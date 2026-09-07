@@ -7,7 +7,12 @@
 		{
 			"Name": "UnrealCH3",
 			"Type": "Runtime",
-			"LoadingPhase": "Default"
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"UMG",
+				"Engine",
+				"CoreUObject"
+			]
 		}
 	],
 	"Plugins": [
