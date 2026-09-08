@@ -4,9 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/UITypes.h"
 #include "HUDWidget.generated.h"
 
 class UImage;
+class UOverlay;
 
 /**
  * 
@@ -25,8 +27,31 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI|HUD")
 	void SetLowHealthEffectIntensity(float Intensity);
 
+	UOverlay* GetLayer(EUILayer Layer) const;
+
 protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> Image_LowHealthVignette;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UOverlay> Overlay_GameLayer;
+	
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UOverlay> Overlay_WorldLayer;
+	
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UOverlay> Overlay_NotificationLayer;
+	
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UOverlay> Overlay_SelectionLayer;
+	
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UOverlay> Overlay_MenuLayer;
+	
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UOverlay> Overlay_TransitionLayer;
+	
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UOverlay> Overlay_ResultLayer;
 	
 };
