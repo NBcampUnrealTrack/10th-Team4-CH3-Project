@@ -53,7 +53,7 @@ void ARGBaseWeapon::SetOwningCharacter(ACharacter* NewOwner)
 }
 
 // [P0] 공통 무기·발사
-
+// 
 //발사 가능한지 확인
 // =========== 발사 시스템 요약 ============
 // StartFire에서StartFireTimer를 호출한다. -> StartFireTimer는 HandleFireTick함수를 FireInterval 간격에 따라서 반복한다.
@@ -148,22 +148,33 @@ void ARGBaseWeapon::Fire()
 	{
 		return;
 	}
+	// FireHitscan()에 StartLocation , FireDirection 전달
 	FireHitscan(StartLocation, FireDirection, -1.f, nullptr);
 }
 
+//
 bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors)
-{
+{	
+	//광선의 끝 지점을 계산 
 	const FVector EndLocation = StartLocation + FireDirection * TraceRange;
-
+	//QueryParams라는 트레이스 검사 옵션을 담는 객체이다.
+	//WeaponFire라는 이름으로 몇 번 걸렸는지 통계를 냄.
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(WeaponFire), true);
+	//무기 자기 자신은 맞은걸로 안침
 	QueryParams.AddIgnoredActor(this);
+	//캐릭터 자기 자신은 맞은걸로 안침
 	if (OwningCharacter)
 	{
 		QueryParams.AddIgnoredActor(OwningCharacter);
 	}
-
+	//트레이스 결과를 담을 그릇.
+	//라인트레이스에 들어가서 맞은 적들 다 Hit에 집어넣어버리고 Hit 안에 있는 엑터들에 대미지 줄 예정
 	FHitResult Hit;
+	//Hit -> 맞은 녀석들을 Hit에 넣을 것이다. / StartLocation -> 라인트레이스 시작 / EndLocation -> 라인트레이스 끝지점 /
+	// TraceChannel -> 라인트레이스에 걸릴 녀석들의 채널 종류 ex)TraceChannel = ECC_Visibility 하면 Visibility 채널에 있는 녀석들만 걸림. / 
+	//그래서 맞았으면 true 아니면 false
 	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, StartLocation, EndLocation, TraceChannel, QueryParams);
+
 	if (!bHit || !Hit.GetActor())
 	{
 		return false;
@@ -186,6 +197,9 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 // ============================================================================
 // [P0] 홀드 조준
 // ============================================================================
+// 조준 기능 주의할 것은 , 조준 중이다. 아니다 , 현재 에이밍이 가능한 상태다 등의 상태 정보만 전달하는 역할이다.
+// 델리게이트도 전달함.
+// 무기 별 조준 배율은 RGWeaponStats.h 의 FWeaponStatsRow 구조체에 ADSFOVMultiplier 변수로 존재함
 
 bool ARGBaseWeapon::IsAiming() const
 {
@@ -216,13 +230,17 @@ void ARGBaseWeapon::StopAiming()
 // [P0] 탄창·재장전
 // ============================================================================
 
+//주의 여기서의 재장전 방식은 인벤토리에 들어있는 전체 탄창을 고려하지 않았음
+//보유 탄창이 무한하고 탄창에 따른 제약없이 재장전이 된다고 가정하고 만든 재장전.
+
 bool ARGBaseWeapon::IsReloading() const
 {
 	return bIsReloading;
 }
 
 bool ARGBaseWeapon::CanReloaded() const
-{
+{	//리로드 될 수 있는지 확인.
+	//조건은 외부 창이 동작하고있는가 -> 이미 리로딩중인가 -> 지금 총알이 풀인가. 전부 아니여야 true 반환
 	if (!bExternalActionsAllowed) return false;
 	if (bIsReloading) return false;
 	if (CurrentAmmo >= WeaponStats.MagazineCapacity) return false;
@@ -269,11 +287,12 @@ void ARGBaseWeapon::CompleteReload()
 	}
 
 	bIsReloading = false;
-
+	//bReloadWholeMagazine가 true라면 탄창 한번에 교환(돌격소총이나 레일건으로 예상)
 	if (WeaponStats.bReloadWholeMagazine)
 	{
 		CurrentAmmo = WeaponStats.MagazineCapacity;
 	}
+	//bReloadWholeMagazine가 false라면 장전 한번에 탄창 한번만 구현
 	else
 	{
 		CurrentAmmo = FMath::Min(WeaponStats.MagazineCapacity, CurrentAmmo + 1);
@@ -312,11 +331,12 @@ void ARGBaseWeapon::SetExternalActionsAllowed(bool bAllowed)
 // [P0] 공통 피해
 // ============================================================================
 
+//데미지 배율인가? 아니면 나중에 강화를 위한 함수?
 float ARGBaseWeapon::GetUpgradeDamageMultiplier() const
 {
 	return 1.0f;
 }
-
+//거리에 따른 데미지 감쇠
 float ARGBaseWeapon::CalculateDistanceFalloffMultiplier(float Distance) const
 {
 	if (WeaponStats.DamageFalloffStart <= 0.f && WeaponStats.DamageFalloffEnd <= 0.f)
