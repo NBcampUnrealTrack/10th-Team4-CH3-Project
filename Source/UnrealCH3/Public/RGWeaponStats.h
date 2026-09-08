@@ -5,9 +5,9 @@
 #include "Engine/DataTable.h"
 #include "RGWeaponStats.generated.h"
 
-/**
- * 무기 1종의 기본 스탯 행. Content Browser에서 이 구조체로 DataTable 애셋(DT_WeaponBaseStats)을 만들고,
- * RowName을 "AssaultRifle", "Shotgun", "Railgun" 등으로 채워서 사용합니다.
+/*
+ 무기 1종의 기본 스탯 행. Content Browser에서 이 구조체로 DataTable 애셋(DT_WeaponBaseStats)을 만들고,
+ RowName을 "AssaultRifle", "Shotgun", "Railgun" 등으로 채워서 사용.
  */
 USTRUCT(BlueprintType)
 struct FWeaponStatsRow : public FTableRowBase
@@ -35,7 +35,7 @@ struct FWeaponStatsRow : public FTableRowBase
 	float ADSFOVMultiplier = 1.35f;
 
 	// 거리 감쇠 시작/끝 거리. 둘 다 0 이하면 "감쇠 없음"(레일건)으로 처리
-	// 거리 감쇠에 대한 부분은 밸런스에서 처리 or 회의 필요할 듯
+	// 거리 감쇠에 대한 부분은 밸런스 잡을 때 따로 세팅 필요할 듯
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
 	float DamageFalloffStart = 2000.f;
 
