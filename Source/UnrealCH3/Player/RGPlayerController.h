@@ -35,6 +35,12 @@ public:
 	TObjectPtr<UInputAction> DashAction;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UInputAction> SprintAction;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UInputAction> CrouchAction;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> ShootAction;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
