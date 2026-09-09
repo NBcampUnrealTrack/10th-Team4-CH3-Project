@@ -33,15 +33,15 @@ public:
     // Sets default values for this character's properties
     ABaseEnemy();
     virtual void BeginPlay() override;
-    /*virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
-    virtual void Attack();
+    virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
+    //virtual void Attack();
     virtual void Die();
     bool IsTargetInAttackRange() const;
-    bool IsTargetInDetectRange() const;
-    void SetEnemyState(EEnemyState NewState);
+    /*bool IsTargetInDetectRange() const;
+    void SetEnemyState(EEnemyState NewState);*/
     EEnemyState GetEnemyState() const;
     void SetTargetActor(AActor* NewTarget);
-    AActor* GetTargetActor() const;*/
+    //AActor* GetTargetActor() const;
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 protected:
