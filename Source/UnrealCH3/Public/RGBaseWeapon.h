@@ -64,6 +64,12 @@ protected:
 	virtual FVector ApplySpread(const FVector& AimDirection) const;
 	// ===========================
 
+	UPROPERTY(EditDefalutsOnly , Category = "Weapon|Damage")
+	FName WeakSpotTag = FName(TEXT("Weakspot"));
+
+	UPROPERTY(EditDefalutsOnly , Category = "Weapon|Damage")
+	float WeakSpotDamageMulplier = 1.5f;
+
 	//루트 컴포넌트 생성
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon")
 	USkeletalMeshComponent* WeaponMesh;

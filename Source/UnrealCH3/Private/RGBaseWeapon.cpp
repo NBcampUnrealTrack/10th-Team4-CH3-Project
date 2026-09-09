@@ -381,12 +381,19 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 	{
 		return;
 	}
-
+	//최종 데미지 계산
 	float FinalDamage = BaseDamage;
+	//강화 데미지 계산
 	FinalDamage *= GetUpgradeDamageMultiplier();
-
+	//거리별 감쇠 데미지 계산
 	const float Distance = FVector::Dist(ShotStart, Hit.ImpactPoint);
 	FinalDamage *= CalculateDistanceFalloffMultiplier(Distance);
+	//약점에 맞았으면 WeakSpotDamageMulplier 배율만큼 데미지 추가
+	const bool bIsWeakSpot = Hit.Component.IsValid() && Hit.Component->ComponentHasTag(WeakSpotTag);
+	if (bIsWeakSpot)
+	{
+		FinalDamage *= WeakSpotDamageMulplier;
+	}
 
 	// 실제 전달은 언리얼 기본 데미지 시스템 사용. 무기는 대상 체력을 직접 수정하지 않습니다.
 	UGameplayStatics::ApplyPointDamage(
