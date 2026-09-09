@@ -60,7 +60,15 @@ protected:
 	virtual float GetUpgradeDamageMultiplier() const;
 	//거리 감쇠 배율 계산
 	virtual float CalculateDistanceFalloffMultiplier(float Distance) const;
+	// 조준 여부(bIsAiming)에 따라 탄퍼짐 효과 적용
+	virtual FVector ApplySpread(const FVector& AimDirection) const;
 	// ===========================
+
+	UPROPERTY(EditDefaultsOnly , Category = "Weapon|Damage")
+	FName WeakSpotTag = FName(TEXT("Weakspot"));
+
+	UPROPERTY(EditDefaultsOnly , Category = "Weapon|Damage")
+	float WeakSpotDamageMulplier = 1.5f;
 
 	//루트 컴포넌트 생성
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon")
