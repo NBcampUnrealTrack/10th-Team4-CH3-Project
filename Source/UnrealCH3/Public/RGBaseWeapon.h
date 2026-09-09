@@ -60,6 +60,8 @@ protected:
 	virtual float GetUpgradeDamageMultiplier() const;
 	//거리 감쇠 배율 계산
 	virtual float CalculateDistanceFalloffMultiplier(float Distance) const;
+	// 조준 여부(bIsAiming)에 따라 탄퍼짐 효과 적용
+	virtual FVector ApplySpread(const FVector& AimDirection) const;
 	// ===========================
 
 	//루트 컴포넌트 생성
