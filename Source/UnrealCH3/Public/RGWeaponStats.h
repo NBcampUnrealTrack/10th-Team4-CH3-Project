@@ -49,4 +49,24 @@ struct FWeaponStatsRow : public FTableRowBase
 	// true = 재장전 시 탄창 전체 교체(돌격소총/레일건), false = 한 발씩 장전(산탄총)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
 	bool bReloadWholeMagazine = true;
+
+	// ===== 탄퍼짐 (DT_WeaponHandling) =====
+	// 조준하지 않았을 때 탄이 흩어지는 원뿔 각도.
+	// 값이 클수록 탄이 더 많이 흩어짐. 0이면 완벽 직선
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats|Spread")
+	float HipFireSpread = 2.0f;
+
+	// 조준 중일 때 탄이 흩어지는 원뿔 각도
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats|Spread")
+	float AimSpread = 0.6f;
+
+	// 발사 시 상하 반동, 무기 로직에 반동 로직 적용 X , 캐릭터 카메라 로직에서 끌어 쓰는 것이 적절할 것으로 생각
+	// 단위도 미정
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats|Recoil")
+	float VerticalRecoil = 1.0f;
+
+	// 발사 시 좌우 반동
+	//특이사항 상하 반동과 같음
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats|Recoil")
+	float HorizontalRecoil = 0.45f;
 };
