@@ -12,14 +12,20 @@
 
 void AUIManager::BeginPlay()
 {
-	Super::BeginPlay();
-	
 	CreateHUDWidget();
 	ApplyGameInputMode();
+
+	Super::BeginPlay();
+
 }
 
 void AUIManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	UE_LOG(LogTemp,
+		Log,
+		TEXT("[UIManager] EndPlay - Remove HUD Widget")
+	);
+
 	RemoveHUDWidget();
 	Super::EndPlay(EndPlayReason);
 }

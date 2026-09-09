@@ -82,7 +82,7 @@ public:
 	void TestCloseSelection();
 
 	//HUD 생성
-	UFUNCTION(Exec)
+	UFUNCTION(Exec, BlueprintCallable, Category = "UI")
 	void CreateHUDWidget();
 
 	//HUD 제거

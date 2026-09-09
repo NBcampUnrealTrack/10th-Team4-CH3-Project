@@ -4,7 +4,9 @@
 #include "GameFrameWork/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/TimelineComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 ARGCharacter::ARGCharacter()
 {
@@ -23,8 +25,12 @@ ARGCharacter::ARGCharacter()
 
 	DashTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("Timeline"));
 	JumpMaxCount = 2;
-	GetCharacterMovement()->MaxWalkSpeed = 800.0f;
-	GetCharacterMovement()->JumpZVelocity = 800.0f;
+	GetCharacterMovement()->MaxWalkSpeed = DefaultSpeed;
+	GetCharacterMovement()->MaxAcceleration = DefaultAccelration;
+	GetCharacterMovement()->JumpZVelocity = DefaultJumpZVelocity;
+	GetCharacterMovement()->AirControl = DefaultAirControl;
+	DefaultGroundFriction = GetCharacterMovement()->GroundFriction;
+	DefaultBreakingDecelerationWalking = GetCharacterMovement()->BrakingDecelerationWalking;
 }
 
 void ARGCharacter::BeginPlay()
@@ -41,7 +47,16 @@ void ARGCharacter::BeginPlay()
 	FOnTimelineEvent TimelineFinished;
 	TimelineFinished.BindDynamic(this, &ARGCharacter::OnDashFinished);
 	DashTimeline->SetTimelineFinishedFunc(TimelineFinished);
-	SetCheckPoint();
+
+	LevelStartLocation = GetActorLocation();
+	GetWorldTimerManager().SetTimer(CheckPointTimerHandle, this, &ARGCharacter::SetCheckPoint, CheckPointInterval, true);
+}
+
+void ARGCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	ClearTimerHandle();
+
+	Super::EndPlay(EndPlayReason);
 }
 
 void ARGCharacter::Tick(float DeltaTime)
@@ -77,7 +92,16 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 		}
 		if (PlayerController->DashAction)
 		{
-			EnhancedInput->BindAction(PlayerController->DashAction, ETriggerEvent::Triggered, this, &ARGCharacter::Dash);
+			EnhancedInput->BindAction(PlayerController->DashAction, ETriggerEvent::Started, this, &ARGCharacter::Dash);
+		}
+		if (PlayerController->SprintAction)
+		{
+			EnhancedInput->BindAction(PlayerController->SprintAction, ETriggerEvent::Started, this, &ARGCharacter::ToggleSprint);
+		}
+		if (PlayerController->CrouchAction)
+		{
+			EnhancedInput->BindAction(PlayerController->CrouchAction, ETriggerEvent::Started, this, &ARGCharacter::StartCrouch);
+			EnhancedInput->BindAction(PlayerController->CrouchAction, ETriggerEvent::Completed, this, &ARGCharacter::StopCrouch);
 		}
 		if (PlayerController->ShootAction)
 		{
@@ -85,7 +109,7 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 		}
 		if (PlayerController->AimAction)
 		{
-			EnhancedInput->BindAction(PlayerController->AimAction, ETriggerEvent::Triggered, this, &ARGCharacter::ToggleAim);
+			EnhancedInput->BindAction(PlayerController->AimAction, ETriggerEvent::Started, this, &ARGCharacter::ToggleAim);
 		}
 	}
 
@@ -93,18 +117,62 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 
 float ARGCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DmageEvent, AController* EventIntigator, AActor* DamageCauser)
 {
+	if (bIsGodMode || bIsDead)
+	{
+		return 0.0f;
+	}
+	// 1초 재생타이머 정리
+	GetWorldTimerManager().ClearTimer(TickRegenerationTimerHandle);
+	// 5초 타이머 시작
+	GetWorldTimerManager().SetTimer(StartRegenerationTimerHandle, this, &ARGCharacter::StartRegenerateHealth, StartRegenerationDelay, false);
+	
 	CurrentHealth = FMath::Clamp(CurrentHealth - DamageAmount, 0.0f, MaxHealth);
 
 	if (CurrentHealth <= 0.0f)
 	{
-		bIsDead = true;
+		Dead();
 	}
 
 	return DamageAmount;
 }
 
+int32 ARGCharacter::GetSlopeType()
+{
+	FFindFloorResult Floor = GetCharacterMovement()->CurrentFloor;
+
+	if (Floor.IsWalkableFloor())
+	{
+		FVector FloorNormal = Floor.HitResult.ImpactNormal;
+
+		if (FMath::IsNearlyEqual(FloorNormal.Z, 1.0f))
+		{
+			return 0;
+		}
+
+		FVector Velocity2D = GetVelocity().GetSafeNormal2D();
+
+		float DotProduct = FVector::DotProduct(Velocity2D, FloorNormal);
+
+		if (DotProduct > 0.1f)
+		{
+			return 1;
+		}
+		else if (DotProduct < -0.1f)
+		{
+			return 2;
+		}
+	}
+
+	return 0;
+}
+
 void ARGCharacter::AddHealth(float Amount)
 {
+	if (bIsDead)
+	{
+		return;
+	}
+
 	CurrentHealth = FMath::Clamp(CurrentHealth + Amount, 0.0f, MaxHealth);
 }
 
@@ -115,11 +183,71 @@ void ARGCharacter::SetCheckPoint()
 		return;
 	}
 
-	CheckPoint = GetActorLocation();
+	CheckPointLocation = GetActorLocation();
+}
+
+void ARGCharacter::SetAimState(bool bCanAim)
+{
+	bIsAiming = bCanAim;
+	Camera->FieldOfView = bIsAiming ? 60.0f : 90.0f;
+}
+
+void ARGCharacter::SetSprintState(bool bCanSprint)
+{
+	bIsSprinting = bCanSprint;
+	GetCharacterMovement()->MaxWalkSpeed = bIsSprinting ? SprintSpeed : DefaultSpeed;
+}
+
+void ARGCharacter::StartRegenerateHealth()
+{
+	GetWorldTimerManager().SetTimer(TickRegenerationTimerHandle, this, &ARGCharacter::TickRegenerateHealth, TickRegenerationInterval, true);
+}
+
+void ARGCharacter::TickRegenerateHealth()
+{
+	float HealthAmount = MaxHealth * RegenerationMultipiler;
+	AddHealth(HealthAmount);
+
+	if (CurrentHealth >= MaxHealth)
+	{
+		GetWorldTimerManager().ClearTimer(TickRegenerationTimerHandle);
+	}
+}
+
+void ARGCharacter::ClearTimerHandle()
+{
+	GetWorldTimerManager().ClearTimer(DashCooldownTimerHandle);
+	GetWorldTimerManager().ClearTimer(CheckPointTimerHandle);
+	GetWorldTimerManager().ClearTimer(GodModeTimerHandle);
+	GetWorldTimerManager().ClearTimer(StartRegenerationTimerHandle);
+	GetWorldTimerManager().ClearTimer(TickRegenerationTimerHandle);
+}
+
+void ARGCharacter::ResetAllState()
+{
+	UnCrouch();
+	SetAimState(false);
+	SetSprintState(false);
+	GetCharacterMovement()->StopMovementImmediately();
+	// TODO 장전등 애니메이션 초기화
 }
 
 void ARGCharacter::UpdateMovementState()
 {
+	if (CurrentMovementState == EMovementState::Sliding)
+	{
+		float CurrentSpeed = GetVelocity().Size2D();
+		int32 Slope = GetSlopeType();
+		float ExitSpeed = Slope == 2 ? 550.0f : 450.0f;
+
+		if (CurrentSpeed <= ExitSpeed || GetCharacterMovement()->IsFalling())
+		{
+			StopSliding();
+		}
+
+		return;
+	}
+
 	if (DashTimeline && DashTimeline->IsPlaying())
 	{
 		CurrentMovementState = EMovementState::Dashing;
@@ -130,6 +258,11 @@ void ARGCharacter::UpdateMovementState()
 	{
 		CurrentMovementState = EMovementState::WallRunning;
 		return;
+	}
+
+	if (bIsSprinting)
+	{
+		CurrentMovementState = EMovementState::Sprinting;
 	}
 
 	if (GetCharacterMovement()->IsFalling())
@@ -147,10 +280,36 @@ void ARGCharacter::UpdateMovementState()
 	}
 }
 
-void ARGCharacter::ComebackCheckPoint()
+void ARGCharacter::ReturnCheckPoint()
 {
-	// 초기화 및 체크포인트로 이동
+	// 낙사 데미지
+	float FallDamage = MaxHealth * 0.2;
+	UGameplayStatics::ApplyDamage(this, FallDamage, GetController(), this, UDamageType::StaticClass());
 
+	if (CurrentHealth == 0.0f)
+	{
+		Dead();
+		return;
+	}
+
+	// 체크포인트 이동
+	FVector ReturnLocation = CheckPointLocation == FVector::ZeroVector ? LevelStartLocation : CheckPointLocation;
+	SetActorLocation(ReturnLocation);
+
+	// 상태 초기화
+	ResetAllState();
+
+	// 무적
+	bIsGodMode = true;
+	TWeakObjectPtr<ARGCharacter> WeakPtr = this;
+	GetWorldTimerManager().SetTimer(GodModeTimerHandle, [WeakPtr]() { if (WeakPtr.IsValid()) { WeakPtr.Get()->bIsGodMode = false; } }, GodModeDuration, false);
+}
+
+void ARGCharacter::Dead()
+{
+	bIsDead = true;
+	// TODO 죽었을때 로직
+	ResetAllState();
 }
 
 void ARGCharacter::Move(const FInputActionValue& value)
@@ -181,11 +340,10 @@ void ARGCharacter::StartJump(const FInputActionValue& value)
 	{
 		DashTimeline->Stop();
 
-		FVector JumpDirection = FMath::IsNearlyZero(MoveInput.X) ? GetActorForwardVector() * MoveInput.Y : GetActorRightVector() * MoveInput.X;
-
-		GetCharacterMovement()->Velocity += JumpDirection * DashDistance;
+		GetCharacterMovement()->Velocity = DashVelocity;
 	}
 	Jump();
+	SetSprintState(false);
 }
 
 void ARGCharacter::StopJump(const FInputActionValue& value)
@@ -211,33 +369,100 @@ void ARGCharacter::Dash(const FInputActionValue& value)
 	GetWorldTimerManager().SetTimer(DashCooldownTimerHandle, this, &ARGCharacter::ResetDashCount, DashCooldown, false);
 }
 
+void ARGCharacter::ToggleSprint(const FInputActionValue& value)
+{
+	if (bIsAiming)
+	{
+		return;
+	}
+	SetSprintState(!bIsSprinting);
+}
+
+void ARGCharacter::StartCrouch(const FInputActionValue& value)
+{
+	Crouch();
+	if (GetVelocity().Size2D() > 700.0f && CurrentMovementState != EMovementState::Sliding)
+	{
+		StartSliding();
+	}
+}
+
+void ARGCharacter::StopCrouch(const FInputActionValue& value)
+{
+	UnCrouch();
+}
+
 void ARGCharacter::Shoot(const FInputActionValue& value)
 {
-	// 총발사
+	// TODO 총의 발사 함수 불러오기
+
 }
 
 void ARGCharacter::ToggleAim(const FInputActionValue& value)
 {
-	if (bIsAiming)
-	{
-		Camera->FieldOfView = 90.0f;
-		bIsAiming = false;
-	}
-	else
-	{
-		Camera->FieldOfView = 60.0f;
-		bIsAiming = true;
-	}
+	// 에임시작시 질주 풀기
+	SetSprintState(false);
+
+	SetAimState(!bIsAiming);
 }
 
 void ARGCharacter::Reload(const FInputActionValue& value)
 {
-	// 재장전
+	// TODO 총의 재장전 함수 불러오기
+
+}
+
+void ARGCharacter::StartSliding()
+{
+	CurrentMovementState = EMovementState::Sliding;
+	int32 Slope = GetSlopeType();
+
+	float SpeedMultipiler = 1.05f;
+	float SlideFriction = 0.25f;
+	if (Slope == 1)
+	{
+		SpeedMultipiler = 1.12f;
+		SlideFriction = 0.15f;
+	}
+	else if (Slope == 2)
+	{
+		SpeedMultipiler = 1.0f;
+		SlideFriction = 0.55;
+	}
+
+	GetCharacterMovement()->GroundFriction = SlideFriction;
+	GetCharacterMovement()->BrakingDecelerationWalking = 100.0f;
+
+	FVector CurrentVelocity = GetVelocity();
+	GetCharacterMovement()->Velocity = CurrentVelocity * SpeedMultipiler;
+	GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, FString::Printf(TEXT("Sliding Apply")));
+}
+
+void ARGCharacter::StopSliding()
+{
+	CurrentMovementState = EMovementState::Idle;
+	GetCharacterMovement()->GroundFriction = DefaultGroundFriction;
+	GetCharacterMovement()->BrakingDecelerationWalking = DefaultBreakingDecelerationWalking;
+	GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, FString::Printf(TEXT("Sliding Unapply")));
+}
+
+void ARGCharacter::StartWallRun()
+{
+
+}
+
+void ARGCharacter::StopWallRun()
+{
+
 }
 
 void ARGCharacter::OnDashUpdate(float Alpha)
 {
+	FVector PreviousLocation = GetActorLocation();
 	FVector CurrentLocation = FMath::Lerp(DashStartLocation, DashEndLocation, Alpha);
+	// 속력 구하기 (이동한거리 / 시간)
+	DashVelocity = (CurrentLocation - PreviousLocation) / GetWorld()->DeltaTimeSeconds;
+
 	SetActorLocation(CurrentLocation, true, &DashHitResult);
 }
 
