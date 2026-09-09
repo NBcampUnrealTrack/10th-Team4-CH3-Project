@@ -170,7 +170,6 @@ void ARGBaseWeapon::Fire()
 	FireHitscan(StartLocation, SpreadDirection, -1.f, nullptr);
 }
 
-//
 bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors)
 {	
 	//광선의 끝 지점을 계산 
