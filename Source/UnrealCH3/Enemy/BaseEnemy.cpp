@@ -28,6 +28,8 @@ void ABaseEnemy::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 
 }
 
+
+
 float ABaseEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
 	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
@@ -53,4 +55,19 @@ bool ABaseEnemy::IsTargetInAttackRange() const
 EEnemyState ABaseEnemy::GetEnemyState() const
 {
 	return EEnemyState();
+}
+
+void ABaseEnemy::SetTargetActor(AActor* NewTarget)
+{
+	TargetActor = NewTarget;
+}
+
+float ABaseEnemy::GetViewingAngle()
+{
+	return ViewingAngle;
+}
+
+float ABaseEnemy::GetViewingDistance()
+{
+	return ViewingDistance;
 }

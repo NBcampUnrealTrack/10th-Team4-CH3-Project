@@ -15,9 +15,13 @@ class UNREALCH3_API AAIEnemyController : public AAIController
 	
 public:
 	AAIEnemyController();
+	UFUNCTION()
 	virtual void OnPossess(APawn* InPawn) override;
-
+	UFUNCTION()
+	void OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus);
+	UFUNCTION()
 	void RunAI();
+	UFUNCTION()
 	void StopAI();
 
 	UPROPERTY(EditAnywhere, Category = "AI")
@@ -29,4 +33,12 @@ public:
 	//UPROPERTY(EditAnywhere, Category = "AI")
 	UPROPERTY()
 	class UBlackboardComponent* BbComp;
+
+protected:
+	UAIPerceptionComponent* Perception;
+	class UAISenseConfig_Sight* Sight;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	bool bCanAttack;        // 공격 가능 여부
+
 };

@@ -43,6 +43,8 @@ public:
     void SetTargetActor(AActor* NewTarget);
     //AActor* GetTargetActor() const;
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+    float GetViewingAngle();
+    float GetViewingDistance();
 
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
@@ -95,9 +97,6 @@ protected:
     float WarningTime;      // 공격 전 경고 시간
 
     FTimerHandle WarningTimer;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    bool bCanAttack;        // 공격 가능 여부
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     bool bIsDead;           // 사망 여부
