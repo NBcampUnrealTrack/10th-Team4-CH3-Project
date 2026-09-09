@@ -1,0 +1,383 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+#include "RGBaseWeapon.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/DamageType.h"
+#include "Kismet/GameplayStatics.h"
+#include "TimerManager.h"
+#include "Engine/World.h"
+
+ARGBaseWeapon::ARGBaseWeapon()
+{
+	PrimaryActorTick.bCanEverTick = true;
+
+	WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMesh"));
+	RootComponent = WeaponMesh;
+}
+
+void ARGBaseWeapon::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// 데이터테이블에서 이 무기의 행(RowName)을 찾아 스탯을 캐싱합니다.
+	if (WeaponStatsTable && !WeaponRowName.IsNone())
+	{
+		//WeaponStatsTable이라는 데이터 테이블에 들어가서 WeaponRowName에 해당하는 무기를 가져옴
+		//ex BP_AssaultRifle의 디테일패널에 Weapon|Stats에 들어가서 AssaultRifle이라고 타이핑해두면 WeaponRowName에 AssaultRifle이 들어감
+		//그리고 WeaponStats에는 AssaultRifle에 해당하는 기본 스탯들이 전부 들어간 행 그 자체가 되는 것. -> WeaponStats.~~~를 통해 무기 스탯을 불러올 수 있다.
+		if (const FWeaponStatsRow* Row = WeaponStatsTable->FindRow<FWeaponStatsRow>(WeaponRowName, TEXT("WeaponStatsLookup")))
+		{
+			WeaponStats = *Row;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("%s: WeaponStatsTable에서 RowName '%s'를 찾지 못했습니다. 기본값을 사용합니다."), *GetName(), *WeaponRowName.ToString());
+		}
+	}
+
+	CurrentAmmo = WeaponStats.MagazineCapacity;
+	
+}
+
+void ARGBaseWeapon::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+}
+
+// OwningCharacter에 실제로 무기를 들고 올 캐릭터를 등록
+// 캐릭터의 조준 위치를 확인할때나 , 라인트레이스에서 누가 쐈는지 확인할 때 사용
+void ARGBaseWeapon::SetOwningCharacter(ACharacter* NewOwner)
+{
+	OwningCharacter = NewOwner;
+	SetOwner(NewOwner);
+}
+
+// [P0] 공통 무기·발사
+// 
+//발사 가능한지 확인
+// =========== 발사 시스템 요약 ============
+// StartFire에서StartFireTimer를 호출한다. -> StartFireTimer는 HandleFireTick함수를 FireInterval 간격에 따라서 반복한다.
+//HandleFireTick 함수는 많은 것을 한다. 발사 가능한 상태인지 확인. 발사 . 탄약 줄이기 등의 역할을 한다.
+//HandleFireTick에서 호출된 Fire()는 GetMuzzleAimTransform()를 통해 카메라의 위치와 보는 방향세팅하고
+//FireHitscan()에서 
+
+//바인딩 할 때 좌클릭을 누를 때 StartFire() 호출 땔 때 StopFire() 호출 해야함
+bool ARGBaseWeapon::CanFire() const
+{	//외부액션중이면 (강화 중 등)
+	if (!bExternalActionsAllowed) return false;
+	//리로드중이면
+	if (bIsReloading) return false;
+	//총알이없으면
+	if (!HasAmmo()) return false;
+	return true;
+}
+
+void ARGBaseWeapon::StartFire()
+{
+	//발사버튼이 눌려있으면 bWantsToFire true로 함 . 중복 발사 방지
+	bWantsToFire = true;
+	StartFireTimer();
+}
+
+void ARGBaseWeapon::StopFire()
+{
+	bWantsToFire = false;
+	StopFireTimer();
+}
+
+void ARGBaseWeapon::StartFireTimer()
+{
+	//FireTimerHandle이 동작하고있으면 그냥 리턴
+	if (GetWorldTimerManager().IsTimerActive(FireTimerHandle))
+	{
+		return;
+	}
+	//FireTimerHandle = 이름표 / this = 무기 자신 / &ARGBaseWeapon::HandleFireTick = 호출할 함수 / 
+	//FMath::Max(0.01f, WeaponStats.FireInterval) = 반복간격 / true -> 계속 반복  / 0.f = 눌렀을 때 지연시간 (0.f 이므로 누르자마자 나감)
+	GetWorldTimerManager().SetTimer(FireTimerHandle, this, &ARGBaseWeapon::HandleFireTick, FMath::Max(0.01f, WeaponStats.FireInterval), true, 0.f);
+}
+
+void ARGBaseWeapon::StopFireTimer()
+{
+	GetWorldTimerManager().ClearTimer(FireTimerHandle);
+}
+
+void ARGBaseWeapon::HandleFireTick()
+{
+	//발사 가능한 상태인가?
+	if (!bWantsToFire || !CanFire())
+	{
+		StopFireTimer();
+		return;
+	}
+	//그렇다면 발사
+	Fire();
+	//탄약 줄이기 
+	CurrentAmmo = FMath::Max(0, CurrentAmmo - 1);
+
+	// 탄약이 바뀌는 이 시점에만 딱 한 번 방송. 누가 듣고 있는지는 몰라도 됨.
+	OnAmmoChanged.Broadcast(CurrentAmmo, WeaponStats.MagazineCapacity);
+	//탄약이 0이라면 
+	if (CurrentAmmo <= 0)
+	{
+		bWantsToFire = false;
+		StopFireTimer();
+		StartReloaded();
+	}
+}
+
+bool ARGBaseWeapon::GetMuzzleAimTransform(FVector& OutStart, FVector& OutDirection) const
+{
+	if (!OwningCharacter)
+	{
+		return false;
+	}
+	FRotator ViewRotation;
+	//캐릭터의 카메라 위치와 보고있는 방향을 얻어온다.
+	OwningCharacter->GetActorEyesViewPoint(OutStart, ViewRotation);
+	//OutStart와 OutDirection은 참조이기 때문에 이 함수는 받은 매개변수를 세팅하는 역할을 한다.
+	//실제로 Fire에서 GetMuzzleAimTransform을 호출해서 FVector 값을 세팅함.
+	OutDirection = ViewRotation.Vector();
+	return true;
+}
+
+void ARGBaseWeapon::Fire()
+{
+	FVector StartLocation, FireDirection;
+	if (!GetMuzzleAimTransform(StartLocation, FireDirection))
+	{
+		return;
+	}
+	// FireHitscan()에 StartLocation , FireDirection 전달
+	FireHitscan(StartLocation, FireDirection, -1.f, nullptr);
+}
+
+//
+bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors)
+{	
+	//광선의 끝 지점을 계산 
+	const FVector EndLocation = StartLocation + FireDirection * TraceRange;
+	//QueryParams라는 트레이스 검사 옵션을 담는 객체이다.
+	//WeaponFire라는 이름으로 몇 번 걸렸는지 통계를 냄.
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(WeaponFire), true);
+	//무기 자기 자신은 맞은걸로 안침
+	QueryParams.AddIgnoredActor(this);
+	//캐릭터 자기 자신은 맞은걸로 안침
+	if (OwningCharacter)
+	{
+		QueryParams.AddIgnoredActor(OwningCharacter);
+	}
+	//트레이스 결과를 담을 그릇.
+	//라인트레이스에 들어가서 맞은 적들 다 Hit에 집어넣어버리고 Hit 안에 있는 엑터들에 대미지 줄 예정
+	FHitResult Hit;
+	//Hit -> 맞은 녀석들을 Hit에 넣을 것이다. / StartLocation -> 라인트레이스 시작 / EndLocation -> 라인트레이스 끝지점 /
+	// TraceChannel -> 라인트레이스에 걸릴 녀석들의 채널 종류 ex)TraceChannel = ECC_Visibility 하면 Visibility 채널에 있는 녀석들만 걸림. / 
+	//그래서 맞았으면 true 아니면 false
+	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, StartLocation, EndLocation, TraceChannel, QueryParams);
+
+	if (!bHit || !Hit.GetActor())
+	{
+		return false;
+	}
+
+	if (AlreadyHitActors)
+	{
+		if (AlreadyHitActors->Contains(Hit.GetActor()))
+		{
+			return false;
+		}
+		AlreadyHitActors->Add(Hit.GetActor());
+	}
+
+	const float BaseDamage = (DamageOverride >= 0.f) ? DamageOverride : WeaponStats.BaseDamage;
+	ApplyHitDamage(Hit, BaseDamage, StartLocation);
+	return true;
+}
+
+// ============================================================================
+// [P0] 홀드 조준
+// ============================================================================
+// 조준 기능 주의할 것은 , 조준 중이다. 아니다 , 현재 에이밍이 가능한 상태다 등의 상태 정보만 전달하는 역할이다.
+// 델리게이트도 전달함.
+// 무기 별 조준 배율은 RGWeaponStats.h 의 FWeaponStatsRow 구조체에 ADSFOVMultiplier 변수로 존재함
+
+bool ARGBaseWeapon::IsAiming() const
+{
+	return bIsAiming;
+}
+
+void ARGBaseWeapon::StartAiming()
+{
+	if (bIsReloading || bIsAiming || !bExternalActionsAllowed)
+	{
+		return;
+	}
+	bIsAiming = true;
+	OnAimingChanged.Broadcast(true);
+}
+
+void ARGBaseWeapon::StopAiming()
+{
+	if (!bIsAiming)
+	{
+		return;
+	}
+	bIsAiming = false;
+	OnAimingChanged.Broadcast(false);
+}
+
+// ============================================================================
+// [P0] 탄창·재장전
+// ============================================================================
+
+//주의 여기서의 재장전 방식은 인벤토리에 들어있는 전체 탄창을 고려하지 않았음
+//보유 탄창이 무한하고 탄창에 따른 제약없이 재장전이 된다고 가정하고 만든 재장전.
+
+bool ARGBaseWeapon::IsReloading() const
+{
+	return bIsReloading;
+}
+
+bool ARGBaseWeapon::CanReloaded() const
+{	//리로드 될 수 있는지 확인.
+	//조건은 외부 창이 동작하고있는가 -> 이미 리로딩중인가 -> 지금 총알이 풀인가. 전부 아니여야 true 반환
+	if (!bExternalActionsAllowed) return false;
+	if (bIsReloading) return false;
+	if (CurrentAmmo >= WeaponStats.MagazineCapacity) return false;
+	return true;
+}
+
+void ARGBaseWeapon::StartReloaded()
+{
+	if (!CanReloaded())
+	{
+		return;
+	}
+
+	StopAiming();
+	StopFire();
+
+	bIsReloading = true;
+	OnReloadStarted.Broadcast();
+
+	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &ARGBaseWeapon::OnReloadTimerComplete, FMath::Max(0.01f, WeaponStats.ReloadTime), false);
+}
+
+void ARGBaseWeapon::CancelReloaded()
+{
+	if (!bIsReloading)
+	{
+		return;
+	}
+	GetWorldTimerManager().ClearTimer(ReloadTimerHandle);
+	bIsReloading = false;
+	// 취소된 장전은 탄약을 지급하지 않고, 재장전 완료 방송도 하지 않습니다.
+}
+
+void ARGBaseWeapon::OnReloadTimerComplete()
+{
+	CompleteReload();
+}
+
+void ARGBaseWeapon::CompleteReload()
+{
+	if (!bIsReloading)
+	{
+		return;
+	}
+
+	bIsReloading = false;
+	//bReloadWholeMagazine가 true라면 탄창 한번에 교환(돌격소총이나 레일건으로 예상)
+	if (WeaponStats.bReloadWholeMagazine)
+	{
+		CurrentAmmo = WeaponStats.MagazineCapacity;
+	}
+	//bReloadWholeMagazine가 false라면 장전 한번에 탄창 한번만 구현
+	else
+	{
+		CurrentAmmo = FMath::Min(WeaponStats.MagazineCapacity, CurrentAmmo + 1);
+	}
+
+	OnAmmoChanged.Broadcast(CurrentAmmo, WeaponStats.MagazineCapacity);
+	OnReloadCompleted.Broadcast();
+
+	if (!WeaponStats.bReloadWholeMagazine && CurrentAmmo < WeaponStats.MagazineCapacity && bExternalActionsAllowed)
+	{
+		StartReloaded();
+	}
+}
+
+// ============================================================================
+// 외부 강제 취소 / 상태 잠금
+// ============================================================================
+
+void ARGBaseWeapon::ForceCancelAllActions()
+{
+	StopFire();
+	CancelReloaded();
+	StopAiming();
+}
+
+void ARGBaseWeapon::SetExternalActionsAllowed(bool bAllowed)
+{
+	bExternalActionsAllowed = bAllowed;
+	if (!bAllowed)
+	{
+		ForceCancelAllActions();
+	}
+}
+
+// ============================================================================
+// [P0] 공통 피해
+// ============================================================================
+
+//데미지 배율인가? 아니면 나중에 강화를 위한 함수?
+float ARGBaseWeapon::GetUpgradeDamageMultiplier() const
+{
+	return 1.0f;
+}
+//거리에 따른 데미지 감쇠
+float ARGBaseWeapon::CalculateDistanceFalloffMultiplier(float Distance) const
+{
+	if (WeaponStats.DamageFalloffStart <= 0.f && WeaponStats.DamageFalloffEnd <= 0.f)
+	{
+		return 1.f;
+	}
+	if (Distance <= WeaponStats.DamageFalloffStart)
+	{
+		return 1.f;
+	}
+	if (Distance >= WeaponStats.DamageFalloffEnd)
+	{
+		return WeaponStats.MinFalloffDamageMultiplier;
+	}
+	const float Range = FMath::Max(1.f, WeaponStats.DamageFalloffEnd - WeaponStats.DamageFalloffStart);
+	const float Alpha = (Distance - WeaponStats.DamageFalloffStart) / Range;
+	return FMath::Lerp(1.f, WeaponStats.MinFalloffDamageMultiplier, Alpha);
+}
+
+void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart)
+{
+	AActor* HitActor = Hit.GetActor();
+	if (!HitActor)
+	{
+		return;
+	}
+
+	float FinalDamage = BaseDamage;
+	FinalDamage *= GetUpgradeDamageMultiplier();
+
+	const float Distance = FVector::Dist(ShotStart, Hit.ImpactPoint);
+	FinalDamage *= CalculateDistanceFalloffMultiplier(Distance);
+
+	// 실제 전달은 언리얼 기본 데미지 시스템 사용. 무기는 대상 체력을 직접 수정하지 않습니다.
+	UGameplayStatics::ApplyPointDamage(
+		HitActor,
+		FinalDamage,
+		(Hit.ImpactPoint - ShotStart).GetSafeNormal(),
+		Hit,
+		OwningCharacter ? OwningCharacter->GetController() : nullptr,
+		this,
+		UDamageType::StaticClass()
+	);
+}
