@@ -396,6 +396,7 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 	}
 
 	// 실제 전달은 언리얼 기본 데미지 시스템 사용. 무기는 대상 체력을 직접 수정하지 않습니다.
+	//내부적으로 HitActor->TakeDamage()를 대신 호출
 	UGameplayStatics::ApplyPointDamage(
 		HitActor,
 		FinalDamage,
