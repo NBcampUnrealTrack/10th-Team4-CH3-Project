@@ -7,6 +7,8 @@
 #include "HUDController.generated.h"
 
 class UHUDWidget;
+class ARGBaseWeapon;
+class UWeaponInfoWidget;
 
 /**
  * 
@@ -26,6 +28,15 @@ public:
 	//HUD 연결 해제 함수
 	void Shutdown();
 
+	// 무기 정보 표시 view 등록
+	void SetWeaponInfoView(UWeaponInfoWidget* InWeaponInfoView);
+
+	// 무기 연결 및 초기 탄약 표시
+	void BindWeapon(ARGBaseWeapon* InWeapon, const FText& InWeaponDisplayName);
+
+	// 무기 연결 해제
+	void UnbindWeapon();
+
 protected:
 	//HUDWidget 약한 참조 연결
 	TWeakObjectPtr<UHUDWidget> HUDWidget;
@@ -34,6 +45,15 @@ protected:
 	float LowHealthFadeStartRatio = 0.5f;
 	float LowHealthFullIntensityRatio = 0.25f;
 
+	// 무기와 view 약한 참조
+	TWeakObjectPtr<ARGBaseWeapon> BoundWeapon;
+	TWeakObjectPtr<UWeaponInfoWidget> WeaponInfoView;
 
+	FText BoundWeaponDisplayName;
+
+	UFUNCTION()
+	void HandleWeaponAmmoChanged(int32 CurrentAmmo, int32 MagazineCapacity);
+
+	void RefreshWeaponInfo();
 
 };
