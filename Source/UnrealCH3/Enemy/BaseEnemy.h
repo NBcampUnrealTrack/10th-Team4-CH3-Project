@@ -10,7 +10,7 @@ UENUM(BlueprintType)
 enum class EEnemyState : uint8
 {
     Idle,
-    Partrol,
+    Patrol,
     Chase,
     Attack,
     Hit,
@@ -20,18 +20,18 @@ enum class EEnemyState : uint8
 UENUM(BlueprintType)
 enum class EEnemyAttackType : uint8
 {
-    melee,
+    Melee,
     Ranged
 };
 
 UCLASS()
 class UNREALCH3_API ABaseEnemy : public ACharacter
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
 public:
-	// Sets default values for this character's properties
-	ABaseEnemy();
+    // Sets default values for this character's properties
+    ABaseEnemy();
     virtual void BeginPlay() override;
     /*virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
     virtual void Attack();
@@ -43,44 +43,65 @@ public:
     void SetTargetActor(AActor* NewTarget);
     AActor* GetTargetActor() const;*/
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     float MaxHP;            // 최대 체력
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     float CurrentHP;        // 현재 체력
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     float AttackDamage;     // 공격력
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float AttackMaxRange;   // 공격 최대 거리
+    float AttackMaxRange;   // 최대 공격 사거리
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float AttackMinRange;   // 공격 최소 거리
+    float AttackMinRange;   // 최소 공격 사거리
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     float Defense;          // 방어력
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float Exp;              // 경험치
+    float Exp;              // 획득 경험치
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float Score;            // 점수
+    float Score;            // 처치 점수
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     float ViewingAngle;     // 시야각
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float ViewingDistance;  // 시야 거리
+    float ViewingDistance;  // 시야 감지 거리
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float HearingDistance;  // 청각 거리
+    float HearingDistance;  // 청각 감지 거리
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float TargetChangeTime; // 목표 유지 시간
+    float TargetChangeTime; // 타겟 변경 대기 시간
+
     FTimerHandle TargetChangeTimer;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    AActor* TargetActor;    // 목표
+    AActor* TargetActor;    // 현재 추적 중인 타겟(목표)
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     float AttackCoolTime;   // 공격 쿨타임
+
     FTimerHandle AttackCoolTimer;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float WarningTime;      // 공격 경고 시간
-    FTimerHandle WarningTimeer;
+    float WarningTime;      // 공격 전 경고 시간
+
+    FTimerHandle WarningTimer;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     bool bCanAttack;        // 공격 가능 여부
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     bool bIsDead;           // 사망 여부
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
     EEnemyState CurrentState;   // 현재 상태
 };
