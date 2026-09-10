@@ -220,5 +220,5 @@ public:
 	int32 GetMagazineCapacity() const { return WeaponStats.MagazineCapacity; }
 
 	UFUNCTION(BlueprintPure, Category = "Weapon")
-	float GetADSFOVMultiplier() const { return WeaponStats.ADSFOVMultiplier; }
+	float GetADSFOV() const { return WeaponStats.ADSFOV; }
 };
