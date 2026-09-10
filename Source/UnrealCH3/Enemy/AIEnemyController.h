@@ -40,5 +40,7 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
 	bool bCanAttack;        // 공격 가능 여부
+	UPROPERTY()
+	FVector TargetLocation;
 
 };

@@ -1,9 +1,9 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Enemy/BaseEnemy.h"
 #include "Enemy/AIEnemyController.h"
-// µ¥¹ÌÁö ÇÇµå¹é ÀÎÅÍÆäÀÌ½º Ãß°¡
+// ë°ë¯¸ì§€ í”¼ë“œë°± ì¸í„°í˜ì´ìŠ¤ ì¶”ê°€
 #include "Combat/DamageFeedbackReceiver.h"
 #include "Engine/DamageEvents.h"
 
@@ -14,6 +14,8 @@ ABaseEnemy::ABaseEnemy()
 	PrimaryActorTick.bCanEverTick = false;
 	AIControllerClass = AAIEnemyController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+	ViewingAngle = 140;
+	ViewingDistance = 3500.0f;
 }
 
 // Called when the game starts or when spawned
@@ -21,7 +23,7 @@ void ABaseEnemy::BeginPlay()
 {
 	Super::BeginPlay();
 
-	//¼³Á¤µÈ ÃÖ´ë Ã¼·ÂÀ¸·Î ½ÃÀÛ
+	//ì„¤ì •ëœ ìµœëŒ€ ì²´ë ¥ìœ¼ë¡œ ì‹œì‘
 	CurrentHP = FMath::Max(0.f, MaxHP);
 
 	if (MaxHP <= 0.f)
@@ -45,7 +47,7 @@ void ABaseEnemy::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 
 float ABaseEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
-	//Á×Àº Àû¿¡°Ô Áßº¹ ÇÇÇØ ¹æÁö
+	//ì£½ì€ ì ì—ê²Œ ì¤‘ë³µ í”¼í•´ ë°©ì§€
 	if (bIsDead || CurrentHP<=0.f || DamageAmount <= 0.f)
 	{
 		return 0.0f;
@@ -58,20 +60,20 @@ float ABaseEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
 		return 0.f;
 	}
 
-	//ÇÇÇØ ¹Ş±â Àü Ã¼·Â ÀúÀå
+	//í”¼í•´ ë°›ê¸° ì „ ì²´ë ¥ ì €ì¥
 	const float PreviousHP = CurrentHP;
 
 	CurrentHP = FMath::Clamp(CurrentHP - ActualDamage, 0.0f, MaxHP);
 
-	//½ÇÁ¦ ÇÇÇØ·® °è»ê
+	//ì‹¤ì œ í”¼í•´ëŸ‰ ê³„ì‚°
 	const float AppliedDamage = PreviousHP - CurrentHP;
 
 	UE_LOG(LogTemp, Log, TEXT("Enemy Dereased to : %f"), CurrentHP);
 
-	// ÇöÀç Ã¼·ÂÀÌ 0 ÀÌÇÏ°¡ µÇ¸é Á×À½ Ã³¸®
+	// í˜„ì¬ ì²´ë ¥ì´ 0 ì´í•˜ê°€ ë˜ë©´ ì£½ìŒ ì²˜ë¦¬
 	const bool bKilledByThisDamage = CurrentHP <= 0.f;
 
-	// ÀÏ¹İ ÇÇÇØ´Â Àû À§Ä¡, Æ÷ÀÎÆ® ÇÇÇØ´Â ½ÇÁ¦ Ãæµ¹ À§Ä¡ »ç¿ë
+	// ì¼ë°˜ í”¼í•´ëŠ” ì  ìœ„ì¹˜, í¬ì¸íŠ¸ í”¼í•´ëŠ” ì‹¤ì œ ì¶©ëŒ ìœ„ì¹˜ ì‚¬ìš©
 	FVector FeedbackLocation = GetActorLocation();
 
 	if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
@@ -87,7 +89,7 @@ float ABaseEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
 		Die();
 	}
 
-	//µ¥¹ÌÁö¸¦ ÁØ °´Ã¼¿¡ °á°ú Àü´Ş
+	//ë°ë¯¸ì§€ë¥¼ ì¤€ ê°ì²´ì— ê²°ê³¼ ì „ë‹¬
 	if (IsValid(DamageCauser))
 	{
 		if (IDamageFeedbackReceiver* Receiver =
@@ -113,7 +115,7 @@ void ABaseEnemy::Die()
 	}
 
 	bIsDead = true;
-	//Á×Àº °´Ã¼ »óÅÂ º¯È­
+	//ì£½ì€ ê°ì²´ ìƒíƒœ ë³€í™”
 	CurrentState = EEnemyState::Dead;
 
 	UE_LOG(LogTemp, Log, TEXT("Character is Dead!"));
@@ -142,4 +144,24 @@ float ABaseEnemy::GetViewingAngle()
 float ABaseEnemy::GetViewingDistance()
 {
 	return ViewingDistance;
+}
+
+float ABaseEnemy::GetAttackMaxRange()
+{
+	return AttackMaxRange;
+}
+
+float ABaseEnemy::GetAttackDamage()
+{
+	return AttackDamage;
+}
+
+int ABaseEnemy::GetScore()
+{
+	return Score;
+}
+
+float ABaseEnemy::GetExp()
+{
+	return Exp;
 }
