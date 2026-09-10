@@ -9,6 +9,8 @@
 #include "Components/Overlay.h"
 #include "UI/View/Menu/PauseMenuWidget.h"
 #include "Components/OverlaySlot.h"
+#include "UI/View/Combat/WeaponInfoWidget.h"
+#include "UI/View/Combat/CrosshairWidget.h"
 
 void AUIManager::BeginPlay()
 {
@@ -83,6 +85,11 @@ bool AUIManager::HasActiveViewInLayer(EUILayer Layer) const
 	}
 
 	return false;
+}
+
+void AUIManager::HandleDamageNumberRequested(float AppliedDamage, AActor* TargetActor, FVector WorldLocation)
+{
+	OnDamageNumberDisplayRequested(AppliedDamage, TargetActor, WorldLocation);
 }
 
 void AUIManager::TestOpenPauseMenu()
@@ -202,6 +209,11 @@ void AUIManager::CreateHUDWidget()
 	if (HUDControllerInstance)
 	{
 		HUDControllerInstance->Initialize(HUDWidgetInstance);
+
+		HUDControllerInstance->OnDamageNumberRequested.AddUObject(
+			this,
+			&AUIManager::HandleDamageNumberRequested
+		);
 	}
 }
 
@@ -228,6 +240,8 @@ void AUIManager::RemoveHUDWidget()
 
 	if (HUDControllerInstance)
 	{
+		HUDControllerInstance->OnDamageNumberRequested.RemoveAll(this);
+
 		HUDControllerInstance->Shutdown();
 		HUDControllerInstance = nullptr;
 	}
@@ -394,6 +408,109 @@ bool AUIManager::CloseView(TSubclassOf<UUserWidget> ViewClass)
 
 	return true;
 }
+
+void AUIManager::RegisterWeaponInfoView(UWeaponInfoWidget* InWeaponInfoView)
+{
+	if (!IsValid(HUDControllerInstance))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[UIManager] HUDController is not ready.")
+		);
+		return;
+	}
+
+	if (!IsValid(InWeaponInfoView))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[UIManager] WeaponInfo View is invalid.")
+		);
+		return;
+	}
+
+	HUDControllerInstance->SetWeaponInfoView(InWeaponInfoView);
+}
+
+void AUIManager::SetEquippedWeapon(ARGBaseWeapon* InWeapon, const FText& InWeaponDisplayName)
+{
+	if (!IsValid(HUDControllerInstance))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[UIManager] Cannot bind weapon: HUDController is not ready.")
+		);
+		return;
+	}
+
+	HUDControllerInstance->BindWeapon(InWeapon, InWeaponDisplayName);
+}
+
+void AUIManager::RegisterCrosshairView(UCrosshairWidget* InCrosshairView)
+{
+	if (!IsValid(HUDControllerInstance) || !IsValid(InCrosshairView))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[UIManager] Cannot register crosshair view.")
+		);
+		return;
+	}
+
+	HUDControllerInstance->SetCrosshairView(InCrosshairView);
+}
+
+void AUIManager::NotifyAttackWarningStarted(AActor* Attacker, float WarningDuration)
+{
+	if (!IsValid(HUDWidgetClass))
+	{
+		return;
+	}
+
+	if (!IsValid(Attacker) || !FMath::IsFinite(WarningDuration) || WarningDuration <= 0.0f)
+	{
+		return;
+	}
+
+	OnAttackWarningDisplayRequested(Attacker, WarningDuration);
+}
+
+void AUIManager::NotifyAttackWarningCanceled(AActor* Attacker)
+{
+	if (!IsValid(HUDWidgetInstance))
+	{
+		return;
+	}
+
+	//공격자 사망시 경고 제거 요청
+	OnAttackWarningHideReqested(Attacker);
+}
+
+void AUIManager::NotifyDirectionalDamage(AActor* Attacker, FVector AttackOrigin)
+{
+	if (!IsValid(HUDWidgetInstance))
+	{
+		return;
+	}
+
+	if (AttackOrigin.ContainsNaN())
+	{
+		return;
+	}
+
+	//피격 위치만 전달 공격 발생 위치 기준
+	AActor* ValidAttacker = IsValid(Attacker) ? Attacker : nullptr;
+
+	OnDirectionDamageDisplayRequested(ValidAttacker, AttackOrigin);
+}
+
+
+
+
 
 
 

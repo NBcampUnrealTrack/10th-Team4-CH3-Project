@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Enemy/AIEnemyController.h"
@@ -43,12 +43,16 @@ void AAIEnemyController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 	ABaseEnemy* Enemy = Cast<ABaseEnemy>(InPawn);
+
 	if (Enemy)
 	{
-		Sight->SightRadius = Enemy->GetViewingDistance();
-		Sight->LoseSightRadius = Enemy->GetViewingDistance() + 500.0f;
-		Sight->PeripheralVisionAngleDegrees = Enemy->GetViewingAngle() / 2.0f;
+		return;
 	}
+
+	Sight->SightRadius = Enemy->GetViewingDistance();
+	Sight->LoseSightRadius = Enemy->GetViewingDistance() + 500.0f;
+	Sight->PeripheralVisionAngleDegrees = Enemy->GetViewingAngle() / 2.0f;
+
 	RunAI();
 }
 

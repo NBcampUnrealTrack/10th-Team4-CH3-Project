@@ -6,6 +6,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
+#include "DrawDebugHelpers.h"
 
 ARGBaseWeapon::ARGBaseWeapon()
 {
@@ -13,6 +14,19 @@ ARGBaseWeapon::ARGBaseWeapon()
 
 	WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMesh"));
 	RootComponent = WeaponMesh;
+}
+
+void ARGBaseWeapon::ReceiveDamageFeedback(float AppliedDamage, bool bKilled, AActor* TargetActor, const FVector& WorldLocation)
+{
+	if (AppliedDamage <= 0.f)
+	{
+		return;
+	}
+	//히트,킬 마커
+	OnDamageConfirmed.Broadcast(AppliedDamage, bKilled);
+
+	//데미지 숫자
+	OnDamageNumberRequested.Broadcast(AppliedDamage, TargetActor, WorldLocation);
 }
 
 void ARGBaseWeapon::BeginPlay()
@@ -114,6 +128,8 @@ void ARGBaseWeapon::HandleFireTick()
 	Fire();
 	//탄약 줄이기 
 	CurrentAmmo = FMath::Max(0, CurrentAmmo - 1);
+	// 발사 처리 Broadcast
+	OnShotFired.Broadcast();
 
 	// 탄약이 바뀌는 이 시점에만 딱 한 번 방송. 누가 듣고 있는지는 몰라도 됨.
 	OnAmmoChanged.Broadcast(CurrentAmmo, WeaponStats.MagazineCapacity);
@@ -176,7 +192,16 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	const FVector EndLocation = StartLocation + FireDirection * TraceRange;
 	//QueryParams라는 트레이스 검사 옵션을 담는 객체이다.
 	//WeaponFire라는 이름으로 몇 번 걸렸는지 통계를 냄.
-	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(WeaponFire), true);
+	
+	/*피격 판정을 몸통/약점의 별도 충돌 컴포넌트를 사용하는 방식으로 구성
+	false : 캡슐, 구체 등 단순 충돌 검사
+	약점 판정은 Trace Complex 여부가 아니라 맞은 컴포넌트의 Weakspot 태그로 구분할 것
+	ex ) 적 BP 에 몸통, 약점용 컴포넌트 추가(Capsule or Sphere)
+	각 컴포넌트를 머리와 몸통에 배치 or 스켈레탈 매쉬의 소켓,뼈에 부착
+	현재 코드는 맞은 컴포넌트의 태그로 약점판단 하므로 단순 충돌로 변경했습니다.
+	원래 생각하신 코드 있으시면 true 로 바꿔 주셔도 됩니다!*/
+
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(WeaponFire), false);
 	//무기 자기 자신은 맞은걸로 안침
 	QueryParams.AddIgnoredActor(this);
 	//캐릭터 자기 자신은 맞은걸로 안침
@@ -192,11 +217,41 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	//그래서 맞았으면 true 아니면 false
 	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, StartLocation, EndLocation, TraceChannel, QueryParams);
 
+	//테스트용 디버그 코드(충돌검사용 라인트레이스)
+#if !UE_BUILD_SHIPPING
+	if (bShowWeaponTraceDebug)
+	{
+		const FVector DebugEnd = bHit
+			? Hit.ImpactPoint
+			: EndLocation;
+
+		DrawDebugLine(
+			GetWorld(),
+			StartLocation,
+			DebugEnd,
+			bHit ? FColor::Green : FColor::Red,
+			false,
+			2.f,
+			0,
+			2.f
+		);
+
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("[WeaponTrace] Owner=%s / Hit=%s / Component=%s"),
+			*GetNameSafe(OwningCharacter),
+			*GetNameSafe(Hit.GetActor()),
+			*GetNameSafe(Hit.GetComponent())
+		);
+	}
+#endif
+
 	if (!bHit || !Hit.GetActor())
 	{
 		return false;
 	}
-
+	// 레일건에만 필요한 로직
 	if (AlreadyHitActors)
 	{
 		if (AlreadyHitActors->Contains(Hit.GetActor()))
@@ -207,7 +262,12 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	}
 
 	const float BaseDamage = (DamageOverride >= 0.f) ? DamageOverride : WeaponStats.BaseDamage;
-	ApplyHitDamage(Hit, BaseDamage, StartLocation);
+	// "직격"의 기준은 무기 종류가 아니라 관통 순서임.
+	// AlreadyHitActors가 없으면(nullptr) 애초에 관통을 아예 안 쓰는 무기 -> 항상 직격.
+	// AlreadyHitActors가 있으면(관통 무기) -> 이 트레이스에서 "처음" 맞은 대상일 때만 직격으로 인정.
+	//   (Add는 이 아래 if문에서 이미 실행됐으므로, 여기서는 "방금 추가되기 전엔 비어있었는지"를 따로 셈)
+	const bool bIsDirectHit = (AlreadyHitActors == nullptr) || (AlreadyHitActors->Num() == 1);
+	ApplyHitDamage(Hit, BaseDamage, StartLocation, bIsDirectHit);
 	return true;
 }
 
@@ -255,6 +315,36 @@ bool ARGBaseWeapon::IsReloading() const
 	return bIsReloading;
 }
 
+//UI 담당자 추가 함수 (재장전 진행률 반환 함수)
+float ARGBaseWeapon::GetReloadProgress() const
+{
+	UWorld* World = GetWorld();
+
+	if (!bIsReloading || !World)
+	{
+		return 0.0f;
+	}
+
+	const FTimerManager& TimerManager = World->GetTimerManager();
+
+	//타이머 지속시간 
+	const float Duration =
+		TimerManager.GetTimerRate(ReloadTimerHandle);
+
+	//타이머 경과시간
+	const float Elapsed =
+		TimerManager.GetTimerElapsed(ReloadTimerHandle);
+
+	//타이머 유효성 검사
+	if (Duration <= 0.f || Elapsed < 0.f)
+	{
+		return 0.f;
+	}
+
+	// 재장전 진행률 계산 경과시간 / 지속시간
+	return FMath::Clamp(Elapsed / Duration, 0.f, 1.f);
+}
+
 bool ARGBaseWeapon::CanReloaded() const
 {	//리로드 될 수 있는지 확인.
 	//조건은 외부 창이 동작하고있는가 -> 이미 리로딩중인가 -> 지금 총알이 풀인가. 전부 아니여야 true 반환
@@ -264,6 +354,7 @@ bool ARGBaseWeapon::CanReloaded() const
 	return true;
 }
 
+//UI 담당자 변경 타이머 -> 알림 순으로 함수 변경
 void ARGBaseWeapon::StartReloaded()
 {
 	if (!CanReloaded())
@@ -275,9 +366,10 @@ void ARGBaseWeapon::StartReloaded()
 	StopFire();
 
 	bIsReloading = true;
-	OnReloadStarted.Broadcast();
 
 	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &ARGBaseWeapon::OnReloadTimerComplete, FMath::Max(0.01f, WeaponStats.ReloadTime), false);
+	
+	OnReloadStarted.Broadcast();	
 }
 
 void ARGBaseWeapon::CancelReloaded()
@@ -289,6 +381,7 @@ void ARGBaseWeapon::CancelReloaded()
 	GetWorldTimerManager().ClearTimer(ReloadTimerHandle);
 	bIsReloading = false;
 	// 취소된 장전은 탄약을 지급하지 않고, 재장전 완료 방송도 하지 않음.
+	OnReloadCanceled.Broadcast();
 }
 
 void ARGBaseWeapon::OnReloadTimerComplete()
@@ -348,7 +441,7 @@ void ARGBaseWeapon::SetExternalActionsAllowed(bool bAllowed)
 // [P0] 공통 피해 (추후 약점 시스템을 위한 코드 추가 필요)
 // ============================================================================
 
-//데미지 배율인가? 아니면 나중에 강화를 위한 함수?
+//강화 데미지 계산 
 float ARGBaseWeapon::GetUpgradeDamageMultiplier() const
 {
 	return 1.0f;
@@ -373,7 +466,7 @@ float ARGBaseWeapon::CalculateDistanceFalloffMultiplier(float Distance) const
 	return FMath::Lerp(1.f, WeaponStats.MinFalloffDamageMultiplier, Alpha);
 }
 
-void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart)
+void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart , bool bIsDirectHit)
 {
 	AActor* HitActor = Hit.GetActor();
 	if (!HitActor)
@@ -387,15 +480,21 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 	//거리별 감쇠 데미지 계산
 	const float Distance = FVector::Dist(ShotStart, Hit.ImpactPoint);
 	FinalDamage *= CalculateDistanceFalloffMultiplier(Distance);
-	//약점에 맞았으면 WeakSpotDamageMulplier 배율만큼 데미지 추가
+	//약점에 맞았으면 WeakSpotDamageMultiplier 배율만큼 데미지 추가
 	const bool bIsWeakSpot = Hit.Component.IsValid() && Hit.Component->ComponentHasTag(WeakSpotTag);
 	if (bIsWeakSpot)
 	{
-		FinalDamage *= WeakSpotDamageMulplier;
+		FinalDamage *= WeakSpotDamageMultiplier;
 	}
+	// ===== 데이터코어 에서 받아야함 =====
+	// 직격 히트스캔이면 URGDirectHitDamageType, 관통이면 그냥 기본 UDamageType으로 전달.
+	// 데이터 코어 쪽은 TakeDamage에서 이 타입을 확인해 관통/도탄/폭발/전이 피해를 걸러낼 수 있음.
+	TSubclassOf<UDamageType> DamageTypeClass = bIsDirectHit ? URGDirectHitDamageType::StaticClass() : UDamageType::StaticClass();
 
-	// 실제 전달은 언리얼 기본 데미지 시스템 사용. 무기는 대상 체력을 직접 수정하지 않습니다.
+	// ===== 적 AI 에서 받아야함 =====
+	// 실제 전달은 언리얼 기본 데미지 시스템 사용.
 	//내부적으로 HitActor->TakeDamage()를 대신 호출
+	//그러므로 적을 담당하는 분은 적 코드에 언리얼에서 제공하는 TakeDamage() 함수 시그니쳐에 따라서 TakeDamage() 코드를 만들어 놓으면 됨
 	UGameplayStatics::ApplyPointDamage(
 		HitActor,
 		FinalDamage,
@@ -403,6 +502,9 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 		Hit,
 		OwningCharacter ? OwningCharacter->GetController() : nullptr,
 		this,
-		UDamageType::StaticClass()
+		DamageTypeClass
 	);
+	// ===== UI , 게임모드에서 받아야함 =====
+	//명중 처치 피드백 용 델리게이트 방송
+	OnWeaponHit.Broadcast(HitActor, FinalDamage, bIsWeakSpot, Hit.ImpactPoint);
 }
