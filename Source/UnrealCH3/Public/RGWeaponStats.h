@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -30,9 +30,9 @@ struct FWeaponStatsRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
 	float ReloadTime = 1.8f;
 
-	// 조준시 카메라 FOV 배율 <- 모든 무기 고정으로 해도 문제 X
+	// 조준시 FOV값
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-	float ADSFOVMultiplier = 1.35f;
+	float ADSFOV = 60.0f;
 
 	// 거리 감쇠 시작/끝 거리. 둘 다 0 이하면 "감쇠 없음"(레일건)으로 처리
 	// 거리 감쇠에 대한 부분은 밸런스 잡을 때 따로 세팅 필요할 듯

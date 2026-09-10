@@ -9,7 +9,7 @@ ARGPlayerController::ARGPlayerController()
 	, DashAction(nullptr)
 	, CrouchAction(nullptr)
 	, SprintAction(nullptr)
-	, ShootAction(nullptr)
+	, FireAction(nullptr)
 	, AimAction(nullptr)
 	, ReloadAction(nullptr)
 {
