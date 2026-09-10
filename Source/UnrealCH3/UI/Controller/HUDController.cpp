@@ -5,6 +5,9 @@
 #include "UI/HUDWidget.h"
 #include "Public/RGBaseWeapon.h"
 #include "UI/View/Combat/WeaponInfoWidget.h"
+#include "UI/View/Combat/CrosshairWidget.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 
 //Controller가 제어할 HUD를 저장 후 초기값 셋팅
 void UHUDController::Initialize(UHUDWidget* InHUDWidget)
@@ -66,6 +69,8 @@ void UHUDController::Shutdown()
 
 	HUDWidget.Reset();
 
+	CrosshairView.Reset();
+
 }
 
 void UHUDController::SetWeaponInfoView(UWeaponInfoWidget* InWeaponInfoView)
@@ -91,6 +96,36 @@ void UHUDController::BindWeapon(ARGBaseWeapon* InWeapon, const FText& InWeaponDi
 		this,
 		&UHUDController::HandleWeaponAmmoChanged
 	);
+	
+	InWeapon->OnReloadStarted.AddUniqueDynamic(
+		this,
+		&UHUDController::HandleWeaponReloadStarted
+	);
+	
+	InWeapon->OnReloadCompleted.AddUniqueDynamic(
+		this,
+		&UHUDController::HandleWeaponReloadCompleted
+	);
+	
+	InWeapon->OnReloadCanceled.AddUniqueDynamic(
+		this,
+		&UHUDController::HandleWeaponReloadCanceled
+	);
+
+	InWeapon->OnShotFired.AddUniqueDynamic(
+		this,
+		&UHUDController::HandleWeaponShotFired
+	);
+
+	InWeapon->OnDamageConfirmed.AddUniqueDynamic(
+		this,
+		&UHUDController::HandleWeaponDamageConfirmed
+	);
+
+	InWeapon->OnDamageNumberRequested.AddUniqueDynamic(
+		this,
+		&UHUDController::HandleWeaponDamageNumberRequested
+	);
 
 	RefreshWeaponInfo();
 }
@@ -103,10 +138,53 @@ void UHUDController::UnbindWeapon()
 			this,
 			&UHUDController::HandleWeaponAmmoChanged
 		);
+
+		Weapon->OnReloadStarted.RemoveDynamic(
+			this,
+			&UHUDController::HandleWeaponReloadStarted
+		);
+
+		Weapon->OnReloadCompleted.RemoveDynamic(
+			this,
+			&UHUDController::HandleWeaponReloadCompleted
+		);
+
+		Weapon->OnReloadCanceled.RemoveDynamic(
+			this,
+			&UHUDController::HandleWeaponReloadCanceled
+		);
+
+		Weapon->OnShotFired.RemoveDynamic(
+			this,
+			&UHUDController::HandleWeaponShotFired
+		);
+
+		Weapon->OnDamageConfirmed.RemoveDynamic(
+			this,
+			&UHUDController::HandleWeaponDamageConfirmed
+		);
+
+		Weapon->OnDamageNumberRequested.RemoveDynamic(
+			this,
+			&UHUDController::HandleWeaponDamageNumberRequested
+		);
 	}
 
 	BoundWeapon.Reset();
 	BoundWeaponDisplayName = FText::GetEmpty();
+}
+
+void UHUDController::SetCrosshairView(UCrosshairWidget* InCrosshairView)
+{
+	CrosshairView = InCrosshairView;
+
+	if (UCrosshairWidget* PreviousView = CrosshairView.Get())
+	{
+		PreviousView->ApplyReloadState(false, 0.f);
+	}
+
+	CrosshairView = InCrosshairView;
+	RefreshReloadUI();
 }
 
 void UHUDController::HandleWeaponAmmoChanged(int32 CurrentAmmo, int32 MagazineCapacity)
@@ -141,6 +219,140 @@ void UHUDController::RefreshWeaponInfo()
 	);
 }
 
+void UHUDController::RefreshReloadUI()
+{
+	//이전 갱신 초기화
+	StopReloadProgressTimer();
+	UpdateReloadProgress();
 
+	ARGBaseWeapon* Weapon = BoundWeapon.Get();
+
+	if (!CrosshairView.IsValid() || !Weapon || !Weapon->IsReloading())
+	{
+		return;
+	}
+
+	UWorld* World = Weapon->GetWorld();
+
+	if (!World)
+	{
+		return;
+	}
+
+	ReloadTimerWorld = World;
+
+	// 재장전 중 60프레임으로 화면 갱신
+	World->GetTimerManager().SetTimer(
+		ReloadProgressTimerHandle,
+		this,
+		&UHUDController::UpdateReloadProgress,
+		1.f / 60.f,
+		true
+	);
+}
+
+void UHUDController::UpdateReloadProgress()
+{
+	UCrosshairWidget* View = CrosshairView.Get();
+	ARGBaseWeapon* Weapon = BoundWeapon.Get();
+
+	if (!View)
+	{
+		StopReloadProgressTimer();
+		return;
+	}
+
+	if (!Weapon || !Weapon->IsReloading())
+	{
+		StopReloadProgressTimer();
+		View->ApplyReloadState(false, 0.f);
+		return;
+	}
+
+	View->ApplyReloadState(true, Weapon->GetReloadProgress());
+}
+
+void UHUDController::StopReloadProgressTimer()
+{
+	if (UWorld* World = ReloadTimerWorld.Get())
+	{
+		World->GetTimerManager().ClearTimer(ReloadProgressTimerHandle);
+	}
+
+	ReloadProgressTimerHandle.Invalidate();
+	ReloadTimerWorld.Reset();
+}
+
+void UHUDController::HandleWeaponShotFired()
+{
+	if (UCrosshairWidget* View = CrosshairView.Get())
+	{
+		View->ApplyShotFired();
+	}
+}
+
+void UHUDController::HandleWeaponDamageConfirmed(float AppliedDamage, bool bKilled)
+{
+	if (AppliedDamage <= 0.f)
+	{
+		return;
+	}
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("[HUDController] Confirmed damage: %.1f / Killed: %s"),
+		AppliedDamage,
+		bKilled ? TEXT("true") : TEXT("false")
+	);
+
+	if (UCrosshairWidget* View = CrosshairView.Get())
+	{
+		View->ApplyHitConfirmed(bKilled);
+	}
+}
+
+void UHUDController::HandleWeaponDamageNumberRequested(float AppliedDamage, AActor* TargetActor, FVector WorldLocation)
+{
+	if (AppliedDamage <= 0.f)
+	{
+		return;
+	}
+
+	OnDamageNumberRequested.Broadcast(AppliedDamage, TargetActor, WorldLocation);
+}
+
+void UHUDController::HandleWeaponReloadStarted()
+{
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("[HUDController] Reload started")
+	);
+
+	RefreshReloadUI();
+}
+
+void UHUDController::HandleWeaponReloadCompleted()
+{
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("[HUDController] Reload completed")
+	);
+
+	RefreshReloadUI();
+}
+
+void UHUDController::HandleWeaponReloadCanceled()
+{
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("[HUDController] Reload canceled")
+	);
+
+	RefreshReloadUI();
+}
 
 

@@ -99,8 +99,8 @@ protected:
     FTimerHandle WarningTimer;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    bool bIsDead;           // 사망 여부
+    bool bIsDead = false;           // 사망 여부
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
-    EEnemyState CurrentState;   // 현재 상태
+    EEnemyState CurrentState = EEnemyState::Idle;   // 현재 상태
 };

@@ -6,6 +6,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
+#include "DrawDebugHelpers.h"
 
 ARGBaseWeapon::ARGBaseWeapon()
 {
@@ -13,6 +14,19 @@ ARGBaseWeapon::ARGBaseWeapon()
 
 	WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMesh"));
 	RootComponent = WeaponMesh;
+}
+
+void ARGBaseWeapon::ReceiveDamageFeedback(float AppliedDamage, bool bKilled, AActor* TargetActor, const FVector& WorldLocation)
+{
+	if (AppliedDamage <= 0.f)
+	{
+		return;
+	}
+	//히트,킬 마커
+	OnDamageConfirmed.Broadcast(AppliedDamage, bKilled);
+
+	//데미지 숫자
+	OnDamageNumberRequested.Broadcast(AppliedDamage, TargetActor, WorldLocation);
 }
 
 void ARGBaseWeapon::BeginPlay()
@@ -114,6 +128,8 @@ void ARGBaseWeapon::HandleFireTick()
 	Fire();
 	//탄약 줄이기 
 	CurrentAmmo = FMath::Max(0, CurrentAmmo - 1);
+	// 발사 처리 Broadcast
+	OnShotFired.Broadcast();
 
 	// 탄약이 바뀌는 이 시점에만 딱 한 번 방송. 누가 듣고 있는지는 몰라도 됨.
 	OnAmmoChanged.Broadcast(CurrentAmmo, WeaponStats.MagazineCapacity);
@@ -176,7 +192,16 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	const FVector EndLocation = StartLocation + FireDirection * TraceRange;
 	//QueryParams라는 트레이스 검사 옵션을 담는 객체이다.
 	//WeaponFire라는 이름으로 몇 번 걸렸는지 통계를 냄.
-	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(WeaponFire), true);
+	
+	/*피격 판정을 몸통/약점의 별도 충돌 컴포넌트를 사용하는 방식으로 구성
+	false : 캡슐, 구체 등 단순 충돌 검사
+	약점 판정은 Trace Complex 여부가 아니라 맞은 컴포넌트의 Weakspot 태그로 구분할 것
+	ex ) 적 BP 에 몸통, 약점용 컴포넌트 추가(Capsule or Sphere)
+	각 컴포넌트를 머리와 몸통에 배치 or 스켈레탈 매쉬의 소켓,뼈에 부착
+	현재 코드는 맞은 컴포넌트의 태그로 약점판단 하므로 단순 충돌로 변경했습니다.
+	원래 생각하신 코드 있으시면 true 로 바꿔 주셔도 됩니다!*/
+
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(WeaponFire), false);
 	//무기 자기 자신은 맞은걸로 안침
 	QueryParams.AddIgnoredActor(this);
 	//캐릭터 자기 자신은 맞은걸로 안침
@@ -191,6 +216,36 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	// TraceChannel -> 라인트레이스에 걸릴 녀석들의 채널 종류 ex)TraceChannel = ECC_Visibility 하면 Visibility 채널에 있는 녀석들만 걸림. / 
 	//그래서 맞았으면 true 아니면 false
 	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, StartLocation, EndLocation, TraceChannel, QueryParams);
+
+	//테스트용 디버그 코드(충돌검사용 라인트레이스)
+#if !UE_BUILD_SHIPPING
+	if (bShowWeaponTraceDebug)
+	{
+		const FVector DebugEnd = bHit
+			? Hit.ImpactPoint
+			: EndLocation;
+
+		DrawDebugLine(
+			GetWorld(),
+			StartLocation,
+			DebugEnd,
+			bHit ? FColor::Green : FColor::Red,
+			false,
+			2.f,
+			0,
+			2.f
+		);
+
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("[WeaponTrace] Owner=%s / Hit=%s / Component=%s"),
+			*GetNameSafe(OwningCharacter),
+			*GetNameSafe(Hit.GetActor()),
+			*GetNameSafe(Hit.GetComponent())
+		);
+	}
+#endif
 
 	if (!bHit || !Hit.GetActor())
 	{
@@ -255,6 +310,36 @@ bool ARGBaseWeapon::IsReloading() const
 	return bIsReloading;
 }
 
+//UI 담당자 추가 함수 (재장전 진행률 반환 함수)
+float ARGBaseWeapon::GetReloadProgress() const
+{
+	UWorld* World = GetWorld();
+
+	if (!bIsReloading || !World)
+	{
+		return 0.0f;
+	}
+
+	const FTimerManager& TimerManager = World->GetTimerManager();
+
+	//타이머 지속시간 
+	const float Duration =
+		TimerManager.GetTimerRate(ReloadTimerHandle);
+
+	//타이머 경과시간
+	const float Elapsed =
+		TimerManager.GetTimerElapsed(ReloadTimerHandle);
+
+	//타이머 유효성 검사
+	if (Duration <= 0.f || Elapsed < 0.f)
+	{
+		return 0.f;
+	}
+
+	// 재장전 진행률 계산 경과시간 / 지속시간
+	return FMath::Clamp(Elapsed / Duration, 0.f, 1.f);
+}
+
 bool ARGBaseWeapon::CanReloaded() const
 {	//리로드 될 수 있는지 확인.
 	//조건은 외부 창이 동작하고있는가 -> 이미 리로딩중인가 -> 지금 총알이 풀인가. 전부 아니여야 true 반환
@@ -264,6 +349,7 @@ bool ARGBaseWeapon::CanReloaded() const
 	return true;
 }
 
+//UI 담당자 변경 타이머 -> 알림 순으로 함수 변경
 void ARGBaseWeapon::StartReloaded()
 {
 	if (!CanReloaded())
@@ -275,9 +361,10 @@ void ARGBaseWeapon::StartReloaded()
 	StopFire();
 
 	bIsReloading = true;
-	OnReloadStarted.Broadcast();
 
 	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &ARGBaseWeapon::OnReloadTimerComplete, FMath::Max(0.01f, WeaponStats.ReloadTime), false);
+	
+	OnReloadStarted.Broadcast();	
 }
 
 void ARGBaseWeapon::CancelReloaded()
@@ -289,6 +376,7 @@ void ARGBaseWeapon::CancelReloaded()
 	GetWorldTimerManager().ClearTimer(ReloadTimerHandle);
 	bIsReloading = false;
 	// 취소된 장전은 탄약을 지급하지 않고, 재장전 완료 방송도 하지 않음.
+	OnReloadCanceled.Broadcast();
 }
 
 void ARGBaseWeapon::OnReloadTimerComplete()

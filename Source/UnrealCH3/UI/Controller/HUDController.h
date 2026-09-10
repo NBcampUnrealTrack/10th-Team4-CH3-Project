@@ -6,9 +6,13 @@
 #include "UObject/NoExportTypes.h"
 #include "HUDController.generated.h"
 
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnHUDDamageNumberRequested, float, AActor*, FVector);
+
 class UHUDWidget;
 class ARGBaseWeapon;
 class UWeaponInfoWidget;
+class UCrosshairWidget;
+class UWorld;
 
 /**
  * 
@@ -37,6 +41,11 @@ public:
 	// 무기 연결 해제
 	void UnbindWeapon();
 
+	//크로스헤어 등록
+	void SetCrosshairView(UCrosshairWidget* InCrosshairView);
+
+	FOnHUDDamageNumberRequested OnDamageNumberRequested;
+
 protected:
 	//HUDWidget 약한 참조 연결
 	TWeakObjectPtr<UHUDWidget> HUDWidget;
@@ -54,6 +63,41 @@ protected:
 	UFUNCTION()
 	void HandleWeaponAmmoChanged(int32 CurrentAmmo, int32 MagazineCapacity);
 
+	UFUNCTION()
+	void HandleWeaponReloadStarted();
+	
+	UFUNCTION()
+	void HandleWeaponReloadCompleted();
+	
+	UFUNCTION()
+	void HandleWeaponReloadCanceled();
+
 	void RefreshWeaponInfo();
+
+	TWeakObjectPtr<UCrosshairWidget> CrosshairView;
+
+	// 재장전 UI 갱신 타이머
+	FTimerHandle ReloadProgressTimerHandle;
+
+	//타이머 연결 World 해제
+	TWeakObjectPtr<UWorld> ReloadTimerWorld;
+
+	// 현재 무기의 재장전 시간과 타이머 동기화
+	void RefreshReloadUI();
+
+	// 무기의 재장전 진행률 크로스헤어에 전달
+	void UpdateReloadProgress();
+
+	// UI 타이머 해제
+	void StopReloadProgressTimer();
+
+	UFUNCTION()
+	void HandleWeaponShotFired();
+
+	UFUNCTION()
+	void HandleWeaponDamageConfirmed(float AppliedDamage, bool bKilled);
+
+	UFUNCTION()
+	void HandleWeaponDamageNumberRequested(float AppliedDamage, AActor* TargetActor, FVector WorldLocation);
 
 };

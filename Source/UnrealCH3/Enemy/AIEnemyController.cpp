@@ -33,12 +33,17 @@ void AAIEnemyController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 	ABaseEnemy* Enemy = Cast<ABaseEnemy>(InPawn);
+
+	//오류 수정 기존: Enemy 가 없을 때 접근 -> if 문을 Enemy 객체 유효성 검사로 수정 기존 코드 아래로 내림
 	if (!Enemy)
 	{
-		Sight->SightRadius = Enemy->GetViewingDistance();
-		Sight->LoseSightRadius = Enemy->GetViewingDistance() + 500.0f;
-		Sight->PeripheralVisionAngleDegrees = Enemy->GetViewingAngle() / 2.0f;
+		return;
 	}
+
+	Sight->SightRadius = Enemy->GetViewingDistance();
+	Sight->LoseSightRadius = Enemy->GetViewingDistance() + 500.0f;
+	Sight->PeripheralVisionAngleDegrees = Enemy->GetViewingAngle() / 2.0f;
+
 	RunAI();
 }
 
