@@ -7,9 +7,9 @@ ARGPlayerController::ARGPlayerController()
 	, LookAction(nullptr)
 	, JumpAction(nullptr)
 	, DashAction(nullptr)
-	, CrouchAction(nullptr)
 	, SprintAction(nullptr)
-	, ShootAction(nullptr)
+	, CrouchAction(nullptr)
+	, FireAction(nullptr)
 	, AimAction(nullptr)
 	, ReloadAction(nullptr)
 {
@@ -21,9 +21,13 @@ void ARGPlayerController::BeginPlay()
 
 	if (ULocalPlayer* LocalPlayer = GetLocalPlayer())
 	{
-		if (UEnhancedInputLocalPlayerSubsystem* Subsytem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+			LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
 		{
-			Subsytem->AddMappingContext(DefaultIMC, 0);
+			if (DefaultIMC)
+			{
+				Subsystem->AddMappingContext(DefaultIMC, 0);
+			}
 		}
 	}
 }

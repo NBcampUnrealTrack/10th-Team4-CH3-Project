@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "RGWeaponStats.h"
+#include "Combat/DamageFeedbackReceiver.h"
 #include "RGBaseWeapon.generated.h"
 
 class USkeletalMeshComponent;
@@ -14,6 +15,13 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAmmoChanged, int32, CurrentAmmo,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnReloadStarted);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnReloadCompleted);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAimingChanged, bool, bNowAiming);
+
+//UI담당자 추가 델리게이트 - 재장전캔슬 델리게이트
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnReloadCanceled);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnWeaponShotFired);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWeaponDamageConfirmed, float, AppliedDamage, bool, bKilled);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnWeaponDamageNumberRequested, float, AppliedDamage, AActor*, TargetActor, FVector, WorldLocation);
+
 //명중 시 맞은 대상 , 최종 피해량 , 약점 bool , 맞은 위치 델리게이트
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnWeaponHit, AActor*, HitActor, float, FinalDamage, bool, bIsWeakspot, FVector, HitLocation);
 
@@ -27,11 +35,12 @@ class UNREALCH3_API URGDirectHitDamageType : public UDamageType
 
 
 UCLASS()
-class UNREALCH3_API ARGBaseWeapon : public AActor
+// 데미지 피드백 인터페이스 상속 추가
+class UNREALCH3_API ARGBaseWeapon : public AActor, public IDamageFeedbackReceiver
 {
 	GENERATED_BODY()
-	
-public:	
+
+public:
 	ARGBaseWeapon();
 	virtual void Tick(float DeltaTime) override;
 
@@ -49,8 +58,29 @@ public:
 	FOnAimingChanged OnAimingChanged;
 
 	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnReloadCanceled OnReloadCanceled;
+
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnWeaponShotFired OnShotFired;
+
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
 	FOnWeaponHit OnWeaponHit;
 	//=======================================================================================
+
+	//명중, 킬마커 정보 전달
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnWeaponDamageConfirmed OnDamageConfirmed;
+
+	//디버그 발사 충돌 검사용 라인트레이스
+	UPROPERTY(EditAnywhere, Category = "Weapon|Debug")
+	bool bShowWeaponTraceDebug = false;
+
+	//데미지 숫자 정보 전달
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnWeaponDamageNumberRequested OnDamageNumberRequested;
+
+	// 데미지 피드백 전달
+	virtual void ReceiveDamageFeedback(float AppliedDamage, bool bKilled, AActor* TargetActor, const FVector& WorldLocation) override;
 
 protected:
 
@@ -64,7 +94,7 @@ protected:
 	//피해 로직 : 기본 피해 * 강화 배율 * 거리 감쇠(선택) -> 최종 피해 전달.
 	// if 강화 X 에 거리감쇠 효과 0으로 한다면 -> 기본피해 == 최종피해
 	// 실제 체력 차감은 맞은 대상 (적) 에서 처리하는 것으로 구현 + 적 체력 여기서 건드리지 않음
-	virtual void ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart , bool bIsDirectHit);
+	virtual void ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart, bool bIsDirectHit);
 	// 발사 시작 지점/방향을 구함 기본은 캐릭터의 카메라 기준. 실패 시 false.
 	virtual bool GetMuzzleAimTransform(FVector& OutStart, FVector& OutDirection) const;
 	//재장전 타이머 끝났을 때 실제 재장전 처리
@@ -77,10 +107,10 @@ protected:
 	virtual FVector ApplySpread(const FVector& AimDirection) const;
 	// ===========================
 
-	UPROPERTY(EditDefaultsOnly , Category = "Weapon|Damage")
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Damage")
 	FName WeakSpotTag = FName(TEXT("Weakspot"));
 
-	UPROPERTY(EditDefaultsOnly , Category = "Weapon|Damage")
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Damage")
 	float WeakSpotDamageMultiplier = 1.5f;
 
 	//루트 컴포넌트 생성
@@ -88,7 +118,7 @@ protected:
 	USkeletalMeshComponent* WeaponMesh;
 
 	//데이터테이블 연동
-	UPROPERTY(EditDefaultsOnly , Category = "Weapon|Stats")
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Stats")
 	UDataTable* WeaponStatsTable;
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Stats")
 	FName WeaponRowName;
@@ -98,7 +128,7 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Weapon|Stats")
 	FWeaponStatsRow WeaponStats;
 	//트레이스 감지 범위
-	UPROPERTY(BlueprintReadOnly , Category = "Weapon|Trace")
+	UPROPERTY(BlueprintReadOnly, Category = "Weapon|Trace")
 	float TraceRange = 10000.f;
 	//라인트레이스 시스템이 감지하는 채널을 Visiblility 채널로 설정함.
 	//드롭다운으로 채널 바꾸기 가능
@@ -190,5 +220,8 @@ public:
 	int32 GetMagazineCapacity() const { return WeaponStats.MagazineCapacity; }
 
 	UFUNCTION(BlueprintPure, Category = "Weapon")
-	float GetADSFOVMultiplier() const { return WeaponStats.ADSFOVMultiplier; }
+	float GetADSFOV() const { return WeaponStats.ADSFOV; }
+
+	UFUNCTION(BlueprintPure, Category = "Weapon")
+	float GetReloadProgress() const;
 };
