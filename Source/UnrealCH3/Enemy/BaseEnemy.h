@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "BaseEnemy.generated.h"
 
+
 UENUM(BlueprintType)
 enum class EEnemyState : uint8
 {
@@ -33,16 +34,22 @@ public:
     // Sets default values for this character's properties
     ABaseEnemy();
     virtual void BeginPlay() override;
-    /*virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
-    virtual void Attack();
+    virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
+    //virtual void Attack();
     virtual void Die();
     bool IsTargetInAttackRange() const;
-    bool IsTargetInDetectRange() const;
-    void SetEnemyState(EEnemyState NewState);
+    /*bool IsTargetInDetectRange() const;
+    void SetEnemyState(EEnemyState NewState);*/
     EEnemyState GetEnemyState() const;
     void SetTargetActor(AActor* NewTarget);
-    AActor* GetTargetActor() const;*/
+    //AActor* GetTargetActor() const;
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+    float GetViewingAngle();
+    float GetViewingDistance();
+    float GetAttackMaxRange();
+    float GetAttackDamage();
+    int GetScore();
+    float GetExp();
 
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
@@ -67,7 +74,7 @@ protected:
     float Exp;              // 획득 경험치
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float Score;            // 처치 점수
+    int Score;            // 처치 점수
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     float ViewingAngle;     // 시야각
@@ -95,9 +102,6 @@ protected:
     float WarningTime;      // 공격 전 경고 시간
 
     FTimerHandle WarningTimer;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    bool bCanAttack;        // 공격 가능 여부
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     bool bIsDead;           // 사망 여부
