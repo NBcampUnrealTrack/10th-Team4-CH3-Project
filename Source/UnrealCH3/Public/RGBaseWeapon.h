@@ -15,11 +15,23 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAmmoChanged, int32, CurrentAmmo,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnReloadStarted);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnReloadCompleted);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAimingChanged, bool, bNowAiming);
+
 //UI담당자 추가 델리게이트 - 재장전캔슬 델리게이트
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnReloadCanceled);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnWeaponShotFired);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWeaponDamageConfirmed, float, AppliedDamage, bool, bKilled);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnWeaponDamageNumberRequested, float, AppliedDamage, AActor*, TargetActor, FVector, WorldLocation);
+
+//명중 시 맞은 대상 , 최종 피해량 , 약점 bool , 맞은 위치 델리게이트
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnWeaponHit, AActor*, HitActor, float, FinalDamage, bool, bIsWeakspot, FVector, HitLocation);
+
+//직접 공격 용 데이터 타입
+//데이터 코어에는 강화로인한 도탄 폭발 스플래쉬 데미지는 받지 않으므로 
+UCLASS()
+class UNREALCH3_API URGDirectHitDamageType : public UDamageType
+{
+	GENERATED_BODY()
+};
 
 
 UCLASS()
@@ -50,6 +62,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
 	FOnWeaponShotFired OnShotFired;
+
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnWeaponHit OnWeaponHit;
 	//=======================================================================================
 
 	//명중, 킬마커 정보 전달
@@ -79,7 +94,7 @@ protected:
 	//피해 로직 : 기본 피해 * 강화 배율 * 거리 감쇠(선택) -> 최종 피해 전달.
 	// if 강화 X 에 거리감쇠 효과 0으로 한다면 -> 기본피해 == 최종피해
 	// 실제 체력 차감은 맞은 대상 (적) 에서 처리하는 것으로 구현 + 적 체력 여기서 건드리지 않음
-	virtual void ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart);
+	virtual void ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart , bool bIsDirectHit);
 	// 발사 시작 지점/방향을 구함 기본은 캐릭터의 카메라 기준. 실패 시 false.
 	virtual bool GetMuzzleAimTransform(FVector& OutStart, FVector& OutDirection) const;
 	//재장전 타이머 끝났을 때 실제 재장전 처리
@@ -96,7 +111,7 @@ protected:
 	FName WeakSpotTag = FName(TEXT("Weakspot"));
 
 	UPROPERTY(EditDefaultsOnly , Category = "Weapon|Damage")
-	float WeakSpotDamageMulplier = 1.5f;
+	float WeakSpotDamageMultiplier = 1.5f;
 
 	//루트 컴포넌트 생성
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon")

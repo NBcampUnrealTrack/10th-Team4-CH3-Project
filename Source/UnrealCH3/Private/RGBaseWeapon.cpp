@@ -251,7 +251,7 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	{
 		return false;
 	}
-
+	// 레일건에만 필요한 로직
 	if (AlreadyHitActors)
 	{
 		if (AlreadyHitActors->Contains(Hit.GetActor()))
@@ -262,7 +262,12 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	}
 
 	const float BaseDamage = (DamageOverride >= 0.f) ? DamageOverride : WeaponStats.BaseDamage;
-	ApplyHitDamage(Hit, BaseDamage, StartLocation);
+	// "직격"의 기준은 무기 종류가 아니라 관통 순서임.
+	// AlreadyHitActors가 없으면(nullptr) 애초에 관통을 아예 안 쓰는 무기 -> 항상 직격.
+	// AlreadyHitActors가 있으면(관통 무기) -> 이 트레이스에서 "처음" 맞은 대상일 때만 직격으로 인정.
+	//   (Add는 이 아래 if문에서 이미 실행됐으므로, 여기서는 "방금 추가되기 전엔 비어있었는지"를 따로 셈)
+	const bool bIsDirectHit = (AlreadyHitActors == nullptr) || (AlreadyHitActors->Num() == 1);
+	ApplyHitDamage(Hit, BaseDamage, StartLocation, bIsDirectHit);
 	return true;
 }
 
@@ -436,7 +441,7 @@ void ARGBaseWeapon::SetExternalActionsAllowed(bool bAllowed)
 // [P0] 공통 피해 (추후 약점 시스템을 위한 코드 추가 필요)
 // ============================================================================
 
-//데미지 배율인가? 아니면 나중에 강화를 위한 함수?
+//강화 데미지 계산 
 float ARGBaseWeapon::GetUpgradeDamageMultiplier() const
 {
 	return 1.0f;
@@ -461,7 +466,7 @@ float ARGBaseWeapon::CalculateDistanceFalloffMultiplier(float Distance) const
 	return FMath::Lerp(1.f, WeaponStats.MinFalloffDamageMultiplier, Alpha);
 }
 
-void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart)
+void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart , bool bIsDirectHit)
 {
 	AActor* HitActor = Hit.GetActor();
 	if (!HitActor)
@@ -475,15 +480,21 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 	//거리별 감쇠 데미지 계산
 	const float Distance = FVector::Dist(ShotStart, Hit.ImpactPoint);
 	FinalDamage *= CalculateDistanceFalloffMultiplier(Distance);
-	//약점에 맞았으면 WeakSpotDamageMulplier 배율만큼 데미지 추가
+	//약점에 맞았으면 WeakSpotDamageMultiplier 배율만큼 데미지 추가
 	const bool bIsWeakSpot = Hit.Component.IsValid() && Hit.Component->ComponentHasTag(WeakSpotTag);
 	if (bIsWeakSpot)
 	{
-		FinalDamage *= WeakSpotDamageMulplier;
+		FinalDamage *= WeakSpotDamageMultiplier;
 	}
+	// ===== 데이터코어 에서 받아야함 =====
+	// 직격 히트스캔이면 URGDirectHitDamageType, 관통이면 그냥 기본 UDamageType으로 전달.
+	// 데이터 코어 쪽은 TakeDamage에서 이 타입을 확인해 관통/도탄/폭발/전이 피해를 걸러낼 수 있음.
+	TSubclassOf<UDamageType> DamageTypeClass = bIsDirectHit ? URGDirectHitDamageType::StaticClass() : UDamageType::StaticClass();
 
-	// 실제 전달은 언리얼 기본 데미지 시스템 사용. 무기는 대상 체력을 직접 수정하지 않습니다.
+	// ===== 적 AI 에서 받아야함 =====
+	// 실제 전달은 언리얼 기본 데미지 시스템 사용.
 	//내부적으로 HitActor->TakeDamage()를 대신 호출
+	//그러므로 적을 담당하는 분은 적 코드에 언리얼에서 제공하는 TakeDamage() 함수 시그니쳐에 따라서 TakeDamage() 코드를 만들어 놓으면 됨
 	UGameplayStatics::ApplyPointDamage(
 		HitActor,
 		FinalDamage,
@@ -491,6 +502,9 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 		Hit,
 		OwningCharacter ? OwningCharacter->GetController() : nullptr,
 		this,
-		UDamageType::StaticClass()
+		DamageTypeClass
 	);
+	// ===== UI , 게임모드에서 받아야함 =====
+	//명중 처치 피드백 용 델리게이트 방송
+	OnWeaponHit.Broadcast(HitActor, FinalDamage, bIsWeakSpot, Hit.ImpactPoint);
 }

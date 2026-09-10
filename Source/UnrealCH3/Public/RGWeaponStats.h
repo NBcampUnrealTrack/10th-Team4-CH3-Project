@@ -31,6 +31,7 @@ struct FWeaponStatsRow : public FTableRowBase
 	float ReloadTime = 1.8f;
 
 	// 조준시 카메라 FOV 배율 <- 모든 무기 고정으로 해도 문제 X
+	//=============== 조준 시 카메라 FOV 는 캐릭터에서 수치값으로 조정하기로 함============================
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
 	float ADSFOVMultiplier = 1.35f;
 
