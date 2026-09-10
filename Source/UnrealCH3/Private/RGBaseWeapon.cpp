@@ -59,9 +59,9 @@ void ARGBaseWeapon::SetOwningCharacter(ACharacter* NewOwner)
 // StartFire에서StartFireTimer를 호출한다. -> StartFireTimer는 HandleFireTick함수를 FireInterval 간격에 따라서 반복한다.
 //HandleFireTick 함수는 많은 것을 한다. 발사 가능한 상태인지 확인. 발사 . 탄약 줄이기 등의 역할을 한다.
 //HandleFireTick에서 호출된 Fire()는 GetMuzzleAimTransform()를 통해 카메라의 위치와 보는 방향세팅하고
-//FireHitscan()에서 
+//ApplySpread()로 조준 상태에 맞는 원뿔 각도만큼 방향을 흩뜨린 뒤 FireHitscan()에 넘김
 
-//바인딩 할 때 좌클릭을 누를 때 StartFire() 호출 땔 때 StopFire() 호출 해야함
+//바인딩 시 좌클릭 누를 때 StartFire() 호출 -> 땔 때 StopFire() 호출 해야함
 bool ARGBaseWeapon::CanFire() const
 {	//외부액션중이면 (강화 중 등)
 	if (!bExternalActionsAllowed) return false;
@@ -101,7 +101,7 @@ void ARGBaseWeapon::StopFireTimer()
 {
 	GetWorldTimerManager().ClearTimer(FireTimerHandle);
 }
-
+//이 함수에 의해 틱(발사시간간격)마다 적용되는 것 -> 발사 가능한 상태인지 실시간 확인 , 탄약 줄이기 , 델리게이트 , 탄퍼짐 , 발사 , 라인트레이스
 void ARGBaseWeapon::HandleFireTick()
 {
 	//발사 가능한 상태인가?
@@ -141,6 +141,21 @@ bool ARGBaseWeapon::GetMuzzleAimTransform(FVector& OutStart, FVector& OutDirecti
 	return true;
 }
 
+FVector ARGBaseWeapon::ApplySpread(const FVector& AimDirection) const
+{
+	const float SpreadDegrees = bIsAiming ? WeaponStats.AimSpread : WeaponStats.HipFireSpread;
+
+	// 0도 이하이면 완벽한 직선(퍼짐 없음)이므로 굳이 랜덤 계산 없이 원래 방향 그대로 반환
+	if (SpreadDegrees <= 0.f)
+	{
+		return AimDirection;
+	}
+
+	const float SpreadRadians = FMath::DegreesToRadians(SpreadDegrees);
+	// AimDirection을 중심축으로 하는 원뿔 안에서 균일 분포로 방향을 하나 뽑음
+	return FMath::VRandCone(AimDirection, SpreadRadians);
+}
+
 void ARGBaseWeapon::Fire()
 {
 	FVector StartLocation, FireDirection;
@@ -148,11 +163,13 @@ void ARGBaseWeapon::Fire()
 	{
 		return;
 	}
-	// FireHitscan()에 StartLocation , FireDirection 전달
-	FireHitscan(StartLocation, FireDirection, -1.f, nullptr);
+	// 조준 여부에 맞는 탄퍼짐을 적용해서 실제 발사 방향을 흩뜨림
+	const FVector SpreadDirection = ApplySpread(FireDirection);
+
+	// FireHitscan()에 StartLocation , (퍼짐 적용된) SpreadDirection 전달
+	FireHitscan(StartLocation, SpreadDirection, -1.f, nullptr);
 }
 
-//
 bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors)
 {	
 	//광선의 끝 지점을 계산 
@@ -253,7 +270,7 @@ void ARGBaseWeapon::StartReloaded()
 	{
 		return;
 	}
-
+	//재장전 시 조준 , 발사 스톱
 	StopAiming();
 	StopFire();
 
@@ -271,7 +288,7 @@ void ARGBaseWeapon::CancelReloaded()
 	}
 	GetWorldTimerManager().ClearTimer(ReloadTimerHandle);
 	bIsReloading = false;
-	// 취소된 장전은 탄약을 지급하지 않고, 재장전 완료 방송도 하지 않습니다.
+	// 취소된 장전은 탄약을 지급하지 않고, 재장전 완료 방송도 하지 않음.
 }
 
 void ARGBaseWeapon::OnReloadTimerComplete()
@@ -292,7 +309,7 @@ void ARGBaseWeapon::CompleteReload()
 	{
 		CurrentAmmo = WeaponStats.MagazineCapacity;
 	}
-	//bReloadWholeMagazine가 false라면 장전 한번에 탄창 한번만 구현
+	//bReloadWholeMagazine가 false라면 장전 한번에 총알 하나씩 장전됨(샷건)
 	else
 	{
 		CurrentAmmo = FMath::Min(WeaponStats.MagazineCapacity, CurrentAmmo + 1);
@@ -328,7 +345,7 @@ void ARGBaseWeapon::SetExternalActionsAllowed(bool bAllowed)
 }
 
 // ============================================================================
-// [P0] 공통 피해
+// [P0] 공통 피해 (추후 약점 시스템을 위한 코드 추가 필요)
 // ============================================================================
 
 //데미지 배율인가? 아니면 나중에 강화를 위한 함수?
@@ -363,14 +380,22 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 	{
 		return;
 	}
-
+	//최종 데미지 계산
 	float FinalDamage = BaseDamage;
+	//강화 데미지 계산
 	FinalDamage *= GetUpgradeDamageMultiplier();
-
+	//거리별 감쇠 데미지 계산
 	const float Distance = FVector::Dist(ShotStart, Hit.ImpactPoint);
 	FinalDamage *= CalculateDistanceFalloffMultiplier(Distance);
+	//약점에 맞았으면 WeakSpotDamageMulplier 배율만큼 데미지 추가
+	const bool bIsWeakSpot = Hit.Component.IsValid() && Hit.Component->ComponentHasTag(WeakSpotTag);
+	if (bIsWeakSpot)
+	{
+		FinalDamage *= WeakSpotDamageMulplier;
+	}
 
 	// 실제 전달은 언리얼 기본 데미지 시스템 사용. 무기는 대상 체력을 직접 수정하지 않습니다.
+	//내부적으로 HitActor->TakeDamage()를 대신 호출
 	UGameplayStatics::ApplyPointDamage(
 		HitActor,
 		FinalDamage,

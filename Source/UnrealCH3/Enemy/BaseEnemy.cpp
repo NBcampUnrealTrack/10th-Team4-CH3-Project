@@ -11,6 +11,8 @@ ABaseEnemy::ABaseEnemy()
 	PrimaryActorTick.bCanEverTick = false;
 	AIControllerClass = AAIEnemyController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+	ViewingAngle = 140;
+	ViewingDistance = 3500.0f;
 }
 
 // Called when the game starts or when spawned
