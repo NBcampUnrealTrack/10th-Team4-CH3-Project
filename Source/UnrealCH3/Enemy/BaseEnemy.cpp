@@ -73,3 +73,23 @@ float ABaseEnemy::GetViewingDistance()
 {
 	return ViewingDistance;
 }
+
+float ABaseEnemy::GetAttackMaxRange()
+{
+	return AttackMaxRange;
+}
+
+float ABaseEnemy::GetAttackDamage()
+{
+	return AttackDamage;
+}
+
+int ABaseEnemy::GetScore()
+{
+	return Score;
+}
+
+float ABaseEnemy::GetExp()
+{
+	return Exp;
+}

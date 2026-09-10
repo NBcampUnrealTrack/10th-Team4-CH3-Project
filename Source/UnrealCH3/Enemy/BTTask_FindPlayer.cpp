@@ -15,6 +15,7 @@ EBTNodeResult::Type UBTTask_FindPlayer::ExecuteTask(UBehaviorTreeComponent& Owne
 	if (BlackboardComp)
 	{
 		AActor* targetActor = Cast<AActor>(BlackboardComp->GetValueAsObject(TEXT("Target")));
+
 		if (targetActor)
 		{
 			BlackboardComp->SetValueAsVector(TEXT("TargetLocation"), targetActor->GetActorLocation());
