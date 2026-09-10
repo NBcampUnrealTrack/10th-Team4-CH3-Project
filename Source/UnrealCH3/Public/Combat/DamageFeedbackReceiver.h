@@ -15,7 +15,7 @@ class UNREALCH3_API IDamageFeedbackReceiver
 	GENERATED_BODY()
 
 public:
-	// 대상이 확정한 실제 피해량과 처치 여부 수신
+	// 대상이 받은 실제 피해량과 처치 여부 수신
 	virtual void ReceiveDamageFeedback(
 		float AppliedDamage,
 		bool bKilled,
