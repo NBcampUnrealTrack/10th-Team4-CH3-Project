@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -7,47 +5,49 @@
 #include "RGGameModeBase.generated.h"
 
 class UUserWidget;
+class ARGCharacter;
+class ABaseEnemy;
 
 
 // =========================================================
-// 게임 진행 상태
+// Run State
 // =========================================================
 
 UENUM(BlueprintType)
 enum class ERunState : uint8
 {
-	Init        UMETA(DisplayName = "초기화"),
-	Combat      UMETA(DisplayName = "전투 중"),
-	Pause       UMETA(DisplayName = "일시정지"),
-	Upgrade     UMETA(DisplayName = "강화 중"),
-	RestHub     UMETA(DisplayName = "휴식처"),
-	Result      UMETA(DisplayName = "결과 화면"),
-	Loading     UMETA(DisplayName = "로딩 중")
+	Init,
+	Combat,
+	Pause,
+	Upgrade,
+	RestHub,
+	Result,
+	Loading
 };
 
 
 // =========================================================
-// 게임 종료 이유
+// Death Reason
 // =========================================================
 
 UENUM(BlueprintType)
 enum class EDeathReason : uint8
 {
-	Killed      UMETA(DisplayName = "사망"),
-	TimeOut     UMETA(DisplayName = "시간 초과")
+	Killed,
+	TimeOut
 };
 
 
 // =========================================================
-// 입력 모드
+// Input Mode
 // =========================================================
 
 UENUM(BlueprintType)
 enum class ERGInputMode : uint8
 {
-	GameOnly        UMETA(DisplayName = "Game Only"),
-	UIOnly          UMETA(DisplayName = "UI Only"),
-	GameAndUI       UMETA(DisplayName = "Game And UI")
+	GameOnly,
+	UIOnly,
+	GameAndUI
 };
 
 
@@ -55,104 +55,65 @@ enum class ERGInputMode : uint8
 // GameMode
 // =========================================================
 
-/**
- * Run & Gun 공통 GameMode
- *
- * 담당 기능
- *
- * 1. 게임 상태 관리
- * 2. 제한 시간 관리
- * 3. Kill Count 관리
- * 4. Stage Clear / Game Over
- * 5. 기본 UI 생성
- * 6. 기본 Input Mode 설정
- *
- * 실제 Pawn / Controller / HUD Class는
- * 이 클래스를 상속한 Blueprint GameMode에서 설정한다.
- */
 UCLASS()
 class UNREALCH3_API ARGGameModeBase : public AGameModeBase
 {
 	GENERATED_BODY()
 
-
-	// =========================================================
-	// Unreal 기본
-	// =========================================================
-
 public:
 
 	ARGGameModeBase();
 
-
 protected:
 
 	virtual void BeginPlay() override;
-
-	virtual void EndPlay(
-		const EEndPlayReason::Type EndPlayReason
-	) override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 
 	// =========================================================
-	// GameMode Type 설정
+	// Run
 	// =========================================================
 
 public:
 
-	/**
-	 * 이 GameMode에서 게임 진행 시스템을 시작할지 여부.
-	 *
-	 * Combat GameMode:
-	 * True
-	 *
-	 * MainMenu GameMode:
-	 * False
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "GameMode|Run"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Run")
 	bool bStartRunSystem;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run")
+	bool bSystemsReady;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run")
+	bool bCombatStarted;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run")
+	bool bIsRunEnded;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run")
+	bool bIsStageCleared;
+
+	UFUNCTION(BlueprintCallable, Category = "Run")
+	void InitializeRun();
+
+	UFUNCTION(BlueprintCallable, Category = "Run")
+	bool StartCombat();
+
+	UFUNCTION(BlueprintPure, Category = "Run")
+	bool IsCombatActive() const;
+
 
 	// =========================================================
-	// Run State
+	// State
 	// =========================================================
 
 public:
 
-	/**
-	 * 현재 게임 상태
-	 */
-	UPROPERTY(
-		VisibleAnywhere,
-		BlueprintReadOnly,
-		Category = "Run|State"
-	)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run|State")
 	ERunState CurrentState;
 
+	UFUNCTION(BlueprintCallable, Category = "Run|State")
+	void ChangeRunState(ERunState NewState);
 
-	/**
-	 * 게임 상태 변경
-	 */
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "Run|State"
-	)
-	void ChangeRunState(
-		ERunState NewState
-	);
-
-
-	/**
-	 * 현재 상태 Getter
-	 */
-	UFUNCTION(
-		BlueprintPure,
-		Category = "Run|State"
-	)
+	UFUNCTION(BlueprintPure, Category = "Run|State")
 	ERunState GetRunState() const
 	{
 		return CurrentState;
@@ -160,41 +121,30 @@ public:
 
 
 	// =========================================================
-	// Run Timer
+	// Timer
 	// =========================================================
 
 protected:
 
-	/**
-	 * 게임 시간 Timer Handle
-	 */
 	FTimerHandle RunTimerHandle;
-
 
 	UFUNCTION()
 	void UpdateRunTimer();
 
-
 public:
 
-	/**
-	 * 게임 제한 시간
-	 *
-	 * BP_RGGameMode Class Defaults에서 조정 가능
-	 */
 	UPROPERTY(
 		EditDefaultsOnly,
-		BlueprintReadWrite,
+		BlueprintReadOnly,
 		Category = "Run|Timer",
-		meta = (ClampMin = "0.0")
+		meta = (ClampMin = "1.0")
 	)
+	float RunTimeLimit;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run|Timer")
 	float RemainingTime;
 
-
-	UFUNCTION(
-		BlueprintPure,
-		Category = "Run|Timer"
-	)
+	UFUNCTION(BlueprintPure, Category = "Run|Timer")
 	float GetRemainingTime() const
 	{
 		return RemainingTime;
@@ -202,110 +152,108 @@ public:
 
 
 	// =========================================================
-	// Kill / Stage Clear
+	// Objective
 	// =========================================================
 
 public:
 
-	/**
-	 * 현재 처치 수
-	 */
-	UPROPERTY(
-		VisibleAnywhere,
-		BlueprintReadOnly,
-		Category = "Run|Kill"
-	)
-	int32 CurrentKills;
-
-
-	/**
-	 * Stage Clear에 필요한 처치 수
-	 */
 	UPROPERTY(
 		EditDefaultsOnly,
 		BlueprintReadOnly,
-		Category = "Run|Kill",
-		meta = (ClampMin = "1")
+		Category = "Run|Objective",
+		meta = (ClampMin = "0")
 	)
 	int32 TargetKillsToClear;
 
-
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "Run|Kill"
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Run|Objective",
+		meta = (ClampMin = "0")
 	)
-	void OnEnemyDied();
+	int32 TargetCoresToClear;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run|Objective")
+	int32 CurrentKills;
 
-	UFUNCTION(
-		BlueprintPure,
-		Category = "Run|Logic"
-	)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run|Objective")
+	int32 CurrentCores;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run|Objective")
+	int32 AliveEnemyCount;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run|Score")
+	int32 CurrentScore;
+
+	UFUNCTION(BlueprintCallable, Category = "Run|Objective")
+	void RegisterEnemySpawned(ABaseEnemy* Enemy);
+
+	UFUNCTION(BlueprintCallable, Category = "Run|Objective")
+	void UnregisterEnemy(ABaseEnemy* Enemy);
+
+	UFUNCTION(BlueprintCallable, Category = "Run|Objective")
+	void RegisterEnemyKilled(ABaseEnemy* Enemy, int32 ScoreValue);
+
+	UFUNCTION(BlueprintCallable, Category = "Run|Objective")
+	void RegisterCoreDestroyed();
+
+	UFUNCTION(BlueprintPure, Category = "Run|Objective")
 	bool CheckStageClearCondition() const;
 
+	UFUNCTION(BlueprintCallable, Category = "Run|Objective")
+	void CheckObjectiveCompletion();
 
-	UFUNCTION(
-		BlueprintPure,
-		Category = "Run|Kill"
-	)
+	UFUNCTION(BlueprintPure, Category = "Run|Objective")
 	int32 GetCurrentKills() const
 	{
 		return CurrentKills;
 	}
 
-
-	UFUNCTION(
-		BlueprintPure,
-		Category = "Run|Kill"
-	)
-	int32 GetTargetKillsToClear() const
+	UFUNCTION(BlueprintPure, Category = "Run|Objective")
+	int32 GetCurrentCores() const
 	{
-		return TargetKillsToClear;
+		return CurrentCores;
+	}
+
+	UFUNCTION(BlueprintPure, Category = "Run|Objective")
+	int32 GetAliveEnemyCount() const
+	{
+		return AliveEnemyCount;
+	}
+
+	UFUNCTION(BlueprintPure, Category = "Run|Score")
+	int32 GetCurrentScore() const
+	{
+		return CurrentScore;
 	}
 
 
 	// =========================================================
-	// 게임 종료
+	// Fail / Clear
 	// =========================================================
 
 public:
 
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "Run|Logic"
-	)
-	void CheckEndCondition(
-		bool bIsPlayerDead,
-		bool bIsTimeOut
-	);
-
+	UFUNCTION(BlueprintCallable, Category = "Run|Result")
+	void NotifyPlayerDeath();
 
 protected:
 
-	void ExecuteGameOver(
-		EDeathReason Reason
-	);
-
-
+	void ExecuteGameOver(EDeathReason Reason);
 	void ExecuteStageClear();
 
 
-	bool bIsRunEnded;
-
-	bool bIsStageCleared;
-
-
 	// =========================================================
-	// System Validation
+	// Systems
 	// =========================================================
 
 public:
 
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "System"
-	)
+	UFUNCTION(BlueprintCallable, Category = "System")
 	bool VerifySystems();
+
+	UFUNCTION(BlueprintCallable, Category = "System")
+	void SetPlayerActionsAllowed(bool bAllowed);
 
 
 	// =========================================================
@@ -314,91 +262,23 @@ public:
 
 public:
 
-	/**
-	 * BeginPlay 시 GameMode가 직접
-	 * Widget을 생성할지 여부
-	 *
-	 * MainMenu:
-	 * True
-	 *
-	 * Combat HUD Manager 사용:
-	 * False
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "UI|Default"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Default")
 	bool bCreateDefaultUI;
 
-
-	/**
-	 * GameMode가 직접 생성할 Widget
-	 *
-	 * 예:
-	 * WBP_MainMenu
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "UI|Default"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Default")
 	TSubclassOf<UUserWidget> DefaultUIClass;
 
-
-	/**
-	 * 실제 생성된 Widget
-	 */
-	UPROPERTY(
-		VisibleAnywhere,
-		BlueprintReadOnly,
-		Category = "UI|Default"
-	)
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "UI|Default")
 	TObjectPtr<UUserWidget> DefaultUIWidget;
 
-
-	/**
-	 * UI ZOrder
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "UI|Default"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Default")
 	int32 DefaultUIZOrder;
 
-
-	/**
-	 * 기본 UI 생성
-	 */
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "UI"
-	)
+	UFUNCTION(BlueprintCallable, Category = "UI")
 	UUserWidget* CreateDefaultUI();
 
-
-	/**
-	 * 기본 UI 제거
-	 */
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "UI"
-	)
+	UFUNCTION(BlueprintCallable, Category = "UI")
 	void RemoveDefaultUI();
-
-
-	/**
-	 * 현재 생성된 기본 UI
-	 */
-	UFUNCTION(
-		BlueprintPure,
-		Category = "UI"
-	)
-	UUserWidget* GetDefaultUIWidget() const
-	{
-		return DefaultUIWidget;
-	}
 
 
 	// =========================================================
@@ -407,45 +287,22 @@ public:
 
 public:
 
-	/**
-	 * BeginPlay에서 자동 Input Mode 적용 여부
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "Input|Default"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Default")
 	bool bApplyDefaultInputMode;
 
-
-	/**
-	 * GameOnly / UIOnly / GameAndUI
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "Input|Default"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Default")
 	ERGInputMode DefaultInputMode;
 
-
-	/**
-	 * 마우스 커서 표시
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "Input|Default"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Default")
 	bool bShowMouseCursor;
 
-
-	/**
-	 * Input Mode 실제 적용
-	 */
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "Input"
-	)
+	UFUNCTION(BlueprintCallable, Category = "Input")
 	void ApplyDefaultInputSettings();
+
+
+private:
+
+	// 중복 Spawn / Death 이벤트 방지
+	UPROPERTY()
+	TSet<TObjectPtr<ABaseEnemy>> AliveEnemies;
 };

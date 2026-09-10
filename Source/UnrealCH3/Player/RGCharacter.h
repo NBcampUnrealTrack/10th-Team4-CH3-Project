@@ -8,6 +8,7 @@ class USpringArmComponent;
 class UCameraComponent;
 class UTimelineComponent;
 struct FInputActionValue;
+class ARGBaseWeapon;
 
 // 캐릭터 이동상태 ENUM
 UENUM(BlueprintType)
@@ -29,6 +30,27 @@ class UNREALCH3_API ARGCharacter : public ACharacter
 
 public:
 	ARGCharacter();
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	TSubclassOf<ARGBaseWeapon> DefaultWeaponClass;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon")
+	TObjectPtr<ARGBaseWeapon> EquippedWeapon;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State")
+	bool bPlayerActionsAllowed = false;
+
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	bool InitializeDefaultWeapon();
+
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void SetPlayerActionsAllowed(bool bAllowed);
+
+	UFUNCTION(BlueprintPure, Category = "Combat")
+	ARGBaseWeapon* GetEquippedWeapon() const
+	{
+		return EquippedWeapon;
+	}
 
 protected:
 	// override 함수

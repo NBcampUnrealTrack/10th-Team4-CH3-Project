@@ -11,7 +11,7 @@ UCLASS()
 class UNREALCH3_API ARGPlayerController : public APlayerController
 {
 	GENERATED_BODY()
-	
+
 public:
 	ARGPlayerController();
 
@@ -19,6 +19,7 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
+
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputMappingContext> DefaultIMC;
 
@@ -40,6 +41,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> CrouchAction;
 
+	// 기존 Character 코드와 이름 통일
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> ShootAction;
 
@@ -48,4 +50,12 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> ReloadAction;
+
+	// P0 수류탄
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UInputAction> GrenadeAction;
+
+	// P0 포털 상호작용
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UInputAction> InteractAction;
 };

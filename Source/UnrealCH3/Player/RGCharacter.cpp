@@ -7,6 +7,8 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "RGBaseWeapon.h"
+#include "Gamemode/RGGameModeBase.h"
 
 ARGCharacter::ARGCharacter()
 {
@@ -471,3 +473,85 @@ void ARGCharacter::OnDashFinished()
 	CurrentMovementState = EMovementState::Idle;
 }
 
+bool ARGCharacter::InitializeDefaultWeapon()
+{
+	if (EquippedWeapon)
+	{
+		return true;
+	}
+
+	if (!DefaultWeaponClass)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[RGCharacter] DefaultWeaponClass is not assigned.")
+		);
+
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+
+	SpawnParams.Owner = this;
+	SpawnParams.Instigator = this;
+	SpawnParams.SpawnCollisionHandlingOverride =
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	EquippedWeapon =
+		GetWorld()->SpawnActor<ARGBaseWeapon>(
+			DefaultWeaponClass,
+			GetActorTransform(),
+			SpawnParams
+		);
+
+	if (!EquippedWeapon)
+	{
+		return false;
+	}
+
+	EquippedWeapon->SetOwningCharacter(this);
+
+	if (USkeletalMeshComponent* CharacterMesh = GetMesh())
+	{
+		EquippedWeapon->AttachToComponent(
+			CharacterMesh,
+			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+			TEXT("WeaponSocket")
+		);
+	}
+
+	EquippedWeapon->SetExternalActionsAllowed(
+		bPlayerActionsAllowed
+	);
+
+	return true;
+}
+
+
+void ARGCharacter::SetPlayerActionsAllowed(
+	bool bAllowed
+)
+{
+	bPlayerActionsAllowed = bAllowed;
+
+	if (!bAllowed)
+	{
+		SetSprintState(false);
+		SetAimState(false);
+
+		if (DashTimeline)
+		{
+			DashTimeline->Stop();
+		}
+
+		GetCharacterMovement()->StopMovementImmediately();
+	}
+
+	if (EquippedWeapon)
+	{
+		EquippedWeapon->SetExternalActionsAllowed(
+			bAllowed
+		);
+	}
+}

@@ -1,4 +1,5 @@
 ﻿#include "Player/RGPlayerController.h"
+
 #include "EnhancedInputSubsystems.h"
 
 ARGPlayerController::ARGPlayerController()
@@ -9,9 +10,11 @@ ARGPlayerController::ARGPlayerController()
 	, DashAction(nullptr)
 	, SprintAction(nullptr)
 	, CrouchAction(nullptr)
-	, FireAction(nullptr)
+	, ShootAction(nullptr)
 	, AimAction(nullptr)
 	, ReloadAction(nullptr)
+	, GrenadeAction(nullptr)
+	, InteractAction(nullptr)
 {
 }
 
