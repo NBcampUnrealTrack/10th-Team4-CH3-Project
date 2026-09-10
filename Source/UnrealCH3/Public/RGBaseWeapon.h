@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "RGWeaponStats.h"
+#include "Combat/DamageFeedbackReceiver.h"
 #include "RGBaseWeapon.generated.h"
 
 class USkeletalMeshComponent;
@@ -14,6 +15,13 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAmmoChanged, int32, CurrentAmmo,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnReloadStarted);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnReloadCompleted);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAimingChanged, bool, bNowAiming);
+
+//UI담당자 추가 델리게이트 - 재장전캔슬 델리게이트
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnReloadCanceled);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnWeaponShotFired);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWeaponDamageConfirmed, float, AppliedDamage, bool, bKilled);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnWeaponDamageNumberRequested, float, AppliedDamage, AActor*, TargetActor, FVector, WorldLocation);
+
 //명중 시 맞은 대상 , 최종 피해량 , 약점 bool , 맞은 위치 델리게이트
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnWeaponHit, AActor*, HitActor, float, FinalDamage, bool, bIsWeakspot, FVector, HitLocation);
 
@@ -27,7 +35,8 @@ class UNREALCH3_API URGDirectHitDamageType : public UDamageType
 
 
 UCLASS()
-class UNREALCH3_API ARGBaseWeapon : public AActor
+// 데미지 피드백 인터페이스 상속 추가
+class UNREALCH3_API ARGBaseWeapon : public AActor , public IDamageFeedbackReceiver
 {
 	GENERATED_BODY()
 	
@@ -47,10 +56,31 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
 	FOnAimingChanged OnAimingChanged;
+	
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnReloadCanceled OnReloadCanceled;
+
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnWeaponShotFired OnShotFired;
 
 	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
 	FOnWeaponHit OnWeaponHit;
 	//=======================================================================================
+
+	//명중, 킬마커 정보 전달
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnWeaponDamageConfirmed OnDamageConfirmed;
+
+	//디버그 발사 충돌 검사용 라인트레이스
+	UPROPERTY(EditAnywhere, Category = "Weapon|Debug")
+	bool bShowWeaponTraceDebug = false;
+
+	//데미지 숫자 정보 전달
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnWeaponDamageNumberRequested OnDamageNumberRequested;
+
+	// 데미지 피드백 전달
+	virtual void ReceiveDamageFeedback(float AppliedDamage, bool bKilled, AActor* TargetActor, const FVector& WorldLocation) override;
 
 protected:
 
@@ -191,4 +221,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Weapon")
 	float GetADSFOVMultiplier() const { return WeaponStats.ADSFOVMultiplier; }
+	
+	UFUNCTION(BlueprintPure, Category = "Weapon")
+	float GetReloadProgress() const;
+
+
 };

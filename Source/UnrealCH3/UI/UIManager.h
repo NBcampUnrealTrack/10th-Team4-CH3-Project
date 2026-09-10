@@ -10,6 +10,9 @@
 class UHUDWidget;
 class UHUDController;
 class UUserWidget;
+class UWeaponInfoWidget;
+class ARGBaseWeapon;
+class UCrosshairWidget;
 
 /**
  * 
@@ -66,6 +69,22 @@ protected:
 	bool HasInputBlockingView() const;
 	//Layer 에 활성화 된 View 존재 여부 판단
 	bool HasActiveViewInLayer(EUILayer Layer) const;
+	// Controll 에서 확정된 피해 정보를 BP로 전달
+	void HandleDamageNumberRequested(float AppliedDamage, AActor* TargetActor, FVector WorldLocation);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI|Damage")
+	void OnDamageNumberDisplayRequested(float AppliedDamage, AActor* TargetActor, FVector WorldLocation);
+
+	//공격 경고 표시
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI|CombatFeedback")
+	void OnAttackWarningDisplayRequested(AActor* Attacker, float WarningDuration);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI|CombatFeedback")
+	void OnAttackWarningHideReqested(AActor* Attacker);
+
+	//피격 방향 표시
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI|CombatFeedback")
+	void OnDirectionDamageDisplayRequested(AActor* Attacker, FVector AttackOrigin);
 
 public:
 	// 테스트용 함수 모음
@@ -104,4 +123,31 @@ public:
 	//View 계층 제거
 	UFUNCTION(BlueprintCallable, Category = "UI|View")
 	bool CloseView(TSubclassOf<UUserWidget> ViewClass);
+
+	// 생성된 무기 정보 View를 기존 HUDController에 등록
+	UFUNCTION(BlueprintCallable, Category = "UI|Binding")
+	void RegisterWeaponInfoView(UWeaponInfoWidget* InWeaponInfoView);
+
+	// 장작한 무기 정보 UI Controller 에 전당
+	UFUNCTION(BlueprintCallable, Category = "UI|Binding")
+	void SetEquippedWeapon(ARGBaseWeapon* InWeapon, const FText& InWeaponDisplayName);
+
+	UFUNCTION(BlueprintCallable, Category = "UI|Binding")
+	void RegisterCrosshairView(UCrosshairWidget* InCrosshairView);
+
+	//플레이어의 UI 매니저 호출
+	//공격 준비 시작 시 공격자와 공격 준비시간을 전달
+	//호출할 함수 공격자, 공격 준비시간
+	UFUNCTION(BlueprintCallable, Category = "UI|CombatFeedback")
+	void NotifyAttackWarningStarted(AActor* Attacker, float WarningDuration);
+
+	//공격 취소, 공격자 사망시 호출
+	//호출할 함수 공격자
+	UFUNCTION(BlueprintCallable, Category = "UI|CombatFeedback")
+	void NotifyAttackWarningCanceled(AActor* Attacker);
+
+	//피격 시 호출
+	//호출할 함수 공격자, 공격 발생 위치
+	UFUNCTION(BlueprintCallable, Category = "UI|CombatFeedback")
+	void NotifyDirectionalDamage(AActor* Attacker, FVector AttackOrigin);
 };
