@@ -41,7 +41,7 @@ public:
 	TObjectPtr<UInputAction> CrouchAction;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
-	TObjectPtr<UInputAction> ShootAction;
+	TObjectPtr<UInputAction> FireAction;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> AimAction;

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -221,9 +221,4 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Weapon")
 	float GetADSFOVMultiplier() const { return WeaponStats.ADSFOVMultiplier; }
-	
-	UFUNCTION(BlueprintPure, Category = "Weapon")
-	float GetReloadProgress() const;
-
-
 };

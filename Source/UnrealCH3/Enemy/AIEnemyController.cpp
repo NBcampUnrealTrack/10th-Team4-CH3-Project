@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+癤�// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Enemy/AIEnemyController.h"
@@ -12,6 +12,16 @@
 
 AAIEnemyController::AAIEnemyController()
 {
+	static ConstructorHelpers::FObjectFinder<UBlackboardData> bb(TEXT("/Game/AI/BB_Enemy.BB_Enemy"));
+	if (bb.Succeeded())
+	{
+		BbAsset = bb.Object;
+	}
+	static ConstructorHelpers::FObjectFinder<UBehaviorTree> bt(TEXT("/Game/AI/BT_Enemy.BT_Enemy"));
+	if (bb.Succeeded())
+	{
+		BtAsset = bt.Object;
+	}
 	Perception = CreateDefaultSubobject<UAIPerceptionComponent>(TEXT("AIPerceptionComponent"));
 	Sight = CreateDefaultSubobject<UAISenseConfig_Sight>(TEXT("Sight Config"));
 
@@ -34,8 +44,7 @@ void AAIEnemyController::OnPossess(APawn* InPawn)
 	Super::OnPossess(InPawn);
 	ABaseEnemy* Enemy = Cast<ABaseEnemy>(InPawn);
 
-	//오류 수정 기존: Enemy 가 없을 때 접근 -> if 문을 Enemy 객체 유효성 검사로 수정 기존 코드 아래로 내림
-	if (!Enemy)
+	if (Enemy)
 	{
 		return;
 	}
@@ -53,20 +62,36 @@ void AAIEnemyController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus
 	if (!Enemy || !Actor) return;
 	ARGCharacter* Player = Cast<ARGCharacter>(Actor);
 	if (!Player) return;
-
 	if (Stimulus.WasSuccessfullySensed())
 	{
-
-		if(Actor)
 		Enemy->SetTargetActor(Actor);
+		BbComp->SetValueAsObject(TEXT("Target"), Actor);
+	}
+	else
+	{
+		
+		Enemy->SetTargetActor(nullptr);
+		BbComp->SetValueAsObject(TEXT("Target"), nullptr);
 	}
 }
 
 void AAIEnemyController::RunAI()
 {
+	if (!BbAsset)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BbAsset NULL"));
+	}
 	if (UseBlackboard(BbAsset, BbComp))
 	{
 		RunBehaviorTree(BtAsset);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("UseBlackboard Failed! BbAsset: %s"), BbAsset ? *BbAsset->GetName() : TEXT("NULL"));
+	}
+	if (!BbComp)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BbComponent NULL"));
 	}
 }
 

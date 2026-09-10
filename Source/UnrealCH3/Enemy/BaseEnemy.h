@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "BaseEnemy.generated.h"
 
+
 UENUM(BlueprintType)
 enum class EEnemyState : uint8
 {
@@ -45,6 +46,10 @@ public:
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
     float GetViewingAngle();
     float GetViewingDistance();
+    float GetAttackMaxRange();
+    float GetAttackDamage();
+    int GetScore();
+    float GetExp();
 
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
@@ -69,7 +74,7 @@ protected:
     float Exp;              // 획득 경험치
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float Score;            // 처치 점수
+    int Score;            // 처치 점수
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     float ViewingAngle;     // 시야각

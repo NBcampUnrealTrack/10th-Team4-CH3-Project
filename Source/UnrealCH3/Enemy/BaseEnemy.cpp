@@ -14,6 +14,8 @@ ABaseEnemy::ABaseEnemy()
 	PrimaryActorTick.bCanEverTick = false;
 	AIControllerClass = AAIEnemyController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+	ViewingAngle = 140;
+	ViewingDistance = 3500.0f;
 }
 
 // Called when the game starts or when spawned
@@ -145,4 +147,24 @@ float ABaseEnemy::GetViewingAngle()
 float ABaseEnemy::GetViewingDistance()
 {
 	return ViewingDistance;
+}
+
+float ABaseEnemy::GetAttackMaxRange()
+{
+	return AttackMaxRange;
+}
+
+float ABaseEnemy::GetAttackDamage()
+{
+	return AttackDamage;
+}
+
+int ABaseEnemy::GetScore()
+{
+	return Score;
+}
+
+float ABaseEnemy::GetExp()
+{
+	return Exp;
 }
