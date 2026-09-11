@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "UI/HUDWidget.h"
@@ -29,11 +29,11 @@ void UHUDWidget::SetLowHealthEffectIntensity(float Intensity)
 		return;
 	}
 
-	//Intensity ÀÇ °­µµ °ªÀ½ 0.0 ~ 1.0 »çÀÌ·Î °íÁ¤
+	//Intensity ì˜ ê°•ë„ ê°’ìŒ 0.0 ~ 1.0 ì‚¬ì´ë¡œ ê³ ì •
 	const float ClampedIntensity =
 		FMath::Clamp(Intensity, 0.0f, 1.0f);
 
-	//ClampedIntensityÀÇ °ªÀÌ 0¿¡ °¡±î¿ï ¼ö·Ï Collapsed Ã³¸®
+	//ClampedIntensityì˜ ê°’ì´ 0ì— ê°€ê¹Œìš¸ ìˆ˜ë¡ Collapsed ì²˜ë¦¬
 	if (ClampedIntensity <= KINDA_SMALL_NUMBER)
 	{
 		Image_LowHealthVignette->SetRenderOpacity(0.0f);
@@ -41,7 +41,7 @@ void UHUDWidget::SetLowHealthEffectIntensity(float Intensity)
 		return;
 	}
 
-	//LowHealthVignette ÀÇ ºÒÅõ¸íµµ ¼³Á¤
+	//LowHealthVignette ì˜ ë¶ˆíˆ¬ëª…ë„ ì„¤ì •
 	Image_LowHealthVignette->SetRenderOpacity(ClampedIntensity);
 	Image_LowHealthVignette->SetVisibility(ESlateVisibility::HitTestInvisible);
 
