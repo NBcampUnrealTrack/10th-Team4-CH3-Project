@@ -136,6 +136,10 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 			EnhancedInput->BindAction(PlayerController->AimAction, ETriggerEvent::Started, this, &ARGCharacter::StartAim);
 			EnhancedInput->BindAction(PlayerController->AimAction, ETriggerEvent::Completed, this, &ARGCharacter::StopAim);
 		}
+		if (PlayerController->ReloadAction)
+		{
+			EnhancedInput->BindAction(PlayerController->ReloadAction, ETriggerEvent::Started, this, &ARGCharacter::Reload);
+		}
 	}
 
 }
@@ -392,7 +396,7 @@ void ARGCharacter::EquipWeapon(TSubclassOf<ARGBaseWeapon> SpawnWeaponClass)
 		CurrentWeapon->OnShotFired.AddDynamic(this, &ARGCharacter::PlayFireAnimation);
 		CurrentWeapon->OnShotFiredStop.AddDynamic(this, &ARGCharacter::StopFireAnimation);
 		CurrentWeapon->OnReloadStarted.AddDynamic(this, &ARGCharacter::PlayReloadAnimation);
-		CurrentWeapon->OnReloadCompleted.AddDynamic(this, &ARGCharacter::StopReloadAnimation);
+		CurrentWeapon->OnReloadCanceled.AddDynamic(this, &ARGCharacter::StopReloadAnimation);
 	}
 }
 
