@@ -14,6 +14,7 @@ UBTS_Combat::UBTS_Combat()
 }
 
 
+
 void UBTS_Combat::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
 	Super::TickNode(OwnerComp, NodeMemory, DeltaSeconds);
@@ -25,17 +26,17 @@ void UBTS_Combat::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory,
 	ABaseEnemy* Enemy = Cast<ABaseEnemy>(AiComp->GetPawn());
 	if (!TargetObj)
 	{
-		OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT("IsCombat"), false);
+		OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT("bIsCombat"), false);
 		return;
 	}
 	float Distance = FVector::Distance(Enemy->GetActorLocation(), TargetObj->GetActorLocation());
 	AttackDistance = Enemy->GetViewingDistance();
 	if (Distance <= AttackDistance)
 	{
-		OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT("IsCombat"), true);
+		OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT("bIsCombat"), true);
 	}
 	else
 	{
-		OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT("IsCombat"), false);
+		OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT("bIsCombat"), false);
 	}
 }

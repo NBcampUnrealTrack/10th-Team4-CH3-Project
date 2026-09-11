@@ -2,4 +2,33 @@
 
 
 #include "Enemy/BehaviorTree/BTS_FindPlayer.h"
+#include "BehaviorTree/BlackboardComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Enemy/BaseEnemy.h"
+#include "AIController.h"
 
+UBTS_FindPlayer::UBTS_FindPlayer()
+{
+	NodeName = "Find Player";
+}
+
+void UBTS_FindPlayer::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
+{
+	Super::TickNode(OwnerComp, NodeMemory, DeltaSeconds);
+
+	UBlackboardComponent* BlackboardComp = OwnerComp.GetBlackboardComponent();
+	if (BlackboardComp)
+	{
+		AAIController* AIController = OwnerComp.GetAIOwner();
+		ABaseEnemy* Enemy = Cast<ABaseEnemy>(AIController->GetPawn());
+		AActor* targetActor = Cast<AActor>(BlackboardComp->GetValueAsObject(TEXT("Target")));
+		bool bHasTarget = (targetActor != nullptr);
+		BlackboardComp->SetValueAsBool(TEXT("bIsPlayer"), bHasTarget);
+		if (bHasTarget)
+		{
+			BlackboardComp->SetValueAsVector(TEXT("TargetLocation"), targetActor->GetActorLocation());
+			return;
+		}
+	}
+	return;
+}

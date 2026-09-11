@@ -1,15 +1,13 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
 #include "CoreMinimal.h"
+#include "EnemyAttackTypeEnum.generated.h"
 
-/**
- * 
- */
-class UNREALCH3_API EnemyAttackTypeEnum
+UENUM(BlueprintType)
+enum class EEnemyAttackType : uint8
 {
-public:
-	EnemyAttackTypeEnum();
-	~EnemyAttackTypeEnum();
+	melee	UMETA(DisplayName = "Melee"),
+	Ranged	UMETA(DisplayName = "Ranged")
 };

@@ -3,27 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Enemy/Enum/EnemyStateEnum.h"
+#include "Enemy/Enum/EnemyAttackTypeEnum.h"
 #include "GameFramework/Character.h"
 #include "BaseEnemy.generated.h"
 
-
-UENUM(BlueprintType)
-enum class EEnemyState : uint8
-{
-    Idle,
-    Patrol,
-    Chase,
-    Attack,
-    Hit,
-    Dead
-};
-
-UENUM(BlueprintType)
-enum class EEnemyAttackType : uint8
-{
-    Melee,
-    Ranged
-};
 
 UCLASS()
 class UNREALCH3_API ABaseEnemy : public ACharacter
@@ -40,9 +24,9 @@ public:
     bool IsTargetInAttackRange() const;
     /*bool IsTargetInDetectRange() const;
     void SetEnemyState(EEnemyState NewState);*/
-    EEnemyState GetEnemyState() const;
+    EEnemyStateEnum GetEnemyState() const;
     void SetTargetActor(AActor* NewTarget);
-    //AActor* GetTargetActor() const;
+    AActor* GetTargetActor() const;
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
     float GetViewingAngle();
     float GetViewingDistance();
@@ -107,5 +91,5 @@ protected:
     bool bIsDead = false;           // 사망 여부
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
-    EEnemyState CurrentState = EEnemyState::Idle;   // 현재 상태
+    EEnemyStateEnum CurrentState;   // 현재 상태
 };
