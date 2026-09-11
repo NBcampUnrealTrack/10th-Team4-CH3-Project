@@ -19,6 +19,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAimingChanged, bool, bNowAiming);
 //UI담당자 추가 델리게이트 - 재장전캔슬 델리게이트
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnReloadCanceled);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnWeaponShotFired);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnWeaponShotFiredStop);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWeaponDamageConfirmed, float, AppliedDamage, bool, bKilled);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnWeaponDamageNumberRequested, float, AppliedDamage, AActor*, TargetActor, FVector, WorldLocation);
 
@@ -62,6 +63,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
 	FOnWeaponShotFired OnShotFired;
+
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnWeaponShotFiredStop OnShotFiredStop;
 
 	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
 	FOnWeaponHit OnWeaponHit;

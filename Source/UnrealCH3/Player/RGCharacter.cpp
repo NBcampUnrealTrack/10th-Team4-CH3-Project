@@ -8,26 +8,24 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "RGBaseWeapon.h"
-#include "RGAssaultRifle.h"
+#include "GameMode/RGGameModeBase.h"
 
 ARGCharacter::ARGCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	
+
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
 	SpringArm->SetupAttachment(RootComponent);
 	SpringArm->TargetArmLength = 0.0f;
 	SpringArm->SetRelativeLocation(FVector(0.0f, 0.0f, 70.0f));
 	SpringArm->SocketOffset = FVector(0.0f, 0.0f, 0.0f);
 	SpringArm->bUsePawnControlRotation = true;
+	// 카메라와 캡슐사이 장애물이 있을때 줌을 땅겨주는 기능
+	SpringArm->bDoCollisionTest = false;
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(SpringArm);
 	Camera->bUsePawnControlRotation = false;
-
-	DashTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("dAshTimeline"));
-	AimTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("AimTimeline"));
-	CrouchTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("CrouchTimeline"));
 
 	JumpMaxCount = 2;
 	GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;
@@ -37,12 +35,17 @@ ARGCharacter::ARGCharacter()
 	GetCharacterMovement()->AirControl = DefaultAirControl;
 	DefaultGroundFriction = GetCharacterMovement()->GroundFriction;
 	DefaultBreakingDecelerationWalking = GetCharacterMovement()->BrakingDecelerationWalking;
+
+	DashTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("DashTimeline"));
+	AimTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("AimTimeline"));
+	CrouchTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("CrouchTimeline"));
 }
 
 void ARGCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	
+	MeshRelativeLocation = GetMesh()->GetRelativeLocation();
+
 	if (DashTimeline == nullptr || DashCurve == nullptr) return;
 
 	// 대쉬 타임라인
@@ -72,7 +75,7 @@ void ARGCharacter::BeginPlay()
 	GetWorldTimerManager().SetTimer(CheckPointTimerHandle, this, &ARGCharacter::SetCheckPoint, CheckPointInterval, true);
 
 	// 임시로 여기서 불러놨음 UI버튼에서 클릭완료되면 지우기
-	EquipWeapon(ARGAssaultRifle::StaticClass());
+	EquipWeapon(WeaponClass);
 }
 
 void ARGCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -355,6 +358,10 @@ void ARGCharacter::Dead()
 	bIsDead = true;
 	// TODO 죽었을때 로직
 	ResetAllState();
+	if (ARGGameModeBase* GameMode = Cast<ARGGameModeBase>(UGameplayStatics::GetGameMode(this)))
+	{
+		GameMode->CheckEndCondition(true, false);
+	}
 }
 
 void ARGCharacter::EquipWeapon(TSubclassOf<ARGBaseWeapon> SpawnWeaponClass)
@@ -380,6 +387,12 @@ void ARGCharacter::EquipWeapon(TSubclassOf<ARGBaseWeapon> SpawnWeaponClass)
 	{
 		CurrentWeapon->SetOwningCharacter(this);
 		CurrentWeapon->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TEXT("WeaponSocket"));
+
+		// 애니메이션 바인딩
+		CurrentWeapon->OnShotFired.AddDynamic(this, &ARGCharacter::PlayFireAnimation);
+		CurrentWeapon->OnShotFiredStop.AddDynamic(this, &ARGCharacter::StopFireAnimation);
+		CurrentWeapon->OnReloadStarted.AddDynamic(this, &ARGCharacter::PlayReloadAnimation);
+		CurrentWeapon->OnReloadCompleted.AddDynamic(this, &ARGCharacter::StopReloadAnimation);
 	}
 }
 
@@ -644,17 +657,54 @@ void ARGCharacter::OnAimUpdate(float Alpha)
 	}
 
 	float TargetFOV = CurrentWeapon->GetADSFOV();
-	float CurrentFOV = FMath::Lerp(TargetFOV, DefaultFOV, Alpha);
+	float CurrentFOV = FMath::Lerp(DefaultFOV, TargetFOV, Alpha);
 
 	Camera->SetFieldOfView(CurrentFOV);
 }
 
 void ARGCharacter::OnCrouchCameraUpdate(float Alpha)
 {
-	float TargetOffsetZ = FMath::Lerp(0.0f, CrouchCapsuleValue, Alpha);
-	FVector CurrentOffset = SpringArm->SocketOffset;
-	CurrentOffset.Z = TargetOffsetZ;
+	float SpringArmTargetZ = FMath::Lerp(0.0f, CrouchCapsuleHeight, Alpha);
+	FVector SpringArmCurrentOffset = SpringArm->TargetOffset;
+	SpringArmCurrentOffset.Z = SpringArmTargetZ;
+	SpringArm->TargetOffset = SpringArmCurrentOffset;
 
-	SpringArm->SocketOffset = CurrentOffset;
+	float MeshLocationZ = MeshRelativeLocation.Z;
+	float MeshTargetZ = FMath::Lerp(MeshLocationZ, MeshLocationZ + CrouchCapsuleHeight, Alpha);
+	FVector MeshCurrentRelativeLocation = GetMesh()->GetRelativeLocation();
+	MeshCurrentRelativeLocation.Z = MeshTargetZ;
+	GetMesh()->SetRelativeLocation(MeshCurrentRelativeLocation);
+}
+
+void ARGCharacter::PlayFireAnimation()
+{
+	if (FireMontage)
+	{
+		PlayAnimMontage(FireMontage);
+	}
+}
+
+void ARGCharacter::StopFireAnimation()
+{
+	if (FireMontage)
+	{
+		StopAnimMontage(FireMontage);
+	}
+}
+
+void ARGCharacter::PlayReloadAnimation()
+{
+	if (ReloadMontage)
+	{
+		PlayAnimMontage(ReloadMontage);
+	}
+}
+
+void ARGCharacter::StopReloadAnimation()
+{
+	if (ReloadMontage)
+	{
+		StopAnimMontage(ReloadMontage);
+	}
 }
 

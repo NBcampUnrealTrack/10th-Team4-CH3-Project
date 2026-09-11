@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "RGBaseWeapon.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
@@ -113,6 +113,7 @@ void ARGBaseWeapon::StartFireTimer()
 
 void ARGBaseWeapon::StopFireTimer()
 {
+	OnShotFiredStop.Broadcast();
 	GetWorldTimerManager().ClearTimer(FireTimerHandle);
 }
 //이 함수에 의해 틱(발사시간간격)마다 적용되는 것 -> 발사 가능한 상태인지 실시간 확인 , 탄약 줄이기 , 델리게이트 , 탄퍼짐 , 발사 , 라인트레이스
