@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "UI/UIManager.h"
@@ -54,8 +54,8 @@ bool AUIManager::IsInputBlockingLayer(EUILayer Layer) const
 
 bool AUIManager::HasInputBlockingView() const
 {
-	//const TPair : MapÀÇ °ªÀ» º¹»çÇÏÁö ¾Ê°í ÀĞ±â Àü¿ëÀ¸·Î È®ÀÎ
-	//ViewLayer.Value : ÀúÀåµÈ EUILayer À§ÀÇ °èÃş°ªÁß ÇÏ³ª¶óµµ ¹ß°ßµÇ¸é Æ®·ç·Î ¹İÈ¯
+	//const TPair : Mapì˜ ê°’ì„ ë³µì‚¬í•˜ì§€ ì•Šê³  ì½ê¸° ì „ìš©ìœ¼ë¡œ í™•ì¸
+	//ViewLayer.Value : ì €ì¥ëœ EUILayer ìœ„ì˜ ê³„ì¸µê°’ì¤‘ í•˜ë‚˜ë¼ë„ ë°œê²¬ë˜ë©´ íŠ¸ë£¨ë¡œ ë°˜í™˜
 	for (const TPair<TSubclassOf<UUserWidget>, EUILayer>& ViewLayer : ActiveViewLayers)
 	{
 		if (IsInputBlockingLayer(ViewLayer.Value))
@@ -103,7 +103,7 @@ void AUIManager::TestOpenPauseMenu()
 		);
 		return;
 	}
-	//IsChildOf : ¼³Á¤ÇÑ Å¬·¡½º°¡ UPauseMenuWidget À» »ó¼ÓÇß´ÂÁö È®ÀÎ, StaticClass: C++ Å¬·¡½ºÀÇ ¾ğ¸®¾ó Å¸ÀÔ Á¤º¸¸¦ °¡Á®¿Â´Ù.
+	//IsChildOf : ì„¤ì •í•œ í´ë˜ìŠ¤ê°€ UPauseMenuWidget ì„ ìƒì†í–ˆëŠ”ì§€ í™•ì¸, StaticClass: C++ í´ë˜ìŠ¤ì˜ ì–¸ë¦¬ì–¼ íƒ€ì… ì •ë³´ë¥¼ ê°€ì ¸ì˜¨ë‹¤.
 	if (!PauseMenuClass->IsChildOf(UPauseMenuWidget::StaticClass()))
 	{
 		UE_LOG(
@@ -219,7 +219,7 @@ void AUIManager::CreateHUDWidget()
 
 void AUIManager::RemoveHUDWidget()
 {
-	//Ãß°¡ µÈ view ¹İº¹ °Ë»ö ÈÄ Á¦°Å
+	//ì¶”ê°€ ëœ view ë°˜ë³µ ê²€ìƒ‰ í›„ ì œê±°
 	for (TPair<TSubclassOf<UUserWidget>, TObjectPtr<UUserWidget>>& ViewPair : ActiveViews)
 	{
 		if (IsValid(ViewPair.Value.Get()))
@@ -228,11 +228,11 @@ void AUIManager::RemoveHUDWidget()
 		}
 	}
 
-	//View,Later ÃÊ±âÈ­
+	//View,Later ì´ˆê¸°í™”
 	ActiveViews.Empty();
 	ActiveViewLayers.Empty();
 
-	//RemoveHUDWidget È£Ãâ ½Ã ¸ŞÀÎ¸Ş´º ÀÔ·Â ¸ğµåÀÏ ½Ã °ÔÀÓ ÀÔ·Â¸ğµå·Î ÀüÈ¯
+	//RemoveHUDWidget í˜¸ì¶œ ì‹œ ë©”ì¸ë©”ë‰´ ì…ë ¥ ëª¨ë“œì¼ ì‹œ ê²Œì„ ì…ë ¥ëª¨ë“œë¡œ ì „í™˜
 	if (bIsMenuInputModeActive)
 	{
 		ApplyGameInputMode();
@@ -486,7 +486,7 @@ void AUIManager::NotifyAttackWarningCanceled(AActor* Attacker)
 		return;
 	}
 
-	//°ø°İÀÚ »ç¸Á½Ã °æ°í Á¦°Å ¿äÃ»
+	//ê³µê²©ì ì‚¬ë§ì‹œ ê²½ê³  ì œê±° ìš”ì²­
 	OnAttackWarningHideReqested(Attacker);
 }
 
@@ -502,7 +502,7 @@ void AUIManager::NotifyDirectionalDamage(AActor* Attacker, FVector AttackOrigin)
 		return;
 	}
 
-	//ÇÇ°İ À§Ä¡¸¸ Àü´Ş °ø°İ ¹ß»ı À§Ä¡ ±âÁØ
+	//í”¼ê²© ìœ„ì¹˜ë§Œ ì „ë‹¬ ê³µê²© ë°œìƒ ìœ„ì¹˜ ê¸°ì¤€
 	AActor* ValidAttacker = IsValid(Attacker) ? Attacker : nullptr;
 
 	OnDirectionDamageDisplayRequested(ValidAttacker, AttackOrigin);
