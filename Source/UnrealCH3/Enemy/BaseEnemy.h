@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -53,59 +53,59 @@ public:
 
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float MaxHP;            // ÃÖ´ë Ã¼·Â
+    float MaxHP;            // ìµœëŒ€ ì²´ë ¥
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float CurrentHP;        // ÇöÀç Ã¼·Â
+    float CurrentHP;        // í˜„ì¬ ì²´ë ¥
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float AttackDamage;     // °ø°İ·Â
+    float AttackDamage;     // ê³µê²©ë ¥
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float AttackMaxRange;   // ÃÖ´ë °ø°İ »ç°Å¸®
+    float AttackMaxRange;   // ìµœëŒ€ ê³µê²© ì‚¬ê±°ë¦¬
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float AttackMinRange;   // ÃÖ¼Ò °ø°İ »ç°Å¸®
+    float AttackMinRange;   // ìµœì†Œ ê³µê²© ì‚¬ê±°ë¦¬
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float Defense;          // ¹æ¾î·Â
+    float Defense;          // ë°©ì–´ë ¥
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float Exp;              // È¹µæ °æÇèÄ¡
+    float Exp;              // íšë“ ê²½í—˜ì¹˜
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    int Score;            // Ã³Ä¡ Á¡¼ö
+    int Score;            // ì²˜ì¹˜ ì ìˆ˜
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float ViewingAngle;     // ½Ã¾ß°¢
+    float ViewingAngle;     // ì‹œì•¼ê°
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float ViewingDistance;  // ½Ã¾ß °¨Áö °Å¸®
+    float ViewingDistance;  // ì‹œì•¼ ê°ì§€ ê±°ë¦¬
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float HearingDistance;  // Ã»°¢ °¨Áö °Å¸®
+    float HearingDistance;  // ì²­ê° ê°ì§€ ê±°ë¦¬
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float TargetChangeTime; // Å¸°Ù º¯°æ ´ë±â ½Ã°£
+    float TargetChangeTime; // íƒ€ê²Ÿ ë³€ê²½ ëŒ€ê¸° ì‹œê°„
 
     FTimerHandle TargetChangeTimer;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    AActor* TargetActor;    // ÇöÀç ÃßÀû ÁßÀÎ Å¸°Ù(¸ñÇ¥)
+    AActor* TargetActor;    // í˜„ì¬ ì¶”ì  ì¤‘ì¸ íƒ€ê²Ÿ(ëª©í‘œ)
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float AttackCoolTime;   // °ø°İ ÄğÅ¸ÀÓ
+    float AttackCoolTime;   // ê³µê²© ì¿¨íƒ€ì„
 
     FTimerHandle AttackCoolTimer;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float WarningTime;      // °ø°İ Àü °æ°í ½Ã°£
+    float WarningTime;      // ê³µê²© ì „ ê²½ê³  ì‹œê°„
 
     FTimerHandle WarningTimer;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    bool bIsDead = false;           // »ç¸Á ¿©ºÎ
+    bool bIsDead = false;           // ì‚¬ë§ ì—¬ë¶€
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
-    EEnemyState CurrentState = EEnemyState::Idle;   // ÇöÀç »óÅÂ
+    EEnemyState CurrentState = EEnemyState::Idle;   // í˜„ì¬ ìƒíƒœ
 };
