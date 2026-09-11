@@ -1,6 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-#pragma once
+Ôªø#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
@@ -8,39 +6,24 @@
 
 class UUserWidget;
 
-
-// =========================================================
-// ∞‘¿” ¡¯«‡ ªÛ≈¬
-// =========================================================
-
 UENUM(BlueprintType)
 enum class ERunState : uint8
 {
-	Init        UMETA(DisplayName = "√ ±‚»≠"),
-	Combat      UMETA(DisplayName = "¿¸≈ı ¡ﬂ"),
-	Pause       UMETA(DisplayName = "¿œΩ√¡§¡ˆ"),
-	Upgrade     UMETA(DisplayName = "∞≠»≠ ¡ﬂ"),
-	RestHub     UMETA(DisplayName = "»ﬁΩƒ√≥"),
-	Result      UMETA(DisplayName = "∞·∞˙ »≠∏È"),
-	Loading     UMETA(DisplayName = "∑Œµ˘ ¡ﬂ")
+	Init        UMETA(DisplayName = "Ï¥àÍ∏∞Ìôî"),
+	Combat      UMETA(DisplayName = "Ï†ÑÌà¨ Ï§ë"),
+	Pause       UMETA(DisplayName = "ÏùºÏãúÏ†ïÏßÄ"),
+	Upgrade     UMETA(DisplayName = "Í∞ïÌôî Ï§ë"),
+	RestHub     UMETA(DisplayName = "Ìú¥ÏãùÏ≤ò"),
+	Result      UMETA(DisplayName = "Í≤∞Í≥º ÌôîÎ©¥"),
+	Loading     UMETA(DisplayName = "Î°úÎî© Ï§ë")
 };
-
-
-// =========================================================
-// ∞‘¿” ¡æ∑· ¿Ã¿Ø
-// =========================================================
 
 UENUM(BlueprintType)
 enum class EDeathReason : uint8
 {
-	Killed      UMETA(DisplayName = "ªÁ∏¡"),
-	TimeOut     UMETA(DisplayName = "Ω√∞£ √ ∞˙")
+	Killed      UMETA(DisplayName = "ÏÇ¨Îßù"),
+	TimeOut     UMETA(DisplayName = "ÏãúÍ∞Ñ Ï¥àÍ≥º")
 };
-
-
-// =========================================================
-// ¿‘∑¬ ∏µÂ
-// =========================================================
 
 UENUM(BlueprintType)
 enum class ERGInputMode : uint8
@@ -50,177 +33,105 @@ enum class ERGInputMode : uint8
 	GameAndUI       UMETA(DisplayName = "Game And UI")
 };
 
-
-// =========================================================
-// GameMode
-// =========================================================
-
-/**
- * Run & Gun ∞¯≈Î GameMode
- *
- * ¥„¥Á ±‚¥…
- *
- * 1. ∞‘¿” ªÛ≈¬ ∞¸∏Æ
- * 2. ¡¶«— Ω√∞£ ∞¸∏Æ
- * 3. Kill Count ∞¸∏Æ
- * 4. Stage Clear / Game Over
- * 5. ±‚∫ª UI ª˝º∫
- * 6. ±‚∫ª Input Mode º≥¡§
- *
- * Ω«¡¶ Pawn / Controller / HUD Class¥¬
- * ¿Ã ≈¨∑°Ω∫∏¶ ªÛº”«— Blueprint GameModeø°º≠ º≥¡§«—¥Ÿ.
- */
 UCLASS()
 class UNREALCH3_API ARGGameModeBase : public AGameModeBase
 {
 	GENERATED_BODY()
 
-
-	// =========================================================
-	// Unreal ±‚∫ª
-	// =========================================================
-
 public:
-
 	ARGGameModeBase();
 
-
 protected:
-
 	virtual void BeginPlay() override;
-
-	virtual void EndPlay(
-		const EEndPlayReason::Type EndPlayReason
-	) override;
-
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// =========================================================
-	// GameMode Type º≥¡§
+	// Run System
 	// =========================================================
 
 public:
-
-	/**
-	 * ¿Ã GameModeø°º≠ ∞‘¿” ¡¯«‡ Ω√Ω∫≈€¿ª Ω√¿€«“¡ˆ ø©∫Œ.
-	 *
-	 * Combat GameMode:
-	 * True
-	 *
-	 * MainMenu GameMode:
-	 * False
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "GameMode|Run"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GameMode|Run")
 	bool bStartRunSystem;
 
-
-	// =========================================================
-	// Run State
-	// =========================================================
-
-public:
-
-	/**
-	 * «ˆ¿Á ∞‘¿” ªÛ≈¬
-	 */
-	UPROPERTY(
-		VisibleAnywhere,
-		BlueprintReadOnly,
-		Category = "Run|State"
-	)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run|State")
 	ERunState CurrentState;
 
+	UFUNCTION(BlueprintCallable, Category = "Run|State")
+	void ChangeRunState(ERunState NewState);
 
-	/**
-	 * ∞‘¿” ªÛ≈¬ ∫Ø∞Ê
-	 */
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "Run|State"
-	)
-	void ChangeRunState(
-		ERunState NewState
-	);
-
-
-	/**
-	 * «ˆ¿Á ªÛ≈¬ Getter
-	 */
-	UFUNCTION(
-		BlueprintPure,
-		Category = "Run|State"
-	)
+	UFUNCTION(BlueprintPure, Category = "Run|State")
 	ERunState GetRunState() const
 	{
 		return CurrentState;
 	}
 
+	// =========================================================
+	// Run Start / Ready
+	// =========================================================
+
+public:
+	UFUNCTION(BlueprintCallable, Category = "Run")
+	void StartRun();
+
+	UFUNCTION(BlueprintPure, Category = "Run")
+	bool IsRunReady() const
+	{
+		return bIsRunReady;
+	}
+
+	UFUNCTION(BlueprintPure, Category = "Run")
+	bool HasRunStarted() const
+	{
+		return bHasRunStarted;
+	}
+
+protected:
+	void ResetRunData();
+	void SetGameplayInputEnabled(bool bEnabled);
+
+	bool bHasRunStarted;
+	bool bIsRunReady;
 
 	// =========================================================
-	// Run Timer
+	// Timer
 	// =========================================================
 
 protected:
-
-	/**
-	 * ∞‘¿” Ω√∞£ Timer Handle
-	 */
 	FTimerHandle RunTimerHandle;
-
 
 	UFUNCTION()
 	void UpdateRunTimer();
 
-
 public:
-
-	/**
-	 * ∞‘¿” ¡¶«— Ω√∞£
-	 *
-	 * BP_RGGameMode Class Defaultsø°º≠ ¡∂¡§ ∞°¥…
-	 */
 	UPROPERTY(
 		EditDefaultsOnly,
 		BlueprintReadWrite,
 		Category = "Run|Timer",
 		meta = (ClampMin = "0.0")
 	)
-	float RemainingTime;
+	float RunDuration;
 
-
-	UFUNCTION(
-		BlueprintPure,
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
 		Category = "Run|Timer"
 	)
+	float RemainingTime;
+
+	UFUNCTION(BlueprintPure, Category = "Run|Timer")
 	float GetRemainingTime() const
 	{
 		return RemainingTime;
 	}
 
-
 	// =========================================================
-	// Kill / Stage Clear
+	// Kill / Score
 	// =========================================================
 
 public:
-
-	/**
-	 * «ˆ¿Á √≥ƒ° ºˆ
-	 */
-	UPROPERTY(
-		VisibleAnywhere,
-		BlueprintReadOnly,
-		Category = "Run|Kill"
-	)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run|Kill")
 	int32 CurrentKills;
 
-
-	/**
-	 * Stage Clearø° « ø‰«— √≥ƒ° ºˆ
-	 */
 	UPROPERTY(
 		EditDefaultsOnly,
 		BlueprintReadOnly,
@@ -229,223 +140,108 @@ public:
 	)
 	int32 TargetKillsToClear;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run|Score")
+	int32 CurrentScore;
 
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "Run|Kill"
-	)
+	UFUNCTION(BlueprintCallable, Category = "Run|Kill")
 	void OnEnemyDied();
 
-
-	UFUNCTION(
-		BlueprintPure,
-		Category = "Run|Logic"
-	)
+	UFUNCTION(BlueprintPure, Category = "Run|Logic")
 	bool CheckStageClearCondition() const;
 
-
-	UFUNCTION(
-		BlueprintPure,
-		Category = "Run|Kill"
-	)
+	UFUNCTION(BlueprintPure, Category = "Run|Kill")
 	int32 GetCurrentKills() const
 	{
 		return CurrentKills;
 	}
 
-
-	UFUNCTION(
-		BlueprintPure,
-		Category = "Run|Kill"
-	)
+	UFUNCTION(BlueprintPure, Category = "Run|Kill")
 	int32 GetTargetKillsToClear() const
 	{
 		return TargetKillsToClear;
 	}
 
+	UFUNCTION(BlueprintPure, Category = "Run|Score")
+	int32 GetCurrentScore() const
+	{
+		return CurrentScore;
+	}
 
 	// =========================================================
-	// ∞‘¿” ¡æ∑·
+	// End / Stage Clear / Victory
 	// =========================================================
 
 public:
+	UFUNCTION(BlueprintCallable, Category = "Run|Logic")
+	void CheckEndCondition(bool bIsPlayerDead, bool bIsTimeOut);
 
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "Run|Logic"
-	)
-	void CheckEndCondition(
-		bool bIsPlayerDead,
-		bool bIsTimeOut
-	);
+	// Ìè¨ÌÉà ÏßÑÏûÖ Ïãú ÏµúÏ¢Ö ÏäπÎ¶¨ Ï≤òÎ¶¨
+	UFUNCTION(BlueprintCallable, Category = "Run|Logic")
+	void ExecuteVictory();
 
+	// 10ÌÇ¨ Îì± Ïä§ÌÖåÏù¥ÏßÄ ÌÅ¥Î¶¨Ïñ¥ Î∞úÏÉù Ïãú
+	// BP_RGGameModeBaseÏóêÏÑú Ìè¨ÌÉà ÌôúÏÑ±Ìôî Îì±Ïóê ÏÇ¨Ïö©
+	UFUNCTION(BlueprintImplementableEvent, Category = "Run|Logic")
+	void OnStageClear();
 
 protected:
-
-	void ExecuteGameOver(
-		EDeathReason Reason
-	);
-
-
+	void ExecuteGameOver(EDeathReason Reason);
 	void ExecuteStageClear();
 
-
 	bool bIsRunEnded;
-
 	bool bIsStageCleared;
 
-
 	// =========================================================
-	// System Validation
+	// Validation
 	// =========================================================
 
 public:
-
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "System"
-	)
+	UFUNCTION(BlueprintCallable, Category = "System")
 	bool VerifySystems();
-
 
 	// =========================================================
 	// UI
 	// =========================================================
 
 public:
-
-	/**
-	 * BeginPlay Ω√ GameMode∞° ¡˜¡¢
-	 * Widget¿ª ª˝º∫«“¡ˆ ø©∫Œ
-	 *
-	 * MainMenu:
-	 * True
-	 *
-	 * Combat HUD Manager ªÁøÎ:
-	 * False
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "UI|Default"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Default")
 	bool bCreateDefaultUI;
 
-
-	/**
-	 * GameMode∞° ¡˜¡¢ ª˝º∫«“ Widget
-	 *
-	 * øπ:
-	 * WBP_MainMenu
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "UI|Default"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Default")
 	TSubclassOf<UUserWidget> DefaultUIClass;
 
-
-	/**
-	 * Ω«¡¶ ª˝º∫µ» Widget
-	 */
-	UPROPERTY(
-		VisibleAnywhere,
-		BlueprintReadOnly,
-		Category = "UI|Default"
-	)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI|Default")
 	TObjectPtr<UUserWidget> DefaultUIWidget;
 
-
-	/**
-	 * UI ZOrder
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "UI|Default"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Default")
 	int32 DefaultUIZOrder;
 
-
-	/**
-	 * ±‚∫ª UI ª˝º∫
-	 */
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "UI"
-	)
+	UFUNCTION(BlueprintCallable, Category = "UI")
 	UUserWidget* CreateDefaultUI();
 
-
-	/**
-	 * ±‚∫ª UI ¡¶∞≈
-	 */
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "UI"
-	)
+	UFUNCTION(BlueprintCallable, Category = "UI")
 	void RemoveDefaultUI();
 
-
-	/**
-	 * «ˆ¿Á ª˝º∫µ» ±‚∫ª UI
-	 */
-	UFUNCTION(
-		BlueprintPure,
-		Category = "UI"
-	)
+	UFUNCTION(BlueprintPure, Category = "UI")
 	UUserWidget* GetDefaultUIWidget() const
 	{
 		return DefaultUIWidget;
 	}
-
 
 	// =========================================================
 	// Input
 	// =========================================================
 
 public:
-
-	/**
-	 * BeginPlayø°º≠ ¿⁄µø Input Mode ¿˚øÎ ø©∫Œ
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "Input|Default"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Default")
 	bool bApplyDefaultInputMode;
 
-
-	/**
-	 * GameOnly / UIOnly / GameAndUI
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "Input|Default"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Default")
 	ERGInputMode DefaultInputMode;
 
-
-	/**
-	 * ∏∂øÏΩ∫ ƒøº≠ «•Ω√
-	 */
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "Input|Default"
-	)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Default")
 	bool bShowMouseCursor;
 
-
-	/**
-	 * Input Mode Ω«¡¶ ¿˚øÎ
-	 */
-	UFUNCTION(
-		BlueprintCallable,
-		Category = "Input"
-	)
+	UFUNCTION(BlueprintCallable, Category = "Input")
 	void ApplyDefaultInputSettings();
 };

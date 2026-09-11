@@ -1,12 +1,10 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-#include "RGGameModeBase.h"
+ï»¿#include "Gamemode/RGGameModeBase.h"
 
 #include "Blueprint/UserWidget.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "TimerManager.h"
-
 
 // =========================================================
 // Constructor
@@ -14,62 +12,37 @@
 
 ARGGameModeBase::ARGGameModeBase()
 {
-	// -----------------------------------------------------
-	// Tick »ç¿ë ¾È ÇÔ
-	// -----------------------------------------------------
-
 	PrimaryActorTick.bCanEverTick = false;
 	PrimaryActorTick.bStartWithTickEnabled = false;
 
-
-	// -----------------------------------------------------
-	// GameMode
-	// -----------------------------------------------------
-
 	bStartRunSystem = true;
-
-
-	// -----------------------------------------------------
-	// Run State
-	// -----------------------------------------------------
 
 	CurrentState = ERunState::Init;
 
-	RemainingTime = 60.0f;
+	RunDuration = 60.0f;
+	RemainingTime = RunDuration;
 
 	CurrentKills = 0;
-
 	TargetKillsToClear = 10;
+	CurrentScore = 0;
 
 	bIsRunEnded = false;
-
 	bIsStageCleared = false;
 
+	bHasRunStarted = false;
+	bIsRunReady = false;
 
-	// -----------------------------------------------------
 	// UI
-	// -----------------------------------------------------
-
 	bCreateDefaultUI = false;
-
 	DefaultUIClass = nullptr;
-
 	DefaultUIWidget = nullptr;
-
 	DefaultUIZOrder = 0;
 
-
-	// -----------------------------------------------------
 	// Input
-	// -----------------------------------------------------
-
 	bApplyDefaultInputMode = true;
-
 	DefaultInputMode = ERGInputMode::GameOnly;
-
 	bShowMouseCursor = false;
 }
-
 
 // =========================================================
 // BeginPlay
@@ -79,85 +52,19 @@ void ARGGameModeBase::BeginPlay()
 {
 	Super::BeginPlay();
 
+	ResetRunData();
 
-	// -----------------------------------------------------
-	// 1. ½Ã½ºÅÛ °ËÁõ
-	// -----------------------------------------------------
-
-	if (!VerifySystems())
-	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[RGGameMode] "
-				"System validation failed."
-			)
-		);
-
-		return;
-	}
-
-
-	UE_LOG(
-		LogTemp,
-		Log,
-		TEXT(
-			"[RGGameMode] "
-			"System validation complete."
-		)
-	);
-
-
-	// -----------------------------------------------------
-	// 2. ±âº» UI »ı¼º
-	// -----------------------------------------------------
+	// í•„ìˆ˜ ì‹œìŠ¤í…œ ì¤€ë¹„ ì „ ì…ë ¥ ì°¨ë‹¨
+	SetGameplayInputEnabled(false);
 
 	if (bCreateDefaultUI)
 	{
 		CreateDefaultUI();
 	}
 
-
-	// -----------------------------------------------------
-	// 3. ±âº» ÀÔ·Â ¼³Á¤
-	//
-	// UIOnlyÀÇ °æ¿ì WidgetÀ» ¸ÕÀú »ı¼ºÇØ¾ß
-	// SetWidgetToFocus »ç¿ë °¡´É
-	// -----------------------------------------------------
-
-	if (bApplyDefaultInputMode)
-	{
-		ApplyDefaultInputSettings();
-	}
-
-
-	// -----------------------------------------------------
-	// 4. ½ÇÁ¦ Run ½Ã½ºÅÛ ½ÃÀÛ
-	//
-	// MainMenu GameMode´Â
-	// bStartRunSystem = false ·Î ¼³Á¤
-	// -----------------------------------------------------
-
-	if (bStartRunSystem)
-	{
-		ChangeRunState(
-			ERunState::Combat
-		);
-	}
-	else
-	{
-		UE_LOG(
-			LogTemp,
-			Log,
-			TEXT(
-				"[RGGameMode] "
-				"Run System disabled."
-			)
-		);
-	}
+	// StartRunì€ BPì—ì„œ HUD / Weapon ì¤€ë¹„ ì™„ë£Œ í›„ í˜¸ì¶œ
+	UE_LOG(LogTemp, Log, TEXT("[RGGameMode] Waiting for required systems..."));
 }
-
 
 // =========================================================
 // EndPlay
@@ -169,111 +76,199 @@ void ARGGameModeBase::EndPlay(
 {
 	if (GetWorld())
 	{
-		GetWorld()
-			->GetTimerManager()
-			.ClearTimer(
-				RunTimerHandle
-			);
+		GetWorld()->GetTimerManager().ClearTimer(RunTimerHandle);
 	}
-
 
 	RemoveDefaultUI();
 
+	Super::EndPlay(EndPlayReason);
+}
 
-	Super::EndPlay(
-		EndPlayReason
+// =========================================================
+// ResetRunData
+// =========================================================
+
+void ARGGameModeBase::ResetRunData()
+{
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(RunTimerHandle);
+	}
+
+	CurrentState = ERunState::Init;
+
+	RemainingTime = RunDuration;
+
+	CurrentKills = 0;
+	CurrentScore = 0;
+
+	bIsRunEnded = false;
+	bIsStageCleared = false;
+
+	bHasRunStarted = false;
+	bIsRunReady = false;
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("[RGGameMode] Run data reset. Time=%.1f / Kills=%d / Score=%d"),
+		RemainingTime,
+		CurrentKills,
+		CurrentScore
 	);
 }
 
+// =========================================================
+// StartRun
+// =========================================================
+
+void ARGGameModeBase::StartRun()
+{
+	// ì¤‘ë³µ ì‹œì‘ ë°©ì§€
+	if (bHasRunStarted)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[RGGameMode] StartRun ignored. First request was already processed.")
+		);
+
+		return;
+	}
+
+	// ì²« ìš”ì²­ ì¦‰ì‹œ ì ê¸ˆ
+	bHasRunStarted = true;
+
+	CurrentState = ERunState::Loading;
+
+	SetGameplayInputEnabled(false);
+
+	// í•„ìˆ˜ ì‹œìŠ¤í…œ ê²€ì¦
+	if (!VerifySystems())
+	{
+		bIsRunReady = false;
+
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[RGGameMode] Run start BLOCKED. Required systems are missing.")
+		);
+
+		return;
+	}
+
+	bIsRunReady = true;
+
+	CurrentState = ERunState::Init;
+
+	if (bApplyDefaultInputMode)
+	{
+		ApplyDefaultInputSettings();
+	}
+
+	SetGameplayInputEnabled(true);
+
+	ChangeRunState(ERunState::Combat);
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("[RGGameMode] Run READY. Combat started.")
+	);
+}
 
 // =========================================================
-// ChangeRunState
+// SetGameplayInputEnabled
 // =========================================================
 
-void ARGGameModeBase::ChangeRunState(
-	ERunState NewState
-)
+void ARGGameModeBase::SetGameplayInputEnabled(bool bEnabled)
 {
 	if (!GetWorld())
 	{
 		return;
 	}
 
+	APlayerController* PlayerController =
+		GetWorld()->GetFirstPlayerController();
 
-	// -----------------------------------------------------
-	// °°Àº »óÅÂ¸é ¹«½Ã
-	// -----------------------------------------------------
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	APawn* PlayerPawn =
+		PlayerController->GetPawn();
+
+	if (!PlayerPawn)
+	{
+		return;
+	}
+
+	if (bEnabled)
+	{
+		PlayerPawn->EnableInput(PlayerController);
+
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("[RGGameMode] Gameplay input ENABLED.")
+		);
+	}
+	else
+	{
+		PlayerPawn->DisableInput(PlayerController);
+
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("[RGGameMode] Gameplay input DISABLED.")
+		);
+	}
+}
+
+// =========================================================
+// ChangeRunState
+// =========================================================
+
+void ARGGameModeBase::ChangeRunState(ERunState NewState)
+{
+	if (!GetWorld())
+	{
+		return;
+	}
 
 	if (CurrentState == NewState)
 	{
 		return;
 	}
 
-
-	// -----------------------------------------------------
-	// Result / Loading »óÅÂ¿¡¼­´Â
-	// ÀÏ¹İ »óÅÂ º¯°æ ¹æÁö
-	// -----------------------------------------------------
-
-	if (
-		CurrentState == ERunState::Result ||
-		CurrentState == ERunState::Loading
-		)
+	// Result ìƒíƒœì—ì„œëŠ” ë‹¤ë¥¸ ìƒíƒœë¡œ ëŒì•„ê°€ì§€ ì•ŠìŒ
+	if (CurrentState == ERunState::Result)
 	{
 		UE_LOG(
 			LogTemp,
 			Warning,
-			TEXT(
-				"[RGGameMode] "
-				"State transition ignored. "
-				"CurrentState: %d / NewState: %d"
-			),
-			static_cast<int32>(
-				CurrentState
-				),
-			static_cast<int32>(
-				NewState
-				)
+			TEXT("[RGGameMode] State change ignored. Run is already in Result state.")
 		);
 
 		return;
 	}
 
-
 	CurrentState = NewState;
-
 
 	UE_LOG(
 		LogTemp,
 		Log,
-		TEXT(
-			"[RGGameMode] "
-			"State changed: %d"
-		),
-		static_cast<int32>(
-			CurrentState
-			)
+		TEXT("[RGGameMode] State changed: %d"),
+		static_cast<int32>(CurrentState)
 	);
-
 
 	FTimerManager& TimerManager =
 		GetWorld()->GetTimerManager();
 
-
-	// -----------------------------------------------------
-	// Combat
-	// -----------------------------------------------------
-
-	if (
-		CurrentState ==
-		ERunState::Combat
-		)
+	if (CurrentState == ERunState::Combat)
 	{
-		if (
-			!TimerManager.TimerExists(
-				RunTimerHandle
-			)
-			)
+		if (!TimerManager.TimerExists(RunTimerHandle))
 		{
 			TimerManager.SetTimer(
 				RunTimerHandle,
@@ -283,38 +278,19 @@ void ARGGameModeBase::ChangeRunState(
 				true
 			);
 		}
-		else if (
-			TimerManager.IsTimerPaused(
-				RunTimerHandle
-			)
-			)
+		else if (TimerManager.IsTimerPaused(RunTimerHandle))
 		{
-			TimerManager.UnPauseTimer(
-				RunTimerHandle
-			);
+			TimerManager.UnPauseTimer(RunTimerHandle);
 		}
 	}
-
-
-	// -----------------------------------------------------
-	// Combat ÀÌ¿Ü
-	// -----------------------------------------------------
-
 	else
 	{
-		if (
-			TimerManager.TimerExists(
-				RunTimerHandle
-			)
-			)
+		if (TimerManager.TimerExists(RunTimerHandle))
 		{
-			TimerManager.PauseTimer(
-				RunTimerHandle
-			);
+			TimerManager.PauseTimer(RunTimerHandle);
 		}
 	}
 }
-
 
 // =========================================================
 // UpdateRunTimer
@@ -322,52 +298,105 @@ void ARGGameModeBase::ChangeRunState(
 
 void ARGGameModeBase::UpdateRunTimer()
 {
+	if (!bIsRunReady)
+	{
+		return;
+	}
+
 	if (bIsRunEnded)
 	{
 		return;
 	}
 
-
-	if (
-		CurrentState !=
-		ERunState::Combat
-		)
+	if (CurrentState != ERunState::Combat)
 	{
 		return;
 	}
-
 
 	if (RemainingTime <= 0.0f)
 	{
 		return;
 	}
 
-
 	RemainingTime -= 1.0f;
-
 
 	if (RemainingTime <= 0.0f)
 	{
 		RemainingTime = 0.0f;
 
-
 		if (GetWorld())
 		{
-			GetWorld()
-				->GetTimerManager()
-				.ClearTimer(
-					RunTimerHandle
-				);
+			GetWorld()->GetTimerManager().ClearTimer(RunTimerHandle);
 		}
 
-
-		CheckEndCondition(
-			false,
-			true
-		);
+		CheckEndCondition(false, true);
 	}
 }
 
+// =========================================================
+// OnEnemyDied
+// =========================================================
+
+void ARGGameModeBase::OnEnemyDied()
+{
+	if (!bIsRunReady)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[RGGameMode] Kill ignored - Run not ready")
+		);
+
+		return;
+	}
+
+	if (bIsRunEnded)
+	{
+		return;
+	}
+
+	if (CurrentState != ERunState::Combat)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[RGGameMode] Kill ignored - Not Combat")
+		);
+
+		return;
+	}
+
+	CurrentKills++;
+	CurrentScore += 100;
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[RGGameMode] Kill: %d / %d"),
+		CurrentKills,
+		TargetKillsToClear
+	);
+
+	if (CurrentKills >= TargetKillsToClear)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[RGGameMode] TARGET KILLS REACHED")
+		);
+
+		CheckEndCondition(false, false);
+	}
+}
+
+// =========================================================
+// CheckStageClearCondition
+// =========================================================
+
+bool ARGGameModeBase::CheckStageClearCondition() const
+{
+	return CurrentKills >= TargetKillsToClear;
+}
 
 // =========================================================
 // CheckEndCondition
@@ -378,74 +407,179 @@ void ARGGameModeBase::CheckEndCondition(
 	bool bIsTimeOut
 )
 {
+	if (!bIsRunReady)
+	{
+		return;
+	}
+
 	if (bIsRunEnded)
 	{
 		return;
 	}
 
+	if (
+		CurrentState == ERunState::Loading ||
+		CurrentState == ERunState::Result
+		)
+	{
+		return;
+	}
 
-	// -----------------------------------------------------
-	// 1. Player Death
-	// -----------------------------------------------------
-
+	// Player Death
 	if (bIsPlayerDead)
 	{
 		bIsRunEnded = true;
 
-
-		ExecuteGameOver(
-			EDeathReason::Killed
-		);
-
+		ExecuteGameOver(EDeathReason::Killed);
 
 		return;
 	}
 
-
-	// -----------------------------------------------------
-	// 2. Stage Clear
-	// -----------------------------------------------------
-
+	// Stage Clear
+	// ì¤‘ìš”: ì—¬ê¸°ì„œëŠ” bIsRunEndedë¥¼ trueë¡œ ë§Œë“¤ì§€ ì•ŠëŠ”ë‹¤.
 	if (CheckStageClearCondition())
 	{
-		bIsRunEnded = true;
-
-
 		ExecuteStageClear();
-
 
 		return;
 	}
 
-
-	// -----------------------------------------------------
-	// 3. TimeOut
-	// -----------------------------------------------------
-
+	// Time Out
 	if (bIsTimeOut)
 	{
 		bIsRunEnded = true;
 
+		ExecuteGameOver(EDeathReason::TimeOut);
 
-		ExecuteGameOver(
-			EDeathReason::TimeOut
-		);
+		return;
 	}
 }
 
-
 // =========================================================
-// Stage Clear Condition
+// ExecuteGameOver
 // =========================================================
 
-bool ARGGameModeBase::CheckStageClearCondition() const
+void ARGGameModeBase::ExecuteGameOver(EDeathReason Reason)
 {
-	return (
-		CurrentKills >=
-		TargetKillsToClear
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(RunTimerHandle);
+	}
+
+	SetGameplayInputEnabled(false);
+
+	CurrentState = ERunState::Result;
+
+	switch (Reason)
+	{
+	case EDeathReason::Killed:
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[GAME OVER] Player died.")
 		);
+
+		break;
+	}
+
+	case EDeathReason::TimeOut:
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[GAME OVER] Time out.")
+		);
+
+		break;
+	}
+
+	default:
+		break;
+	}
 }
 
+// =========================================================
+// ExecuteStageClear
+// =========================================================
+
+void ARGGameModeBase::ExecuteStageClear()
+{
+	// ì¤‘ë³µ Stage Clear ë°©ì§€
+	if (bIsStageCleared)
+	{
+		return;
+	}
+
+	bIsStageCleared = true;
+
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(RunTimerHandle);
+	}
+
+	// 10í‚¬ì€ ìµœì¢… ìŠ¹ë¦¬ê°€ ì•„ë‹ˆë¯€ë¡œ ì…ë ¥ ìœ ì§€
+	// SetGameplayInputEnabled(false); í˜¸ì¶œí•˜ì§€ ì•ŠìŒ
+
+	CurrentState = ERunState::RestHub;
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[STAGE CLEAR] Target kill count reached. Portal activation requested.")
+	);
+
+	// Blueprintì— Stage Clear ì•Œë¦¼
+	OnStageClear();
+}
+
+// =========================================================
+// ExecuteVictory
+// =========================================================
+
+void ARGGameModeBase::ExecuteVictory()
+{
+	// ì¤€ë¹„ë˜ì§€ ì•Šì€ Runì—ì„œëŠ” ìŠ¹ë¦¬ ë¶ˆê°€
+	if (!bIsRunReady)
+	{
+		return;
+	}
+
+	// ì´ë¯¸ ì¢…ë£Œëœ ê²½ìš° ì¤‘ë³µ ì²˜ë¦¬ ë°©ì§€
+	if (bIsRunEnded)
+	{
+		return;
+	}
+
+	// 10í‚¬ Stage Clear ì´í›„ì—ë§Œ ìŠ¹ë¦¬ ê°€ëŠ¥
+	if (!bIsStageCleared)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[VICTORY] Ignored. Stage has not been cleared yet.")
+		);
+
+		return;
+	}
+
+	bIsRunEnded = true;
+
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(RunTimerHandle);
+	}
+
+	CurrentState = ERunState::Result;
+
+	SetGameplayInputEnabled(false);
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[VICTORY] Player entered the portal.")
+	);
+}
 
 // =========================================================
 // VerifySystems
@@ -458,187 +592,48 @@ bool ARGGameModeBase::VerifySystems()
 		UE_LOG(
 			LogTemp,
 			Error,
-			TEXT(
-				"[RGGameMode] "
-				"World is NULL."
-			)
+			TEXT("[RGGameMode] World is NULL.")
 		);
 
 		return false;
 	}
 
-
 	APlayerController* PlayerController =
 		GetWorld()->GetFirstPlayerController();
-
 
 	if (!PlayerController)
 	{
 		UE_LOG(
 			LogTemp,
-			Warning,
-			TEXT(
-				"[RGGameMode] "
-				"PlayerController not found."
-			)
+			Error,
+			TEXT("[RGGameMode] PlayerController not found.")
 		);
 
-
-		/*
-		 * MainMenu µîÀÇ »óÈ²¿¡¼­µµ
-		 * BeginPlay ¼ø¼­¿¡ µû¶ó Àá½Ã ¾øÀ» ¼ö ÀÖ±â ¶§¹®¿¡
-		 * ¿©±â¼­´Â false Ã³¸®ÇÏÁö ¾Ê´Â´Ù.
-		 */
+		return false;
 	}
 
+	APawn* PlayerPawn =
+		PlayerController->GetPawn();
 
-	return true;
-}
-
-
-// =========================================================
-// OnEnemyDied
-// =========================================================
-
-void ARGGameModeBase::OnEnemyDied()
-{
-	if (bIsRunEnded)
+	if (!PlayerPawn)
 	{
-		return;
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[RGGameMode] Player Pawn not found.")
+		);
+
+		return false;
 	}
-
-
-	if (
-		CurrentState !=
-		ERunState::Combat
-		)
-	{
-		return;
-	}
-
-
-	CurrentKills++;
-
 
 	UE_LOG(
 		LogTemp,
 		Log,
-		TEXT(
-			"[RGGameMode] "
-			"Kill: %d / %d"
-		),
-		CurrentKills,
-		TargetKillsToClear
+		TEXT("[RGGameMode] Required systems verified.")
 	);
 
-
-	if (CheckStageClearCondition())
-	{
-		CheckEndCondition(
-			false,
-			false
-		);
-	}
+	return true;
 }
-
-
-// =========================================================
-// ExecuteGameOver
-// =========================================================
-
-void ARGGameModeBase::ExecuteGameOver(
-	EDeathReason Reason
-)
-{
-	if (GetWorld())
-	{
-		GetWorld()
-			->GetTimerManager()
-			.ClearTimer(
-				RunTimerHandle
-			);
-	}
-
-
-	ChangeRunState(
-		ERunState::Result
-	);
-
-
-	switch (Reason)
-	{
-	case EDeathReason::Killed:
-	{
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT(
-				"[GAME OVER] "
-				"Player died."
-			)
-		);
-
-		break;
-	}
-
-
-	case EDeathReason::TimeOut:
-	{
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT(
-				"[GAME OVER] "
-				"Time out."
-			)
-		);
-
-		break;
-	}
-
-
-	default:
-	{
-		break;
-	}
-	}
-}
-
-
-// =========================================================
-// ExecuteStageClear
-// =========================================================
-
-void ARGGameModeBase::ExecuteStageClear()
-{
-	if (GetWorld())
-	{
-		GetWorld()
-			->GetTimerManager()
-			.ClearTimer(
-				RunTimerHandle
-			);
-	}
-
-
-	bIsStageCleared = true;
-
-
-	ChangeRunState(
-		ERunState::RestHub
-	);
-
-
-	UE_LOG(
-		LogTemp,
-		Warning,
-		TEXT(
-			"[STAGE CLEAR] "
-			"Stage clear condition met."
-		)
-	);
-}
-
 
 // =========================================================
 // CreateDefaultUI
@@ -646,64 +641,40 @@ void ARGGameModeBase::ExecuteStageClear()
 
 UUserWidget* ARGGameModeBase::CreateDefaultUI()
 {
-	// -----------------------------------------------------
-	// ÀÌ¹Ì UI Á¸Àç
-	// -----------------------------------------------------
-
 	if (DefaultUIWidget)
 	{
 		return DefaultUIWidget;
 	}
-
-
-	// -----------------------------------------------------
-	// UI Class ¹Ì¼³Á¤
-	// -----------------------------------------------------
 
 	if (!DefaultUIClass)
 	{
 		UE_LOG(
 			LogTemp,
 			Warning,
-			TEXT(
-				"[RGGameMode] "
-				"DefaultUIClass is not assigned."
-			)
+			TEXT("[RGGameMode] DefaultUIClass is not assigned.")
 		);
 
 		return nullptr;
 	}
 
-
-	// -----------------------------------------------------
-	// PlayerController Ã£±â
-	// -----------------------------------------------------
+	if (!GetWorld())
+	{
+		return nullptr;
+	}
 
 	APlayerController* PlayerController =
-		GetWorld()
-		? GetWorld()->GetFirstPlayerController()
-		: nullptr;
-
+		GetWorld()->GetFirstPlayerController();
 
 	if (!PlayerController)
 	{
 		UE_LOG(
 			LogTemp,
 			Warning,
-			TEXT(
-				"[RGGameMode] "
-				"Cannot create UI. "
-				"PlayerController not found."
-			)
+			TEXT("[RGGameMode] Cannot create UI. PlayerController not found.")
 		);
 
 		return nullptr;
 	}
-
-
-	// -----------------------------------------------------
-	// Widget »ı¼º
-	// -----------------------------------------------------
 
 	DefaultUIWidget =
 		CreateWidget<UUserWidget>(
@@ -711,44 +682,21 @@ UUserWidget* ARGGameModeBase::CreateDefaultUI()
 			DefaultUIClass
 		);
 
-
 	if (!DefaultUIWidget)
 	{
 		UE_LOG(
 			LogTemp,
 			Error,
-			TEXT(
-				"[RGGameMode] "
-				"Failed to create Default UI."
-			)
+			TEXT("[RGGameMode] Failed to create Default UI.")
 		);
 
 		return nullptr;
 	}
 
-
-	// -----------------------------------------------------
-	// Viewport Ãß°¡
-	// -----------------------------------------------------
-
-	DefaultUIWidget->AddToViewport(
-		DefaultUIZOrder
-	);
-
-
-	UE_LOG(
-		LogTemp,
-		Log,
-		TEXT(
-			"[RGGameMode] "
-			"Default UI created."
-		)
-	);
-
+	DefaultUIWidget->AddToViewport(DefaultUIZOrder);
 
 	return DefaultUIWidget;
 }
-
 
 // =========================================================
 // RemoveDefaultUI
@@ -761,22 +709,10 @@ void ARGGameModeBase::RemoveDefaultUI()
 		return;
 	}
 
-
 	DefaultUIWidget->RemoveFromParent();
 
 	DefaultUIWidget = nullptr;
-
-
-	UE_LOG(
-		LogTemp,
-		Log,
-		TEXT(
-			"[RGGameMode] "
-			"Default UI removed."
-		)
-	);
 }
-
 
 // =========================================================
 // ApplyDefaultInputSettings
@@ -789,38 +725,16 @@ void ARGGameModeBase::ApplyDefaultInputSettings()
 		return;
 	}
 
-
 	APlayerController* PlayerController =
 		GetWorld()->GetFirstPlayerController();
 
-
 	if (!PlayerController)
 	{
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT(
-				"[RGGameMode] "
-				"Cannot apply input settings. "
-				"PlayerController not found."
-			)
-		);
-
 		return;
 	}
 
-
-	// -----------------------------------------------------
-	// Mouse Cursor
-	// -----------------------------------------------------
-
 	PlayerController->bShowMouseCursor =
 		bShowMouseCursor;
-
-
-	// -----------------------------------------------------
-	// Input Mode
-	// -----------------------------------------------------
 
 	switch (DefaultInputMode)
 	{
@@ -828,21 +742,15 @@ void ARGGameModeBase::ApplyDefaultInputSettings()
 	{
 		FInputModeGameOnly InputMode;
 
-
-		PlayerController->SetInputMode(
-			InputMode
-		);
-
+		PlayerController->SetInputMode(InputMode);
 
 		break;
 	}
-
 
 	case ERGInputMode::UIOnly:
 	{
 		FInputModeUIOnly InputMode;
 
-
 		if (DefaultUIWidget)
 		{
 			InputMode.SetWidgetToFocus(
@@ -850,21 +758,15 @@ void ARGGameModeBase::ApplyDefaultInputSettings()
 			);
 		}
 
-
-		PlayerController->SetInputMode(
-			InputMode
-		);
-
+		PlayerController->SetInputMode(InputMode);
 
 		break;
 	}
-
 
 	case ERGInputMode::GameAndUI:
 	{
 		FInputModeGameAndUI InputMode;
 
-
 		if (DefaultUIWidget)
 		{
 			InputMode.SetWidgetToFocus(
@@ -872,19 +774,12 @@ void ARGGameModeBase::ApplyDefaultInputSettings()
 			);
 		}
 
-
-		PlayerController->SetInputMode(
-			InputMode
-		);
-
+		PlayerController->SetInputMode(InputMode);
 
 		break;
 	}
-
 
 	default:
-	{
 		break;
-	}
 	}
 }

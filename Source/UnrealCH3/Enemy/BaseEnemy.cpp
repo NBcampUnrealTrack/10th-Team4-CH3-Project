@@ -6,6 +6,8 @@
 // 데미지 피드백 인터페이스 추가
 #include "Combat/DamageFeedbackReceiver.h"
 #include "Engine/DamageEvents.h"
+#include "Gamemode/RGGameModeBase.h"
+#include "Kismet/GameplayStatics.h"
 
 // Sets default values
 ABaseEnemy::ABaseEnemy()
@@ -115,12 +117,38 @@ void ABaseEnemy::Die()
 	}
 
 	bIsDead = true;
-	//죽은 객체 상태 변화
 	CurrentState = EEnemyState::Dead;
 
-	UE_LOG(LogTemp, Log, TEXT("Character is Dead!"));
-}
+	if (AAIEnemyController* EnemyController =
+		Cast<AAIEnemyController>(GetController()))
+	{
+		EnemyController->StopAI();
+	}
 
+	if (ARGGameModeBase* GameMode =
+		Cast<ARGGameModeBase>(
+			UGameplayStatics::GetGameMode(this)
+		))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[BaseEnemy] Calling OnEnemyDied")
+		);
+
+		GameMode->OnEnemyDied();
+	}
+	else
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[BaseEnemy] GameMode not found")
+		);
+	}
+
+	SetLifeSpan(1.0f);
+}
 bool ABaseEnemy::IsTargetInAttackRange() const
 {
 	return false;
