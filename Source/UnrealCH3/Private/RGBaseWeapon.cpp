@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "RGBaseWeapon.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
@@ -186,7 +186,7 @@ void ARGBaseWeapon::Fire()
 	FireHitscan(StartLocation, SpreadDirection, -1.f, nullptr);
 }
 
-bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors)
+bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors , FHitResult* OutHit)
 {	
 	//광선의 끝 지점을 계산 
 	const FVector EndLocation = StartLocation + FireDirection * TraceRange;
@@ -268,6 +268,9 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	//   (Add는 이 아래 if문에서 이미 실행됐으므로, 여기서는 "방금 추가되기 전엔 비어있었는지"를 따로 셈)
 	const bool bIsDirectHit = (AlreadyHitActors == nullptr) || (AlreadyHitActors->Num() == 1);
 	ApplyHitDamage(Hit, BaseDamage, StartLocation, bIsDirectHit);
+	if (OutHit) {
+		*OutHit = Hit;
+	}
 	return true;
 }
 
