@@ -43,16 +43,12 @@ void AAIEnemyController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 	ABaseEnemy* Enemy = Cast<ABaseEnemy>(InPawn);
-
 	if (Enemy)
 	{
-		return;
+		Sight->SightRadius = Enemy->GetViewingDistance();
+		Sight->LoseSightRadius = Enemy->GetViewingDistance() + 500.0f;
+		Sight->PeripheralVisionAngleDegrees = Enemy->GetViewingAngle() / 2.0f;
 	}
-
-	Sight->SightRadius = Enemy->GetViewingDistance();
-	Sight->LoseSightRadius = Enemy->GetViewingDistance() + 500.0f;
-	Sight->PeripheralVisionAngleDegrees = Enemy->GetViewingAngle() / 2.0f;
-
 	RunAI();
 }
 

@@ -21,9 +21,13 @@ void ARGPlayerController::BeginPlay()
 
 	if (ULocalPlayer* LocalPlayer = GetLocalPlayer())
 	{
-		if (UEnhancedInputLocalPlayerSubsystem* Subsytem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+			LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
 		{
-			Subsytem->AddMappingContext(DefaultIMC, 0);
+			if (DefaultIMC)
+			{
+				Subsystem->AddMappingContext(DefaultIMC, 0);
+			}
 		}
 	}
 }
