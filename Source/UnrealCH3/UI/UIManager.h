@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -30,19 +30,19 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UHUDWidget> HUDWidgetClass;
 
-	//½ÇÁ¦ È­¸é
+	//ì‹¤ì œ í™”ë©´
 	UPROPERTY(Transient)
 	TObjectPtr<UHUDWidget> HUDWidgetInstance;
 
-	//È­¸é¿¡ °ª Àü´Ş
+	//í™”ë©´ì— ê°’ ì „ë‹¬
 	UPROPERTY(Transient)
 	TObjectPtr<UHUDController> HUDControllerInstance;
 
-	//¸Ş´º ÀÔ·Â ¸ğµå
+	//ë©”ë‰´ ì…ë ¥ ëª¨ë“œ
 	UPROPERTY(Transient)
 	bool bIsMenuInputModeActive = false;
 
-	//Å×½ºÆ®¿ë º¯¼ö ¸ğÀ½
+	//í…ŒìŠ¤íŠ¸ìš© ë³€ìˆ˜ ëª¨ìŒ
 	UPROPERTY(EditDefaultsOnly, Category = "UI|Debug")
 	bool bPreviewLowHealthEffect = false;
 
@@ -55,39 +55,39 @@ protected:
 	UFUNCTION()
 	void HandleResumeRequested();
 
-	//View ÀúÀå Map »ı¼º
+	//View ì €ì¥ Map ìƒì„±
 	UPROPERTY(Transient)
 	TMap<TSubclassOf<UUserWidget>, TObjectPtr<UUserWidget>> ActiveViews;
 
-	//View Layer ÀúÀå Map »ı¼º
+	//View Layer ì €ì¥ Map ìƒì„±
 	UPROPERTY(Transient)
 	TMap<TSubclassOf<UUserWidget>, EUILayer> ActiveViewLayers;
 
-	//ÇØ´ç Layer °ÔÀÓ ÀÔ·Â Blocking ÆÇ´Ü
+	//í•´ë‹¹ Layer ê²Œì„ ì…ë ¥ Blocking íŒë‹¨
 	bool IsInputBlockingLayer(EUILayer Layer) const;
-	//ÀÔ·ÂÀ» ¸·´Â Layer Á¸Àç ¿©ºÎ ÆÇ´Ü
+	//ì…ë ¥ì„ ë§‰ëŠ” Layer ì¡´ì¬ ì—¬ë¶€ íŒë‹¨
 	bool HasInputBlockingView() const;
-	//Layer ¿¡ È°¼ºÈ­ µÈ View Á¸Àç ¿©ºÎ ÆÇ´Ü
+	//Layer ì— í™œì„±í™” ëœ View ì¡´ì¬ ì—¬ë¶€ íŒë‹¨
 	bool HasActiveViewInLayer(EUILayer Layer) const;
-	// Controll ¿¡¼­ È®Á¤µÈ ÇÇÇØ Á¤º¸¸¦ BP·Î Àü´Ş
+	// Controll ì—ì„œ í™•ì •ëœ í”¼í•´ ì •ë³´ë¥¼ BPë¡œ ì „ë‹¬
 	void HandleDamageNumberRequested(float AppliedDamage, AActor* TargetActor, FVector WorldLocation);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI|Damage")
 	void OnDamageNumberDisplayRequested(float AppliedDamage, AActor* TargetActor, FVector WorldLocation);
 
-	//°ø°İ °æ°í Ç¥½Ã
+	//ê³µê²© ê²½ê³  í‘œì‹œ
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI|CombatFeedback")
 	void OnAttackWarningDisplayRequested(AActor* Attacker, float WarningDuration);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI|CombatFeedback")
 	void OnAttackWarningHideReqested(AActor* Attacker);
 
-	//ÇÇ°İ ¹æÇâ Ç¥½Ã
+	//í”¼ê²© ë°©í–¥ í‘œì‹œ
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI|CombatFeedback")
 	void OnDirectionDamageDisplayRequested(AActor* Attacker, FVector AttackOrigin);
 
 public:
-	// Å×½ºÆ®¿ë ÇÔ¼ö ¸ğÀ½
+	// í…ŒìŠ¤íŠ¸ìš© í•¨ìˆ˜ ëª¨ìŒ
 	UFUNCTION(Exec, BlueprintCallable, Category = "UI|Debug")
 	void TestOpenPauseMenu();
 
@@ -100,54 +100,54 @@ public:
 	UFUNCTION(Exec)
 	void TestCloseSelection();
 
-	//HUD »ı¼º
+	//HUD ìƒì„±
 	UFUNCTION(Exec, BlueprintCallable, Category = "UI")
 	void CreateHUDWidget();
 
-	//HUD Á¦°Å
+	//HUD ì œê±°
 	UFUNCTION(Exec)
 	void RemoveHUDWidget();
 
-	//HUD Ç¥½Ã (Move, Look »ç¿ë)
+	//HUD í‘œì‹œ (Move, Look ì‚¬ìš©)
 	UFUNCTION(BlueprintCallable, Category = "UI|Input")
 	void ApplyGameInputMode();
 
-	//ÀÏ½ÃÁ¤Áö, °­È­, °á°ú È­¸é µî Ç¥½Ã ( ÀÌµ¿ ÀÔ·Â Â÷´Ü, ¸¶¿ì½º Ç¥½Ã)
+	//ì¼ì‹œì •ì§€, ê°•í™”, ê²°ê³¼ í™”ë©´ ë“± í‘œì‹œ ( ì´ë™ ì…ë ¥ ì°¨ë‹¨, ë§ˆìš°ìŠ¤ í‘œì‹œ)
 	UFUNCTION(BlueprintCallable, Category = "UI|Input")
 	void ApplyMenuInputMode();
 
-	//View °èÃş Ãß°¡
+	//View ê³„ì¸µ ì¶”ê°€
 	UFUNCTION(BlueprintCallable, Category = "UI|View")
 	UUserWidget* OpenView(TSubclassOf<UUserWidget> ViewClass, EUILayer Layer);
 
-	//View °èÃş Á¦°Å
+	//View ê³„ì¸µ ì œê±°
 	UFUNCTION(BlueprintCallable, Category = "UI|View")
 	bool CloseView(TSubclassOf<UUserWidget> ViewClass);
 
-	// »ı¼ºµÈ ¹«±â Á¤º¸ View¸¦ ±âÁ¸ HUDController¿¡ µî·Ï
+	// ìƒì„±ëœ ë¬´ê¸° ì •ë³´ Viewë¥¼ ê¸°ì¡´ HUDControllerì— ë“±ë¡
 	UFUNCTION(BlueprintCallable, Category = "UI|Binding")
 	void RegisterWeaponInfoView(UWeaponInfoWidget* InWeaponInfoView);
 
-	// ÀåÀÛÇÑ ¹«±â Á¤º¸ UI Controller ¿¡ Àü´ç
+	// ì¥ì‘í•œ ë¬´ê¸° ì •ë³´ UI Controller ì— ì „ë‹¹
 	UFUNCTION(BlueprintCallable, Category = "UI|Binding")
 	void SetEquippedWeapon(ARGBaseWeapon* InWeapon, const FText& InWeaponDisplayName);
 
 	UFUNCTION(BlueprintCallable, Category = "UI|Binding")
 	void RegisterCrosshairView(UCrosshairWidget* InCrosshairView);
 
-	//ÇÃ·¹ÀÌ¾îÀÇ UI ¸Å´ÏÀú È£Ãâ
-	//°ø°İ ÁØºñ ½ÃÀÛ ½Ã °ø°İÀÚ¿Í °ø°İ ÁØºñ½Ã°£À» Àü´Ş
-	//È£ÃâÇÒ ÇÔ¼ö °ø°İÀÚ, °ø°İ ÁØºñ½Ã°£
+	//í”Œë ˆì´ì–´ì˜ UI ë§¤ë‹ˆì € í˜¸ì¶œ
+	//ê³µê²© ì¤€ë¹„ ì‹œì‘ ì‹œ ê³µê²©ìì™€ ê³µê²© ì¤€ë¹„ì‹œê°„ì„ ì „ë‹¬
+	//í˜¸ì¶œí•  í•¨ìˆ˜ ê³µê²©ì, ê³µê²© ì¤€ë¹„ì‹œê°„
 	UFUNCTION(BlueprintCallable, Category = "UI|CombatFeedback")
 	void NotifyAttackWarningStarted(AActor* Attacker, float WarningDuration);
 
-	//°ø°İ Ãë¼Ò, °ø°İÀÚ »ç¸Á½Ã È£Ãâ
-	//È£ÃâÇÒ ÇÔ¼ö °ø°İÀÚ
+	//ê³µê²© ì·¨ì†Œ, ê³µê²©ì ì‚¬ë§ì‹œ í˜¸ì¶œ
+	//í˜¸ì¶œí•  í•¨ìˆ˜ ê³µê²©ì
 	UFUNCTION(BlueprintCallable, Category = "UI|CombatFeedback")
 	void NotifyAttackWarningCanceled(AActor* Attacker);
 
-	//ÇÇ°İ ½Ã È£Ãâ
-	//È£ÃâÇÒ ÇÔ¼ö °ø°İÀÚ, °ø°İ ¹ß»ı À§Ä¡
+	//í”¼ê²© ì‹œ í˜¸ì¶œ
+	//í˜¸ì¶œí•  í•¨ìˆ˜ ê³µê²©ì, ê³µê²© ë°œìƒ ìœ„ì¹˜
 	UFUNCTION(BlueprintCallable, Category = "UI|CombatFeedback")
 	void NotifyDirectionalDamage(AActor* Attacker, FVector AttackOrigin);
 };

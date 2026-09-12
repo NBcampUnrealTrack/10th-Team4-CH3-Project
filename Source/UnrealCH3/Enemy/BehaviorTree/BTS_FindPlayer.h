@@ -4,20 +4,17 @@
 
 #include "CoreMinimal.h"
 #include "BehaviorTree/BTService.h"
-#include "BTS_Combat.generated.h"
+#include "BTS_FindPlayer.generated.h"
 
-/**
- * 
- */
 UCLASS()
-class UNREALCH3_API UBTS_Combat : public UBTService
+class UNREALCH3_API UBTS_FindPlayer : public UBTService
 {
 	GENERATED_BODY()
 	
+
 public:
-	UBTS_Combat();
+	UBTS_FindPlayer();
 
 protected:
 	virtual void TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds);
-	float AttackDistance;
 };

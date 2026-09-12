@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+Ôªø// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -19,11 +19,11 @@ class UNREALCH3_API UHUDWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	// LowHealthEffect ≤Ù±‚/ƒ—±‚
+	// LowHealthEffect ÎÅÑÍ∏∞/ÏºúÍ∏∞
 	UFUNCTION(BlueprintCallable, Category = "UI|HUD")
 	void SetLowHealthEffectVisible(bool bVisible);
 
-	// LowHealthEffect ∞≠µµ ¿˚øÎ
+	// LowHealthEffect Í∞ïÎèÑ Ï†ÅÏö©
 	UFUNCTION(BlueprintCallable, Category = "UI|HUD")
 	void SetLowHealthEffectIntensity(float Intensity);
 
