@@ -1,13 +1,29 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Enemy/Enum/EnemyStateEnum.h"
-#include "Enemy/Enum/EnemyAttackTypeEnum.h"
 #include "GameFramework/Character.h"
 #include "BaseEnemy.generated.h"
 
+
+UENUM(BlueprintType)
+enum class EEnemyState : uint8
+{
+    Idle,
+    Patrol,
+    Chase,
+    Attack,
+    Hit,
+    Dead
+};
+
+UENUM(BlueprintType)
+enum class EEnemyAttackType : uint8
+{
+    Melee,
+    Ranged
+};
 
 UCLASS()
 class UNREALCH3_API ABaseEnemy : public ACharacter
@@ -24,9 +40,9 @@ public:
     bool IsTargetInAttackRange() const;
     /*bool IsTargetInDetectRange() const;
     void SetEnemyState(EEnemyState NewState);*/
-    EEnemyStateEnum GetEnemyState() const;
+    EEnemyState GetEnemyState() const;
     void SetTargetActor(AActor* NewTarget);
-    AActor* GetTargetActor() const;
+    //AActor* GetTargetActor() const;
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
     float GetViewingAngle();
     float GetViewingDistance();
@@ -37,59 +53,59 @@ public:
 
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float MaxHP;            // ìµœëŒ€ ì²´ë ¥
+    float MaxHP;            // ÃÖ´ë Ã¼·Â
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float CurrentHP;        // í˜„ì¬ ì²´ë ¥
+    float CurrentHP;        // ÇöÀç Ã¼·Â
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float AttackDamage;     // ê³µê²©ë ¥
+    float AttackDamage;     // °ø°İ·Â
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float AttackMaxRange;   // ìµœëŒ€ ê³µê²© ì‚¬ê±°ë¦¬
+    float AttackMaxRange;   // ÃÖ´ë °ø°İ »ç°Å¸®
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float AttackMinRange;   // ìµœì†Œ ê³µê²© ì‚¬ê±°ë¦¬
+    float AttackMinRange;   // ÃÖ¼Ò °ø°İ »ç°Å¸®
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float Defense;          // ë°©ì–´ë ¥
+    float Defense;          // ¹æ¾î·Â
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float Exp;              // íšë“ ê²½í—˜ì¹˜
+    float Exp;              // È¹µæ °æÇèÄ¡
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    int Score;            // ì²˜ì¹˜ ì ìˆ˜
+    int Score;            // Ã³Ä¡ Á¡¼ö
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float ViewingAngle;     // ì‹œì•¼ê°
+    float ViewingAngle;     // ½Ã¾ß°¢
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float ViewingDistance;  // ì‹œì•¼ ê°ì§€ ê±°ë¦¬
+    float ViewingDistance;  // ½Ã¾ß °¨Áö °Å¸®
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float HearingDistance;  // ì²­ê° ê°ì§€ ê±°ë¦¬
+    float HearingDistance;  // Ã»°¢ °¨Áö °Å¸®
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float TargetChangeTime; // íƒ€ê²Ÿ ë³€ê²½ ëŒ€ê¸° ì‹œê°„
+    float TargetChangeTime; // Å¸°Ù º¯°æ ´ë±â ½Ã°£
 
     FTimerHandle TargetChangeTimer;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    AActor* TargetActor;    // í˜„ì¬ ì¶”ì  ì¤‘ì¸ íƒ€ê²Ÿ(ëª©í‘œ)
+    AActor* TargetActor;    // ÇöÀç ÃßÀû ÁßÀÎ Å¸°Ù(¸ñÇ¥)
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float AttackCoolTime;   // ê³µê²© ì¿¨íƒ€ì„
+    float AttackCoolTime;   // °ø°İ ÄğÅ¸ÀÓ
 
     FTimerHandle AttackCoolTimer;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float WarningTime;      // ê³µê²© ì „ ê²½ê³  ì‹œê°„
+    float WarningTime;      // °ø°İ Àü °æ°í ½Ã°£
 
     FTimerHandle WarningTimer;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    bool bIsDead = false;           // ì‚¬ë§ ì—¬ë¶€
+    bool bIsDead = false;           // »ç¸Á ¿©ºÎ
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
-    EEnemyStateEnum CurrentState;   // í˜„ì¬ ìƒíƒœ
+    EEnemyState CurrentState = EEnemyState::Idle;   // ÇöÀç »óÅÂ
 };

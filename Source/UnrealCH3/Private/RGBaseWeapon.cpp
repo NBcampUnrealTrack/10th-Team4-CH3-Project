@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 #include "RGBaseWeapon.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
@@ -113,7 +113,6 @@ void ARGBaseWeapon::StartFireTimer()
 
 void ARGBaseWeapon::StopFireTimer()
 {
-	OnShotFiredStop.Broadcast();
 	GetWorldTimerManager().ClearTimer(FireTimerHandle);
 }
 //이 함수에 의해 틱(발사시간간격)마다 적용되는 것 -> 발사 가능한 상태인지 실시간 확인 , 탄약 줄이기 , 델리게이트 , 탄퍼짐 , 발사 , 라인트레이스
@@ -187,7 +186,7 @@ void ARGBaseWeapon::Fire()
 	FireHitscan(StartLocation, SpreadDirection, -1.f, nullptr);
 }
 
-bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors , FHitResult* OutHit)
+bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors)
 {	
 	//광선의 끝 지점을 계산 
 	const FVector EndLocation = StartLocation + FireDirection * TraceRange;
@@ -269,9 +268,6 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	//   (Add는 이 아래 if문에서 이미 실행됐으므로, 여기서는 "방금 추가되기 전엔 비어있었는지"를 따로 셈)
 	const bool bIsDirectHit = (AlreadyHitActors == nullptr) || (AlreadyHitActors->Num() == 1);
 	ApplyHitDamage(Hit, BaseDamage, StartLocation, bIsDirectHit);
-	if (OutHit) {
-		*OutHit = Hit;
-	}
 	return true;
 }
 

@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -23,38 +23,38 @@ class UNREALCH3_API UHUDController : public UObject
 	GENERATED_BODY()
 	
 public:
-	//Controller HUD ì—°ê²°
+	//Controller HUD ¿¬°á
 	void Initialize(UHUDWidget* InHUDWidget);
 
-	//Model ì²´ë ¥ ì—°ê²° í•¨ìˆ˜
+	//Model Ã¼·Â ¿¬°á ÇÔ¼ö
 	void HandleHealthChanged(float CurrentHealth, float MaxHelth);
 
-	//HUD ì—°ê²° í•´ì œ í•¨ìˆ˜
+	//HUD ¿¬°á ÇØÁ¦ ÇÔ¼ö
 	void Shutdown();
 
-	// ë¬´ê¸° ì •ë³´ í‘œì‹œ view ë“±ë¡
+	// ¹«±â Á¤º¸ Ç¥½Ã view µî·Ï
 	void SetWeaponInfoView(UWeaponInfoWidget* InWeaponInfoView);
 
-	// ë¬´ê¸° ì—°ê²° ë° ì´ˆê¸° íƒ„ì•½ í‘œì‹œ
+	// ¹«±â ¿¬°á ¹× ÃÊ±â Åº¾à Ç¥½Ã
 	void BindWeapon(ARGBaseWeapon* InWeapon, const FText& InWeaponDisplayName);
 
-	// ë¬´ê¸° ì—°ê²° í•´ì œ
+	// ¹«±â ¿¬°á ÇØÁ¦
 	void UnbindWeapon();
 
-	//í¬ë¡œìŠ¤í—¤ì–´ ë“±ë¡
+	//Å©·Î½ºÇì¾î µî·Ï
 	void SetCrosshairView(UCrosshairWidget* InCrosshairView);
 
 	FOnHUDDamageNumberRequested OnDamageNumberRequested;
 
 protected:
-	//HUDWidget ì•½í•œ ì°¸ì¡° ì—°ê²°
+	//HUDWidget ¾àÇÑ ÂüÁ¶ ¿¬°á
 	TWeakObjectPtr<UHUDWidget> HUDWidget;
 
-	//LowHealthRatio ì´í™íŠ¸ ë‚˜ì˜¤ëŠ” ê°’ ì¡°ì • (50% ì‹œì‘ ìµœëŒ€ 25%)
+	//LowHealthRatio ÀÌÆåÆ® ³ª¿À´Â °ª Á¶Á¤ (50% ½ÃÀÛ ÃÖ´ë 25%)
 	float LowHealthFadeStartRatio = 0.5f;
 	float LowHealthFullIntensityRatio = 0.25f;
 
-	// ë¬´ê¸°ì™€ view ì•½í•œ ì°¸ì¡°
+	// ¹«±â¿Í view ¾àÇÑ ÂüÁ¶
 	TWeakObjectPtr<ARGBaseWeapon> BoundWeapon;
 	TWeakObjectPtr<UWeaponInfoWidget> WeaponInfoView;
 
@@ -76,19 +76,19 @@ protected:
 
 	TWeakObjectPtr<UCrosshairWidget> CrosshairView;
 
-	// ì¬ì¥ì „ UI ê°±ì‹  íƒ€ì´ë¨¸
+	// ÀçÀåÀü UI °»½Å Å¸ÀÌ¸Ó
 	FTimerHandle ReloadProgressTimerHandle;
 
-	//íƒ€ì´ë¨¸ ì—°ê²° World í•´ì œ
+	//Å¸ÀÌ¸Ó ¿¬°á World ÇØÁ¦
 	TWeakObjectPtr<UWorld> ReloadTimerWorld;
 
-	// í˜„ì¬ ë¬´ê¸°ì˜ ì¬ì¥ì „ ì‹œê°„ê³¼ íƒ€ì´ë¨¸ ë™ê¸°í™”
+	// ÇöÀç ¹«±âÀÇ ÀçÀåÀü ½Ã°£°ú Å¸ÀÌ¸Ó µ¿±âÈ­
 	void RefreshReloadUI();
 
-	// ë¬´ê¸°ì˜ ì¬ì¥ì „ ì§„í–‰ë¥  í¬ë¡œìŠ¤í—¤ì–´ì— ì „ë‹¬
+	// ¹«±âÀÇ ÀçÀåÀü ÁøÇà·ü Å©·Î½ºÇì¾î¿¡ Àü´Ş
 	void UpdateReloadProgress();
 
-	// UI íƒ€ì´ë¨¸ í•´ì œ
+	// UI Å¸ÀÌ¸Ó ÇØÁ¦
 	void StopReloadProgressTimer();
 
 	UFUNCTION()

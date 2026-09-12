@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Enemy/BTS_Combat.h"
@@ -14,7 +14,6 @@ UBTS_Combat::UBTS_Combat()
 }
 
 
-
 void UBTS_Combat::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
 	Super::TickNode(OwnerComp, NodeMemory, DeltaSeconds);
@@ -26,17 +25,17 @@ void UBTS_Combat::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory,
 	ABaseEnemy* Enemy = Cast<ABaseEnemy>(AiComp->GetPawn());
 	if (!TargetObj)
 	{
-		OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT("bIsCombat"), false);
+		OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT("IsCombat"), false);
 		return;
 	}
 	float Distance = FVector::Distance(Enemy->GetActorLocation(), TargetObj->GetActorLocation());
 	AttackDistance = Enemy->GetViewingDistance();
 	if (Distance <= AttackDistance)
 	{
-		OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT("bIsCombat"), true);
+		OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT("IsCombat"), true);
 	}
 	else
 	{
-		OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT("bIsCombat"), false);
+		OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT("IsCombat"), false);
 	}
 }

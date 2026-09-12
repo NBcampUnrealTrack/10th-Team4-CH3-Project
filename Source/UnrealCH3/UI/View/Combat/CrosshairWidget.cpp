@@ -1,11 +1,11 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "UI/View/Combat/CrosshairWidget.h"
 
 void UCrosshairWidget::ApplyReloadState(bool bIsReloading, float Progress)
 {
-	//ì¬ì¥ì „ ì‹œ 0~1 ë²”ìœ„ì˜ ì§„í–‰ë¥  ì‚¬ìš©
+	//ÀçÀåÀü ½Ã 0~1 ¹üÀ§ÀÇ ÁøÇà·ü »ç¿ë
 	const float DisplayProgress = bIsReloading ? FMath::Clamp(Progress, 0.f, 1.f) : 0.f;
 
 	OnReloadVisualUpdate(bIsReloading, DisplayProgress);

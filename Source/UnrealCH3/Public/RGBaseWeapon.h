@@ -19,7 +19,6 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAimingChanged, bool, bNowAiming);
 //UI담당자 추가 델리게이트 - 재장전캔슬 델리게이트
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnReloadCanceled);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnWeaponShotFired);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnWeaponShotFiredStop);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWeaponDamageConfirmed, float, AppliedDamage, bool, bKilled);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnWeaponDamageNumberRequested, float, AppliedDamage, AActor*, TargetActor, FVector, WorldLocation);
 
@@ -65,9 +64,6 @@ public:
 	FOnWeaponShotFired OnShotFired;
 
 	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
-	FOnWeaponShotFiredStop OnShotFiredStop;
-
-	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
 	FOnWeaponHit OnWeaponHit;
 	//=======================================================================================
 
@@ -94,7 +90,7 @@ protected:
 	virtual void Fire();
 	//라인트레이스 -> 맞았으면 ApplyHitDamage호출 ( AlreadyHitActors 를 넘기면 이 안의 엑터는 다시 처리하지 않음 ( 관통 무기용 중복 방지) )
 	//맞췄으면 true 반환 못맞췄으면 false 반환
-	virtual bool FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors , FHitResult* OutHit = nullptr);
+	virtual bool FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors);
 	//피해 로직 : 기본 피해 * 강화 배율 * 거리 감쇠(선택) -> 최종 피해 전달.
 	// if 강화 X 에 거리감쇠 효과 0으로 한다면 -> 기본피해 == 최종피해
 	// 실제 체력 차감은 맞은 대상 (적) 에서 처리하는 것으로 구현 + 적 체력 여기서 건드리지 않음
@@ -206,7 +202,7 @@ public:
 	// ===== 상태 조회 =====
 	//(델리게이트 시스템이 있으면 재장전 , 에임 , 총알변경 등은 여기서 안가져와도됨)
 	UFUNCTION(BlueprintPure, Category = "Weapon")
-	virtual bool CanFire() const;
+	bool CanFire() const;
 
 	UFUNCTION(BlueprintPure, Category = "Weapon")
 	bool CanReloaded() const;

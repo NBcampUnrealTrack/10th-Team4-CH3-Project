@@ -1,4 +1,4 @@
-ï»¿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
@@ -15,7 +15,7 @@ class UNREALCH3_API IDamageFeedbackReceiver
 	GENERATED_BODY()
 
 public:
-	// ëŒ€ìƒì´ ë°›ì€ ì‹¤ì œ í”¼í•´ëŸ‰ê³¼ ì²˜ì¹˜ ì—¬ë¶€ ìˆ˜ì‹ 
+	// ´ë»óÀÌ ¹ŞÀº ½ÇÁ¦ ÇÇÇØ·®°ú Ã³Ä¡ ¿©ºÎ ¼ö½Å
 	virtual void ReceiveDamageFeedback(
 		float AppliedDamage,
 		bool bKilled,

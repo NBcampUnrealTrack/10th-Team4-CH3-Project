@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -39,7 +39,7 @@ protected:
 	class UAISenseConfig_Sight* Sight;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-	bool bCanAttack;        // ê³µê²© ê°€ëŠ¥ ì—¬ë¶€
+	bool bCanAttack;        // °ø°Ý °¡´É ¿©ºÎ
 	UPROPERTY()
 	FVector TargetLocation;
 

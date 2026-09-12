@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "UI/Controller/HUDController.h"
@@ -9,7 +9,7 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 
-//Controllerê°€ ì œì–´í•  HUDë¥¼ ì €ìž¥ í›„ ì´ˆê¸°ê°’ ì…‹íŒ…
+//Controller°¡ Á¦¾îÇÒ HUD¸¦ ÀúÀå ÈÄ ÃÊ±â°ª ¼ÂÆÃ
 void UHUDController::Initialize(UHUDWidget* InHUDWidget)
 {
 	HUDWidget = InHUDWidget;
@@ -33,7 +33,7 @@ void UHUDController::HandleHealthChanged(float CurrentHealth, float MaxHelth)
 		return;
 	}
 
-	// í˜„ìž¬ ì²´ë ¥ / ìµœëŒ€ì²´ë ¥ìœ¼ë¡œ ë‚˜ëˆ„ì–´ HealthRatio ê³„ì‚°
+	// ÇöÀç Ã¼·Â / ÃÖ´ëÃ¼·ÂÀ¸·Î ³ª´©¾î HealthRatio °è»ê
 	const float HealthRatio =
 		FMath::Clamp(
 			CurrentHealth / MaxHelth,
@@ -42,7 +42,7 @@ void UHUDController::HandleHealthChanged(float CurrentHealth, float MaxHelth)
 		);
 
 
-	// ì²´ë ¥ ë¹„ìœ¨ì— ë”°ë¼ íš¨ê³¼ ê°•ë„ ì €ìž¥
+	// Ã¼·Â ºñÀ²¿¡ µû¶ó È¿°ú °­µµ ÀúÀå
 	const float Intensity =
 		FMath::GetMappedRangeValueClamped(
 			FVector2D(
@@ -53,7 +53,7 @@ void UHUDController::HandleHealthChanged(float CurrentHealth, float MaxHelth)
 			HealthRatio
 		);
 
-	//Intensity ê°’ì— ë”°ë¼ LowHealthEffect ì˜ ê°•ë„ ì„¤ì •
+	//Intensity °ª¿¡ µû¶ó LowHealthEffect ÀÇ °­µµ ¼³Á¤
 	HUDWidget->SetLowHealthEffectIntensity(Intensity);
 }
 
@@ -221,7 +221,7 @@ void UHUDController::RefreshWeaponInfo()
 
 void UHUDController::RefreshReloadUI()
 {
-	//ì´ì „ ê°±ì‹  ì´ˆê¸°í™”
+	//ÀÌÀü °»½Å ÃÊ±âÈ­
 	StopReloadProgressTimer();
 	UpdateReloadProgress();
 
@@ -241,7 +241,7 @@ void UHUDController::RefreshReloadUI()
 
 	ReloadTimerWorld = World;
 
-	// ìž¬ìž¥ì „ ì¤‘ 60í”„ë ˆìž„ìœ¼ë¡œ í™”ë©´ ê°±ì‹ 
+	// ÀçÀåÀü Áß 60ÇÁ·¹ÀÓÀ¸·Î È­¸é °»½Å
 	World->GetTimerManager().SetTimer(
 		ReloadProgressTimerHandle,
 		this,

@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -15,17 +15,17 @@ class UNREALCH3_API UCrosshairWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	//Controller ê°€ ì „ë‹¬í•œ ì¬ì¥ì „ ìƒíƒœë¥¼ UI ì— ë°˜ì˜
+	//Controller °¡ Àü´ŞÇÑ ÀçÀåÀü »óÅÂ¸¦ UI ¿¡ ¹İ¿µ
 	UFUNCTION(BlueprintCallable, Category = "UI|Reload")
 	void ApplyReloadState(bool bIsReloading, float Progress);
-	// ë°œì‚¬ ì•Œë¦¼ ì „ë‹¬
+	// ¹ß»ç ¾Ë¸² Àü´Ş
 	void ApplyShotFired();
 	
-	// í”¼í•´ í™•ì¸
+	// ÇÇÇØ È®ÀÎ
 	void ApplyHitConfirmed(bool bKilled);
 	
 protected:
-	// ì¬ì¥ì „ UI ë¹„ì£¼ì–¼ ì—…ë°ì´íŠ¸ í•¨ìˆ˜ BP ì—ì„œ êµ¬í˜„
+	// ÀçÀåÀü UI ºñÁÖ¾ó ¾÷µ¥ÀÌÆ® ÇÔ¼ö BP ¿¡¼­ ±¸Çö
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI|Reload")
 	void OnReloadVisualUpdate(bool bIsReloading, float Progress);
 
