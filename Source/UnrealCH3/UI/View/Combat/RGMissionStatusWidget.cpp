@@ -60,4 +60,14 @@ void URGMissionStatusWidget::ApplyMissionStatus(float RemainingSeconds, int32 Cu
 			);
 		}
 	}
+
+	const bool bNewWarningActive = SafeSeconds <= FMath::Max(0.f, TimeWarningThreshold);
+
+	if (!bHasReceivedStatus || bTimeWarningActive != bNewWarningActive)
+	{
+		bHasReceivedStatus = true;
+		bTimeWarningActive = bNewWarningActive;
+
+		OnTimerWarningChanged(bTimeWarningActive);
+	}
 }
