@@ -36,7 +36,13 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI|Mission")
 	void OnTimerWarningChanged(bool bWarningActive);
 
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI|Mission")
+	void OnKillObjectiveCompletedChanged(bool bCompleted);
+
 private:
 	bool bHasReceivedStatus = false;
 	bool bTimeWarningActive = false;
+
+	bool bHasReceiveKillStatus = false;
+	bool bKillObjectiveCompleted = false;
 };
