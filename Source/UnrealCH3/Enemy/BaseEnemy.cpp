@@ -6,8 +6,7 @@
 // 데미지 피드백 인터페이스 추가
 #include "Combat/DamageFeedbackReceiver.h"
 #include "Engine/DamageEvents.h"
-#include "Gamemode/RGGameModeBase.h"
-#include "Kismet/GameplayStatics.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
 ABaseEnemy::ABaseEnemy()
@@ -18,6 +17,12 @@ ABaseEnemy::ABaseEnemy()
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 	ViewingAngle = 140;
 	ViewingDistance = 3500.0f;
+
+	CurrentState = EEnemyStateEnum::Idle;
+
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 480.0f, 0.0f);
+	bUseControllerRotationYaw = false;
 }
 
 // Called when the game starts or when spawned
@@ -117,44 +122,18 @@ void ABaseEnemy::Die()
 	}
 
 	bIsDead = true;
-	CurrentState = EEnemyState::Dead;
+	//죽은 객체 상태 변화
+	CurrentState = EEnemyStateEnum::Dead;
 
-	if (AAIEnemyController* EnemyController =
-		Cast<AAIEnemyController>(GetController()))
-	{
-		EnemyController->StopAI();
-	}
-
-	if (ARGGameModeBase* GameMode =
-		Cast<ARGGameModeBase>(
-			UGameplayStatics::GetGameMode(this)
-		))
-	{
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("[BaseEnemy] Calling OnEnemyDied")
-		);
-
-		GameMode->OnEnemyDied();
-	}
-	else
-	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT("[BaseEnemy] GameMode not found")
-		);
-	}
-
-	SetLifeSpan(1.0f);
+	UE_LOG(LogTemp, Log, TEXT("Character is Dead!"));
 }
+
 bool ABaseEnemy::IsTargetInAttackRange() const
 {
 	return false;
 }
 
-EEnemyState ABaseEnemy::GetEnemyState() const
+EEnemyStateEnum ABaseEnemy::GetEnemyState() const
 {
 	return CurrentState;
 }
@@ -162,6 +141,11 @@ EEnemyState ABaseEnemy::GetEnemyState() const
 void ABaseEnemy::SetTargetActor(AActor* NewTarget)
 {
 	TargetActor = NewTarget;
+}
+
+AActor* ABaseEnemy::GetTargetActor() const
+{
+	return TargetActor;
 }
 
 float ABaseEnemy::GetViewingAngle()
