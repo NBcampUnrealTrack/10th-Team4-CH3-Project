@@ -54,6 +54,14 @@ void ABaseEnemy::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 
 float ABaseEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("Enemy TakeDamage 호출! Damage = %f, Causer = %s"),
+		DamageAmount,
+		DamageCauser ? *DamageCauser->GetName() : TEXT("None")
+	);
+
 	//죽은 적에게 중복 피해 방지
 	if (bIsDead || CurrentHP<=0.f || DamageAmount <= 0.f)
 	{
