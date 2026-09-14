@@ -60,4 +60,25 @@ void URGMissionStatusWidget::ApplyMissionStatus(float RemainingSeconds, int32 Cu
 			);
 		}
 	}
+
+	const bool bNewWarningActive = SafeSeconds <= FMath::Max(0.f, TimeWarningThreshold);
+
+	if (!bHasReceivedStatus || bTimeWarningActive != bNewWarningActive)
+	{
+		bHasReceivedStatus = true;
+		bTimeWarningActive = bNewWarningActive;
+
+		OnTimerWarningChanged(bTimeWarningActive);
+	}
+
+	// 처치 목표 or 목표 이상 처치했는지 확인
+	const bool bNewKillCompleted = RequiredKills > 0 && CurrentKills >= RequiredKills;
+
+	if (!bHasReceivedStatus || bKillObjectiveCompleted != bNewKillCompleted)
+	{
+		bHasReceiveKillStatus = true;
+		bKillObjectiveCompleted = bNewKillCompleted;
+
+		OnKillObjectiveCompletedChanged(bKillObjectiveCompleted);
+	}
 }
