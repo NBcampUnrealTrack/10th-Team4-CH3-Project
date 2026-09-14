@@ -23,11 +23,26 @@ public:
 	(float RemainingSeconds, int32 CurrentKills, int32 RequiredKills);
 
 protected:
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, Category = "UI|Mission", meta = (BindWidget))
 	TObjectPtr<UTextBlock> Text_RemainingTime;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(BlueprintReadOnly, Category = "UI|Mission", meta = (BindWidget))
 	TObjectPtr<UTextBlock> Text_KillObjective;
 
-	
+	//경고 표시 시간
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Mission")
+	float TimeWarningThreshold = 30.f;
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI|Mission")
+	void OnTimerWarningChanged(bool bWarningActive);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI|Mission")
+	void OnKillObjectiveCompletedChanged(bool bCompleted);
+
+private:
+	bool bHasReceivedStatus = false;
+	bool bTimeWarningActive = false;
+
+	bool bHasReceiveKillStatus = false;
+	bool bKillObjectiveCompleted = false;
 };
