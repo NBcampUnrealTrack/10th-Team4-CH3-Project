@@ -193,14 +193,6 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	const FVector EndLocation = StartLocation + FireDirection * TraceRange;
 	//QueryParams라는 트레이스 검사 옵션을 담는 객체이다.
 	//WeaponFire라는 이름으로 몇 번 걸렸는지 통계를 냄.
-	
-	/*피격 판정을 몸통/약점의 별도 충돌 컴포넌트를 사용하는 방식으로 구성
-	false : 캡슐, 구체 등 단순 충돌 검사
-	약점 판정은 Trace Complex 여부가 아니라 맞은 컴포넌트의 Weakspot 태그로 구분할 것
-	ex ) 적 BP 에 몸통, 약점용 컴포넌트 추가(Capsule or Sphere)
-	각 컴포넌트를 머리와 몸통에 배치 or 스켈레탈 매쉬의 소켓,뼈에 부착
-	현재 코드는 맞은 컴포넌트의 태그로 약점판단 하므로 단순 충돌로 변경했습니다.
-	원래 생각하신 코드 있으시면 true 로 바꿔 주셔도 됩니다!*/
 
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(WeaponFire), false);
 	//무기 자기 자신은 맞은걸로 안침
@@ -210,6 +202,17 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	{
 		QueryParams.AddIgnoredActor(OwningCharacter);
 	}
+
+	//이미 맞은 적들을 라인 트레이스가 감지하지 않도록 무시목록에 넣는다
+	//레일건 전용
+	if (AlreadyHitActors)
+	{
+		for (AActor* AlreadyHitActor : *AlreadyHitActors)
+		{
+			QueryParams.AddIgnoredActor(AlreadyHitActor);
+		}
+	}
+
 	//트레이스 결과를 담을 그릇.
 	//라인트레이스에 들어가서 맞은 적들 다 Hit에 집어넣어버리고 Hit 안에 있는 엑터들에 대미지 줄 예정
 	FHitResult Hit;
@@ -218,56 +221,19 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	//그래서 맞았으면 true 아니면 false
 	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, StartLocation, EndLocation, TraceChannel, QueryParams);
 
-	//테스트용 디버그 코드(충돌검사용 라인트레이스)
-#if !UE_BUILD_SHIPPING
-	if (bShowWeaponTraceDebug)
-	{
-		const FVector DebugEnd = bHit
-			? Hit.ImpactPoint
-			: EndLocation;
-
-		DrawDebugLine(
-			GetWorld(),
-			StartLocation,
-			DebugEnd,
-			bHit ? FColor::Green : FColor::Red,
-			false,
-			2.f,
-			0,
-			2.f
-		);
-
-		UE_LOG(
-			LogTemp,
-			Log,
-			TEXT("[WeaponTrace] Owner=%s / Hit=%s / Component=%s"),
-			*GetNameSafe(OwningCharacter),
-			*GetNameSafe(Hit.GetActor()),
-			*GetNameSafe(Hit.GetComponent())
-		);
-	}
-#endif
-
 	if (!bHit || !Hit.GetActor())
 	{
 		return false;
 	}
-	// 레일건에만 필요한 로직
-	if (AlreadyHitActors)
-	{
-		if (AlreadyHitActors->Contains(Hit.GetActor()))
-		{
-			return false;
-		}
-		AlreadyHitActors->Add(Hit.GetActor());
-	}
 
 	const float BaseDamage = (DamageOverride >= 0.f) ? DamageOverride : WeaponStats.BaseDamage;
+
 	// "직격"의 기준은 무기 종류가 아니라 관통 순서임.
 	// AlreadyHitActors가 없으면(nullptr) 애초에 관통을 아예 안 쓰는 무기 -> 항상 직격.
 	// AlreadyHitActors가 있으면(관통 무기) -> 이 트레이스에서 "처음" 맞은 대상일 때만 직격으로 인정.
 	//   (Add는 이 아래 if문에서 이미 실행됐으므로, 여기서는 "방금 추가되기 전엔 비어있었는지"를 따로 셈)
 	const bool bIsDirectHit = (AlreadyHitActors == nullptr) || (AlreadyHitActors->Num() == 1);
+
 	ApplyHitDamage(Hit, BaseDamage, StartLocation, bIsDirectHit);
 	if (OutHit) {
 		*OutHit = Hit;
