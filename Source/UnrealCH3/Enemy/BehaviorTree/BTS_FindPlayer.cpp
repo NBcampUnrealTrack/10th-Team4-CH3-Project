@@ -17,18 +17,49 @@ void UBTS_FindPlayer::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMem
 	Super::TickNode(OwnerComp, NodeMemory, DeltaSeconds);
 
 	UBlackboardComponent* BlackboardComp = OwnerComp.GetBlackboardComponent();
-	if (BlackboardComp)
+	
+	if (!BlackboardComp) return;
+
+	AAIController* AIController = OwnerComp.GetAIOwner();
+	ABaseEnemy* Enemy = Cast<ABaseEnemy>(AIController->GetPawn());
+	AActor* TargetActor = Cast<AActor>(Enemy->GetTargetActor());
+	BlackboardComp->SetValueAsObject(TEXT("Target"), TargetActor);
+	
+	MaxRange = Enemy->GetAttackMaxRange();
+	MinRange = Enemy->GetAttackMinRange();
+	
+	bool bHasTarget = (TargetActor != nullptr);
+	
+	BlackboardComp->SetValueAsBool(TEXT("bIsPlayer"), bHasTarget);
+	if (!TargetActor)
 	{
-		AAIController* AIController = OwnerComp.GetAIOwner();
-		ABaseEnemy* Enemy = Cast<ABaseEnemy>(AIController->GetPawn());
-		AActor* targetActor = Cast<AActor>(BlackboardComp->GetValueAsObject(TEXT("Target")));
-		bool bHasTarget = (targetActor != nullptr);
-		BlackboardComp->SetValueAsBool(TEXT("bIsPlayer"), bHasTarget);
-		if (bHasTarget)
-		{
-			BlackboardComp->SetValueAsVector(TEXT("TargetLocation"), targetActor->GetActorLocation());
-			return;
-		}
+		BlackboardComp->SetValueAsEnum(TEXT("EnemyState"), static_cast<uint8>(EEnemyStateEnum::Patrol));
+		Enemy->SetState(EEnemyStateEnum::Patrol);
+		return;
 	}
+	
+	float Distance = FVector::Dist(TargetActor->GetActorLocation(), Enemy->GetActorLocation());
+	bool bInAttackRange = (Distance <= MaxRange && Distance >= MinRange);
+	
+	Enemy->SetEnemyTurn(true);
+
+	if (bInAttackRange)
+	{
+		BlackboardComp->SetValueAsEnum(TEXT("EnemyState"), static_cast<uint8>(EEnemyStateEnum::Attack));
+		Enemy->SetState(EEnemyStateEnum::Attack);
+	}
+	else if (Distance < MinRange)
+	{
+		BlackboardComp->SetValueAsEnum(TEXT("EnemyState"), static_cast<uint8>(EEnemyStateEnum::SoClose));
+		Enemy->SetState(EEnemyStateEnum::SoClose);
+		
+	}
+	else if (Distance >MaxRange)
+	{
+		BlackboardComp->SetValueAsEnum(TEXT("EnemyState"), static_cast<uint8>(EEnemyStateEnum::Chase));
+		Enemy->SetState(EEnemyStateEnum::Chase);
+		BlackboardComp->SetValueAsVector(TEXT("TargetLocation"), TargetActor->GetActorLocation());
+	}
+
 	return;
 }
