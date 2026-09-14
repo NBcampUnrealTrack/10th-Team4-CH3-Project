@@ -58,6 +58,15 @@ public:
 	UFUNCTION()
 	void OnCrouchCameraUpdate(float Alpha);
 
+	// 애니메이션
+	UFUNCTION()
+	void PlayFireAnimation();
+	UFUNCTION()
+	void StopFireAnimation();
+	UFUNCTION()
+	void PlayReloadAnimation();
+	UFUNCTION()
+	void StopReloadAnimation();
 public:
 	// 겟터
 	UFUNCTION(BlueprintPure, Category = "State")
@@ -127,12 +136,18 @@ private:
 
 	// 무기
 private:
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<ARGBaseWeapon> CurrentWeapon;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<ARGBaseWeapon> WeaponClass;
 
 private:
+	// 애니메이션
+	UPROPERTY(EditAnywhere, Category = "Animation")
+	TObjectPtr<UAnimMontage> FireMontage;
+	UPROPERTY(EditAnywhere, Category = "Animation")
+	TObjectPtr<UAnimMontage> ReloadMontage;
+
 	// 상태 변수
 	UPROPERTY(VisibleAnywhere, Category = "State|Movement")
 	EMovementState CurrentMovementState = EMovementState::Idle;
@@ -156,7 +171,9 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Crouch")
 	TObjectPtr<UCurveFloat> CrouchCurve;
 	UPROPERTY(EditAnywhere, Category = "Crouch")
-	float CrouchCapsuleValue = -44.0f;
+	float CrouchCapsuleHeight = -48.0f;
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	FVector MeshRelativeLocation = FVector::ZeroVector;
 
 	// 대쉬 변수
 	UPROPERTY(VisibleAnywhere, Category = "Movement|Dash")
