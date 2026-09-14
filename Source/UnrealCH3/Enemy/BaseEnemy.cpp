@@ -21,7 +21,7 @@ ABaseEnemy::ABaseEnemy()
 	CurrentState = EEnemyStateEnum::Idle;
 
 	GetCharacterMovement()->bOrientRotationToMovement = true;
-	GetCharacterMovement()->RotationRate = FRotator(0.0f, 480.0f, 0.0f);
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 120.0f, 0.0f);
 	bUseControllerRotationYaw = false;
 }
 
@@ -128,6 +128,22 @@ void ABaseEnemy::Die()
 	UE_LOG(LogTemp, Log, TEXT("Character is Dead!"));
 }
 
+void ABaseEnemy::SetEnemyTurn(bool bIsTurn)
+{
+	GetCharacterMovement()->bOrientRotationToMovement = bIsTurn;
+	bUseControllerRotationYaw = bIsTurn;
+}
+
+void ABaseEnemy::MoveAwayFromTarget(float DeltaSeconds)
+{
+	if (!TargetActor) return;
+	FVector Direction = (GetActorLocation() - TargetActor->GetActorLocation()).GetSafeNormal();
+	Direction.Z = 0.0f;
+	Direction = Direction.GetSafeNormal();
+
+	AddMovementInput(Direction, 1.0f);
+}
+
 bool ABaseEnemy::IsTargetInAttackRange() const
 {
 	return false;
@@ -163,6 +179,11 @@ float ABaseEnemy::GetAttackMaxRange()
 	return AttackMaxRange;
 }
 
+float ABaseEnemy::GetAttackMinRange()
+{
+	return AttackMinRange;
+}
+
 float ABaseEnemy::GetAttackDamage()
 {
 	return AttackDamage;
@@ -176,4 +197,9 @@ int ABaseEnemy::GetScore()
 float ABaseEnemy::GetExp()
 {
 	return Exp;
+}
+
+void ABaseEnemy::SetState(EEnemyStateEnum State)
+{
+	CurrentState = State;
 }
