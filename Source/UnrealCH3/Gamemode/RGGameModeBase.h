@@ -122,10 +122,9 @@ public:
 	// =========================================================
 
 public:
-	// DT_ExperienceCurve 테이블 - > 언리얼 에디터 BP_RGGameMode Class Defaults 에서 지정하면 됨
+	// DT_ExperienceCurve 테이블 - > 언리얼 에디터 BP_RGGameMode Class Defaults 에서 지정
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Progression")
 	UDataTable* ExperienceCurveTable = nullptr;
-
 
 
 	// =========================================================
