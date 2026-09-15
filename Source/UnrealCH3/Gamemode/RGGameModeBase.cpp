@@ -6,6 +6,7 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
+#include "RGProgressionSubsystem.h"
 
 
 // =========================================================
@@ -79,6 +80,14 @@ void ARGGameModeBase::BeginPlay()
 {
 	Super::BeginPlay();
 
+	//시작할 때 URGProgressionSubsystem의 Progression 호출
+	//만들어둔 경험치 테이블에 따라 경험치 커브 셋팅
+	if (UGameInstance* GI = GetGameInstance()) {
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>()) {
+			Progression->InitializeExperienceCurve(ExperienceCurveTable);
+			Progression->InitializeGeneralUpgrades(GeneralUpgradeTable);
+		}
+	}
 
 	// -----------------------------------------------------
 	// 1. �ý��� ����
