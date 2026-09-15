@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RGGameModeBase.h"
 
@@ -15,7 +15,7 @@
 ARGGameModeBase::ARGGameModeBase()
 {
 	// -----------------------------------------------------
-	// Tick »ç¿ë ¾È ÇÔ
+	// Tick ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½
 	// -----------------------------------------------------
 
 	PrimaryActorTick.bCanEverTick = false;
@@ -81,7 +81,7 @@ void ARGGameModeBase::BeginPlay()
 
 
 	// -----------------------------------------------------
-	// 1. ½Ã½ºÅÛ °ËÁõ
+	// 1. ï¿½Ã½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	// -----------------------------------------------------
 
 	if (!VerifySystems())
@@ -110,7 +110,7 @@ void ARGGameModeBase::BeginPlay()
 
 
 	// -----------------------------------------------------
-	// 2. ±âº» UI »ý¼º
+	// 2. ï¿½âº» UI ï¿½ï¿½ï¿½ï¿½
 	// -----------------------------------------------------
 
 	if (bCreateDefaultUI)
@@ -120,10 +120,10 @@ void ARGGameModeBase::BeginPlay()
 
 
 	// -----------------------------------------------------
-	// 3. ±âº» ÀÔ·Â ¼³Á¤
+	// 3. ï¿½âº» ï¿½Ô·ï¿½ ï¿½ï¿½ï¿½ï¿½
 	//
-	// UIOnlyÀÇ °æ¿ì WidgetÀ» ¸ÕÀú »ý¼ºÇØ¾ß
-	// SetWidgetToFocus »ç¿ë °¡´É
+	// UIOnlyï¿½ï¿½ ï¿½ï¿½ï¿½ Widgetï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ø¾ï¿½
+	// SetWidgetToFocus ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	// -----------------------------------------------------
 
 	if (bApplyDefaultInputMode)
@@ -133,10 +133,10 @@ void ARGGameModeBase::BeginPlay()
 
 
 	// -----------------------------------------------------
-	// 4. ½ÇÁ¦ Run ½Ã½ºÅÛ ½ÃÀÛ
+	// 4. ï¿½ï¿½ï¿½ï¿½ Run ï¿½Ã½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	//
-	// MainMenu GameMode´Â
-	// bStartRunSystem = false ·Î ¼³Á¤
+	// MainMenu GameModeï¿½ï¿½
+	// bStartRunSystem = false ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	// -----------------------------------------------------
 
 	if (bStartRunSystem)
@@ -201,7 +201,7 @@ void ARGGameModeBase::ChangeRunState(
 
 
 	// -----------------------------------------------------
-	// °°Àº »óÅÂ¸é ¹«½Ã
+	// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Â¸ï¿½ ï¿½ï¿½ï¿½ï¿½
 	// -----------------------------------------------------
 
 	if (CurrentState == NewState)
@@ -211,8 +211,8 @@ void ARGGameModeBase::ChangeRunState(
 
 
 	// -----------------------------------------------------
-	// Result / Loading »óÅÂ¿¡¼­´Â
-	// ÀÏ¹Ý »óÅÂ º¯°æ ¹æÁö
+	// Result / Loading ï¿½ï¿½ï¿½Â¿ï¿½ï¿½ï¿½ï¿½ï¿½
+	// ï¿½Ï¹ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	// -----------------------------------------------------
 
 	if (
@@ -297,7 +297,7 @@ void ARGGameModeBase::ChangeRunState(
 
 
 	// -----------------------------------------------------
-	// Combat ÀÌ¿Ü
+	// Combat ï¿½Ì¿ï¿½
 	// -----------------------------------------------------
 
 	else
@@ -485,9 +485,9 @@ bool ARGGameModeBase::VerifySystems()
 
 
 		/*
-		 * MainMenu µîÀÇ »óÈ²¿¡¼­µµ
-		 * BeginPlay ¼ø¼­¿¡ µû¶ó Àá½Ã ¾øÀ» ¼ö ÀÖ±â ¶§¹®¿¡
-		 * ¿©±â¼­´Â false Ã³¸®ÇÏÁö ¾Ê´Â´Ù.
+		 * MainMenu ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+		 * BeginPlay ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½Ö±ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+		 * ï¿½ï¿½ï¿½â¼­ï¿½ï¿½ false Ã³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ê´Â´ï¿½.
 		 */
 	}
 
@@ -647,7 +647,7 @@ void ARGGameModeBase::ExecuteStageClear()
 UUserWidget* ARGGameModeBase::CreateDefaultUI()
 {
 	// -----------------------------------------------------
-	// ÀÌ¹Ì UI Á¸Àç
+	// ï¿½Ì¹ï¿½ UI ï¿½ï¿½ï¿½ï¿½
 	// -----------------------------------------------------
 
 	if (DefaultUIWidget)
@@ -657,7 +657,7 @@ UUserWidget* ARGGameModeBase::CreateDefaultUI()
 
 
 	// -----------------------------------------------------
-	// UI Class ¹Ì¼³Á¤
+	// UI Class ï¿½Ì¼ï¿½ï¿½ï¿½
 	// -----------------------------------------------------
 
 	if (!DefaultUIClass)
@@ -676,7 +676,7 @@ UUserWidget* ARGGameModeBase::CreateDefaultUI()
 
 
 	// -----------------------------------------------------
-	// PlayerController Ã£±â
+	// PlayerController Ã£ï¿½ï¿½
 	// -----------------------------------------------------
 
 	APlayerController* PlayerController =
@@ -702,7 +702,7 @@ UUserWidget* ARGGameModeBase::CreateDefaultUI()
 
 
 	// -----------------------------------------------------
-	// Widget »ý¼º
+	// Widget ï¿½ï¿½ï¿½ï¿½
 	// -----------------------------------------------------
 
 	DefaultUIWidget =
@@ -728,7 +728,7 @@ UUserWidget* ARGGameModeBase::CreateDefaultUI()
 
 
 	// -----------------------------------------------------
-	// Viewport Ãß°¡
+	// Viewport ï¿½ß°ï¿½
 	// -----------------------------------------------------
 
 	DefaultUIWidget->AddToViewport(

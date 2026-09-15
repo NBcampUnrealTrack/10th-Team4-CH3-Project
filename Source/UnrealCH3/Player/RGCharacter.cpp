@@ -9,6 +9,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "RGBaseWeapon.h"
 #include "GameMode/RGGameModeBase.h"
+#include "Component/RGWallRunMovement.h"
 
 ARGCharacter::ARGCharacter()
 {
@@ -17,7 +18,7 @@ ARGCharacter::ARGCharacter()
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
 	SpringArm->SetupAttachment(RootComponent);
 	SpringArm->TargetArmLength = 0.0f;
-	SpringArm->SetRelativeLocation(FVector(0.0f, 0.0f, 70.0f));
+	SpringArm->SetRelativeLocation(FVector(0.0f, 0.0f, 80.0f));
 	SpringArm->SocketOffset = FVector(0.0f, 0.0f, 0.0f);
 	SpringArm->bUsePawnControlRotation = true;
 	// 카메라와 캡슐사이 장애물이 있을때 줌을 땅겨주는 기능
@@ -26,6 +27,10 @@ ARGCharacter::ARGCharacter()
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(SpringArm);
 	Camera->bUsePawnControlRotation = false;
+
+	WallRunMovement = CreateDefaultSubobject<URGWallRunMovement>(TEXT("WallRunMovement"));
+	WallRunMovement->OnWallRunStarted.AddDynamic(this, &ARGCharacter::StartWallRun);
+	WallRunMovement->OnWallRunStopped.AddDynamic(this, &ARGCharacter::StopWallRun);
 
 	JumpMaxCount = 2;
 	GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;
@@ -39,6 +44,7 @@ ARGCharacter::ARGCharacter()
 	DashTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("DashTimeline"));
 	AimTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("AimTimeline"));
 	CrouchTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("CrouchTimeline"));
+
 }
 
 void ARGCharacter::BeginPlay()
@@ -46,9 +52,11 @@ void ARGCharacter::BeginPlay()
 	Super::BeginPlay();
 	MeshRelativeLocation = GetMesh()->GetRelativeLocation();
 
-	if (DashTimeline == nullptr || DashCurve == nullptr) return;
-
 	// 대쉬 타임라인
+	if (DashTimeline == nullptr || DashCurve == nullptr)
+	{
+		return;
+	}
 	FOnTimelineFloat DashTimelineFloat;
 	DashTimelineFloat.BindDynamic(this, &ARGCharacter::OnDashUpdate);
 	DashTimeline->AddInterpFloat(DashCurve, DashTimelineFloat);
@@ -59,12 +67,20 @@ void ARGCharacter::BeginPlay()
 	DashTimeline->SetTimelineFinishedFunc(DashTimelineFinished);
 
 	// 에임 타임라인
+	if (AimTimeline == nullptr || AimCurve == nullptr)
+	{
+		return;
+	}
 	FOnTimelineFloat AimTimelineFloat;
 	AimTimelineFloat.BindDynamic(this, &ARGCharacter::OnAimUpdate);
 	AimTimeline->AddInterpFloat(AimCurve, AimTimelineFloat);
 	AimTimeline->SetTimelineLengthMode(ETimelineLengthMode::TL_LastKeyFrame);
 
 	// Crouch 카메라 타임라인
+	if (CrouchTimeline == nullptr || CrouchCurve == nullptr)
+	{
+		return;
+	}
 	FOnTimelineFloat CrouchTimelineFloat;
 	CrouchTimelineFloat.BindDynamic(this, &ARGCharacter::OnCrouchCameraUpdate);
 	CrouchTimeline->AddInterpFloat(CrouchCurve, CrouchTimelineFloat);
@@ -175,6 +191,7 @@ void ARGCharacter::Falling()
 		{
 			StopSliding();
 		}
+
 		CurrentMovementState = EMovementState::Falling;
 		UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
 	}
@@ -221,11 +238,11 @@ int32 ARGCharacter::GetSlopeType()
 
 		float DotProduct = FVector::DotProduct(Velocity2D, FloorNormal);
 
-		if (DotProduct > 0.1f)
+		if (DotProduct > 0.0f)
 		{
 			return 1;
 		}
-		else if (DotProduct < -0.1f)
+		else if (DotProduct < 0.0f)
 		{
 			return 2;
 		}
@@ -445,18 +462,20 @@ void ARGCharacter::Look(const FInputActionValue& value)
 
 void ARGCharacter::StartJump(const FInputActionValue& value)
 {
+	if (CurrentMovementState == EMovementState::WallRunning)
+	{
+		WallRunMovement->WallJump();
+		return;
+	}
+
 	if (DashTimeline && DashTimeline->IsPlaying())
 	{
 		DashTimeline->Stop();
 
 		GetCharacterMovement()->Velocity = DashVelocity;
 	}
-	if (CurrentMovementState == EMovementState::Sliding)
-	{
-		UnCrouch();
-		StopSliding();
-	}
 
+	StopCrouch();
 	Jump();
 }
 
@@ -473,11 +492,7 @@ void ARGCharacter::Dash(const FInputActionValue& value)
 		return;
 	}
 
-	if (CurrentMovementState == EMovementState::Sliding)
-	{
-		UnCrouch();
-		StopSliding();
-	}
+	StopCrouch();
 
 	CurrentMovementState = EMovementState::Dashing;
 	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
@@ -493,7 +508,7 @@ void ARGCharacter::Dash(const FInputActionValue& value)
 
 void ARGCharacter::ToggleSprint(const FInputActionValue& value)
 {
-	if (bIsAiming)
+	if (bIsDead || bIsAiming)
 	{
 		return;
 	}
@@ -502,36 +517,18 @@ void ARGCharacter::ToggleSprint(const FInputActionValue& value)
 
 void ARGCharacter::ToggleCrouch(const FInputActionValue& value)
 {
-	if (CurrentMovementState == EMovementState::Falling)
+	if (CurrentMovementState == EMovementState::Falling || CurrentMovementState == EMovementState::WallRunning)
 	{
 		return;
 	}
 
 	if (bIsCrouched)
 	{
-		UnCrouch();
-		if (CrouchTimeline)
-		{
-			CrouchTimeline->Reverse();
-		}
-
-		if (CurrentMovementState == EMovementState::Sliding)
-		{
-			StopSliding();
-		}
+		StopCrouch();
 	}
 	else
 	{
-		Crouch();
-		if (CrouchTimeline)
-		{
-			CrouchTimeline->Play();
-		}
-
-		if (GetVelocity().Size2D() > 700.0f && CurrentMovementState != EMovementState::Sliding)
-		{
-			StartSliding();
-		}
+		StartCrouch();
 	}
 }
 
@@ -585,6 +582,34 @@ void ARGCharacter::Reload(const FInputActionValue& value)
 	CurrentWeapon->StartReloaded();
 }
 
+void ARGCharacter::StartCrouch()
+{
+	Crouch();
+	if (CrouchTimeline)
+	{
+		CrouchTimeline->Play();
+	}
+
+	if (GetVelocity().Size2D() > 700.0f && CurrentMovementState != EMovementState::Sliding)
+	{
+		StartSliding();
+	}
+}
+
+void ARGCharacter::StopCrouch()
+{
+	UnCrouch();
+	if (CrouchTimeline)
+	{
+		CrouchTimeline->Reverse();
+	}
+
+	if (CurrentMovementState == EMovementState::Sliding)
+	{
+		StopSliding();
+	}
+}
+
 void ARGCharacter::StartSliding()
 {
 	CurrentMovementState = EMovementState::Sliding;
@@ -629,12 +654,17 @@ void ARGCharacter::StopSliding()
 
 void ARGCharacter::StartWallRun()
 {
-	// TODO 벽타기 시작
+	CurrentMovementState = EMovementState::WallRunning;
+	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
 }
 
 void ARGCharacter::StopWallRun()
 {
-	// TODO 벽타기 종료
+	if (CurrentMovementState != EMovementState::Falling)
+	{
+		CurrentMovementState = EMovementState::Idle;
+		UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
+	}
 }
 
 void ARGCharacter::OnDashUpdate(float Alpha)

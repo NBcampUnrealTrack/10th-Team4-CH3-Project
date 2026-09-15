@@ -120,11 +120,18 @@ private:
 	void StopAim(const FInputActionValue& value);
 	void Reload(const FInputActionValue& value);
 
+	// 앉기
+	void StartCrouch();
+	void StopCrouch();
+
 	// 슬라이딩
 	void StartSliding();
 	void StopSliding();
+
 	// 벽달리기
+	UFUNCTION()
 	void StartWallRun();
+	UFUNCTION()
 	void StopWallRun();
 
 private:
@@ -133,6 +140,10 @@ private:
 	TObjectPtr<USpringArmComponent> SpringArm;
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<UCameraComponent> Camera;
+
+	// WallRun 컴포넌트
+	UPROPERTY(VisibleAnywhere, Category = "Movement")
+	TObjectPtr<class URGWallRunMovement> WallRunMovement;
 
 	// 무기
 private:
