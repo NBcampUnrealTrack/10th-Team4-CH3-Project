@@ -8,6 +8,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "RGBaseWeapon.h"
+#include "RGRailgun.h"
 #include "GameMode/RGGameModeBase.h"
 #include "GameMode/RGProgressionSubsystem.h"
 #include "Component/RGWallRunMovement.h"
@@ -560,7 +561,14 @@ void ARGCharacter::StopFire(const FInputActionValue& value)
 		return;
 	}
 
-	CurrentWeapon->StopFire();
+	if (ARGRailgun* Railgun = Cast<ARGRailgun>(CurrentWeapon))
+	{
+		Railgun->ReleaseChargeAndFire();
+	}
+	else
+	{
+		CurrentWeapon->StopFire();
+	}
 }
 
 void ARGCharacter::StartAim(const FInputActionValue& value)

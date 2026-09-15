@@ -5,11 +5,12 @@
 #include "RGEXPLevelRow.h"
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "RGUpgradeOption.h"
 #include "RGProgressionSubsystem.generated.h"
 
 class UDataTable;
 //레벨 업 시 UI가 받는 신호
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnLevelUpReady, int32, NewLevel, int32, ChoiceCount);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnLevelUpReady, const TArray<FRGUpgradeOption>&, Options);
 //경험치 바 UI 갱신용 신호 (경험치 바 없다면 무시)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnExperienceChanged, float, CurrentExperience, float, RequiredExperience, int32, CurrentLevel);
 
@@ -25,9 +26,23 @@ public:
 	UFUNCTION(BlueprintCallable , Category = "Progression")
 	void InitializeExperienceCurve(UDataTable* InExperienceCurveTable);
 
+	//강화 카탈로그 등록
+	UFUNCTION(BlueprintCallable, Category = "Progression")
+	void InitializeGeneralUpgrades(UDataTable* InGeneralUpgradeTable);
+
 	//적 AI에서 호출 . 적 Ai 사망 시 경험치 획득
 	UFUNCTION(BlueprintCallable, Category = "Progression")
 	void GrantExperience(float Amount);
+
+
+	//디버깅용 강제 레벨업 -> 콘솔 창에 등록해서 사용 예정
+	UFUNCTION(BlueprintCallable, Category = "Progression|Debug")
+	void DebugForceLevelUp();
+
+	// UI의 "HandleUpgradeSelected(CardIndex)" 이벤트에서 그대로 호출하면 됨.
+	// 카드 몇 번째를 클릭했는지 index로 적용
+	UFUNCTION(BlueprintCallable, Category = "Progression")
+	void ApplyUpgradeByIndex(int32 CardIndex);
 
 	//UI가 강화 카드를 선택 했을 때 호출
 	//추후 수정 예정
@@ -37,6 +52,10 @@ public:
 	//특정 강화를 몇번 선택했는지 반환해줌. 무기나 UI등에서 호출
 	UFUNCTION(BlueprintPure, Category = "Progression")
 	int32 GetUpgradeStackCount(FName UpgradeId) const;
+
+	//스택 1개당 효과량 조회
+	UFUNCTION(BlueprintPure, Category = "Progression")
+	float GetUpgradeEffectAmount(FName UpgradeId) const;
 
 	UFUNCTION(BlueprintPure, Category = "Progression")
 	int32 GetCurrentLevel() const { return CurrentLevel; }
@@ -66,8 +85,12 @@ private:
 	// 대기 중인 레벨업이 있으면 그중 하나를 실제로 UI에 띄움 (동시에 여러 장 안 띄우고 순차적으로)
 	void PresentNextPendingLevelUpIfAny();
 
+	TArray<FRGUpgradeOption> GenerateUpgradeOptions(int32 Count) const;
+
 	UPROPERTY()
 	UDataTable* ExperienceCurveTable = nullptr;
+	UPROPERTY()
+	UDataTable* GeneralUpgradeTable = nullptr;
 
 	int32 CurrentLevel = 1;
 	float CurrentExperience = 0.f;
@@ -81,5 +104,9 @@ private:
 	// 강화 ID별 선택 횟수. 최종 수치가 아니라 "몇 번 골랐는지"만 저장해서,
 	// 선택 순서와 무관하게 항상 같은 최종 결과가 나오게 함.
 	TMap<FName, int32> UpgradeStacks;
+
+	// 방금 UI에 띄운 후보 배열. ApplyUpgradeByIndex()가 CardIndex -> UpgradeId를 여기서 찾음.
+	UPROPERTY()
+	TArray<FRGUpgradeOption> LastPresentedOptions;
 
 };

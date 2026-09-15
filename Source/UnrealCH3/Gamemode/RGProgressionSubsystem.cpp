@@ -9,6 +9,11 @@ void URGProgressionSubsystem::InitializeExperienceCurve(UDataTable* InExperience
 {
 	ExperienceCurveTable = InExperienceCurveTable;
 }
+//업그레이드 데이터 테이블 세팅
+void URGProgressionSubsystem::InitializeGeneralUpgrades(UDataTable* InGeneralUpgradeTable)
+{
+	GeneralUpgradeTable = InGeneralUpgradeTable;
+}
 
 //현재 레벨이 몇 레벨인지 데이터테이블에서 찾아오는 함수.
 //레벨별 데이터테이블 행을 반환한다.
@@ -51,6 +56,14 @@ void URGProgressionSubsystem::GrantExperience(float Amount)
 	PresentNextPendingLevelUpIfAny();
 }
 
+//디버깅용 강제 레벨업
+void URGProgressionSubsystem::DebugForceLevelUp()
+{
+	CurrentLevel += 1;
+	PendingLevelUpCount += 1;
+	PresentNextPendingLevelUpIfAny();
+}
+
 bool URGProgressionSubsystem::TryLevelUpOnce()
 
 {
@@ -75,7 +88,66 @@ bool URGProgressionSubsystem::TryLevelUpOnce()
 	return true; // 레벨업 성공 -> 혹시 한 번 더 오를 수 있는지 바깥의 while문이 다시 확인함
 }
 
-//UI에서 카드 띄우는 함수 ( 수정 예정)
+//정해진 Count만큼 UpgradeOption 를 구조체의 플랫에 맞게 세팅하고 세팅된 구조체 배열 반환
+//구조체는 UI의 카드와 매치되게 만들어져있음
+TArray<FRGUpgradeOption> URGProgressionSubsystem::GenerateUpgradeOptions(int32 Count) const
+{
+	TArray<FRGUpgradeOption> Result;
+
+	if (!GeneralUpgradeTable)
+	{
+		return Result;
+	}
+	
+	TArray<FName> ValidRowNames;
+	static const FString ContextString(TEXT("UpgradeCandidateGen"));
+	//강화 테이블 가져와서 행 이름 가져옴
+	for (const FName& RowName : GeneralUpgradeTable->GetRowNames())
+	{	
+		//이름이 일치하는 행 불러와서 예외사항이 없으면 ValidRowNames에 해당하는 행 이름 넣음
+		const FRGGeneralUpgradeRow* Row = GeneralUpgradeTable->FindRow<FRGGeneralUpgradeRow>(RowName, ContextString);
+		if (!Row)
+		{
+			continue;
+		}
+		// 예외사항: 최대 중첩에 도달한 후보 제외
+		if (GetUpgradeStackCount(RowName) >= Row->MaxStack)
+		{
+			continue;
+		}
+		ValidRowNames.Add(RowName);
+	}
+
+	// 무작위로 섞은 뒤 앞에서 Count개만 뽑음 (중복 없이)
+	for (int32 i = ValidRowNames.Num() - 1; i > 0; --i)
+	{
+		const int32 j = FMath::RandRange(0, i);
+		ValidRowNames.Swap(i, j);
+	}
+
+	const int32 PickCount = FMath::Min(Count, ValidRowNames.Num());
+	for (int32 i = 0; i < PickCount; ++i)
+	{
+		const FRGGeneralUpgradeRow* Row = GeneralUpgradeTable->FindRow<FRGGeneralUpgradeRow>(ValidRowNames[i], ContextString);
+		if (!Row)
+		{
+			continue;
+		}
+
+		FRGUpgradeOption Option;
+		Option.UpgradeId = ValidRowNames[i];
+		Option.CategoryText = Row->CategoryText;
+		Option.NameText = Row->NameText;
+		Option.DescriptionText = Row->DescriptionText;
+		Option.ValueChangeText = Row->ValueChangeText;
+		Result.Add(Option);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[Progression] 강화 후보 %d개 생성 완료 (유효 후보 %d개 중)"), Result.Num(), ValidRowNames.Num());
+	return Result;
+}
+
+//UI에서 카드 띄우는 함수
 void URGProgressionSubsystem::PresentNextPendingLevelUpIfAny()
 {
 	if (bIsPresentingUpgradeChoice)
@@ -90,9 +162,26 @@ void URGProgressionSubsystem::PresentNextPendingLevelUpIfAny()
 	// 카드 몇 장을 보여줄지는 "지금 막 올라간 그 레벨"의 데이터 기준
 	const FRGEXPLevelRow* Row = FindCurrentLevelRow();
 	const int32 ChoiceCount = Row ? Row->UpgradeChoiceCount : 3;
-
+	//실제 후보를 뽑는 코드
+	LastPresentedOptions = GenerateUpgradeOptions(ChoiceCount);
+	//업글중임.
 	bIsPresentingUpgradeChoice = true;
-	OnLevelUpReady.Broadcast(CurrentLevel, ChoiceCount);
+
+	OnLevelUpReady.Broadcast(LastPresentedOptions);
+}
+
+void URGProgressionSubsystem::ApplyUpgradeByIndex(int32 CardIndex)
+{
+	if (!bIsPresentingUpgradeChoice)
+	{
+		return;
+	}
+	if (!LastPresentedOptions.IsValidIndex(CardIndex))
+	{
+		return;
+	}
+
+	ApplyUpgrade(LastPresentedOptions[CardIndex].UpgradeId);
 }
 
 void URGProgressionSubsystem::ApplyUpgrade(FName UpgradeId)
@@ -122,6 +211,19 @@ int32 URGProgressionSubsystem::GetUpgradeStackCount(FName UpgradeId) const
 		return *Found;
 	}
 	return 0;
+}
+
+float URGProgressionSubsystem::GetUpgradeEffectAmount(FName UpgradeId) const
+{
+	if (!GeneralUpgradeTable)
+	{
+		return 0.f;
+	}
+	if (const FRGGeneralUpgradeRow* Row = GeneralUpgradeTable->FindRow<FRGGeneralUpgradeRow>(UpgradeId, TEXT("EffectAmountLookup")))
+	{
+		return Row->EffectAmountPerStack;
+	}
+	return 0.f;
 }
 
 void URGProgressionSubsystem::ResetRun()

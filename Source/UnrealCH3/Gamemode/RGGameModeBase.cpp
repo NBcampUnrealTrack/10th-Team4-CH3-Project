@@ -85,6 +85,7 @@ void ARGGameModeBase::BeginPlay()
 	if (UGameInstance* GI = GetGameInstance()) {
 		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>()) {
 			Progression->InitializeExperienceCurve(ExperienceCurveTable);
+			Progression->InitializeGeneralUpgrades(GeneralUpgradeTable);
 		}
 	}
 
