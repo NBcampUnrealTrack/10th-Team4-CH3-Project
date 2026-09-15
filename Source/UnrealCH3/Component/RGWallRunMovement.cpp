@@ -1,4 +1,4 @@
-﻿#include "Player/Component/RGWallRunMovement.h"
+﻿#include "Component/RGWallRunMovement.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Camera/CameraComponent.h"
@@ -20,15 +20,15 @@ void URGWallRunMovement::BeginPlay()
 	{
 		CharacterMovementComponent = CharacterOwner->GetCharacterMovement();
 		CharacterCameraComponent = Cast<UCameraComponent>(CharacterOwner->GetComponentByClass(UCameraComponent::StaticClass()));
+		CharacterOwner->LandedDelegate.AddDynamic(this, &URGWallRunMovement::OnCharacterLanded);
 	}
 
 	if (CharacterMovementComponent)
 	{
 		DefaultGravity = CharacterMovementComponent->GravityScale;
-		TraceDistance = CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleRadius() + 10.0f;
+		CanWallRunDistance = CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleRadius() + 10.0f;
 	}
 }
-
 
 void URGWallRunMovement::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
@@ -42,16 +42,24 @@ void URGWallRunMovement::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 		}
 		else
 		{
-			CheckWallRun();
+			if (bIsWallRunning)
+			{
+				UpdateWallRun();
+			}
+			else
+			{
+				CheckWallRun();
+			}
 		}
-	}
-	else if (bIsWallRunning)
-	{
-		StopWallRun();
-		LastWallNormal = FVector::ZeroVector;
 	}
 
 	UpdateCameraTilt(DeltaTime);
+}
+
+void URGWallRunMovement::OnCharacterLanded(const FHitResult& Hit)
+{
+	LastWallNormal = FVector::ZeroVector;
+	LastWallRunLocation = FVector::ZeroVector;
 }
 
 void URGWallRunMovement::CheckWallRun()
@@ -62,33 +70,11 @@ void URGWallRunMovement::CheckWallRun()
 	}
 
 	FVector Start = CharacterOwner->GetActorLocation();
-	WallRunSpeed = CharacterMovementComponent->MaxWalkSpeed;
-	if (bIsWallRunning)
-	{
-		FVector End = Start + (-WallNormal * 100.0f);
-		FHitResult MaintainHit;
-		FCollisionQueryParams Params;
-		Params.AddIgnoredActor(CharacterOwner);
-
-		bool bHit = GetWorld()->LineTraceSingleByChannel(MaintainHit, Start, End, ECC_Visibility, Params);
-		if (!bHit || MaintainHit.Distance > TraceDistance)
-		{
-			StopWallRun();
-		}
-		FVector ForwardDir = FVector::VectorPlaneProject(CharacterOwner->GetActorForwardVector(), WallNormal).GetSafeNormal();
-		FVector PushDir = -WallNormal;
-
-		FVector FinalVelocity = (ForwardDir * WallRunSpeed) + (PushDir * 250.0f);
-		CharacterOwner->LaunchCharacter(FinalVelocity, true, false);
-
-		return;
-	}
-
 	FVector ForwardVector = CharacterOwner->GetActorForwardVector();
 	FVector RightVector = CharacterOwner->GetActorRightVector();
 
-	FVector LeftEnd = Start + (-RightVector * 75.0f) + (ForwardVector * -35);
-	FVector RightEnd = Start + (RightVector * 75.0f) + (ForwardVector * -35);
+	FVector LeftEnd = Start + (-RightVector * 70.0f) + (ForwardVector * -30.0f);
+	FVector RightEnd = Start + (RightVector * 70.0f) + (ForwardVector * -30.0f);
 
 	FHitResult LeftHit;
 	FHitResult RightHit;
@@ -98,9 +84,9 @@ void URGWallRunMovement::CheckWallRun()
 	bool bLeftHit = GetWorld()->LineTraceSingleByChannel(LeftHit, Start, LeftEnd, ECC_Visibility, Params);
 	bool bRightHit = GetWorld()->LineTraceSingleByChannel(RightHit, Start, RightEnd, ECC_Visibility, Params);
 
-	if (bLeftHit && LeftHit.Distance <= TraceDistance)
+	if (bLeftHit && LeftHit.Distance <= CanWallRunDistance)
 	{
-		if (FVector::DotProduct(ForwardVector, LeftHit.ImpactNormal) < -0.9f)
+		if (FVector::DotProduct(ForwardVector, LeftHit.ImpactNormal) < -0.95f)
 		{
 			if (bIsWallRunning)
 			{
@@ -108,16 +94,19 @@ void URGWallRunMovement::CheckWallRun()
 				return;
 			}
 		}
-		if (FVector::DotProduct(LeftHit.ImpactNormal, LastWallNormal) > 0.9f)
+		if (FVector::DotProduct(LeftHit.ImpactNormal, LastWallNormal) >= 0.9f)
 		{
-			return;
+			if (FVector::Dist2D(Start, LastWallRunLocation) < 1300.0f)
+			{
+				return;
+			}
 		}
 
 		StartWallRun(LeftHit, -1);
 	}
-	else if (bRightHit && RightHit.Distance <= TraceDistance)
+	else if (bRightHit && RightHit.Distance <= CanWallRunDistance)
 	{
-		if (FVector::DotProduct(ForwardVector, RightHit.ImpactNormal) < -0.9f)
+		if (FVector::DotProduct(ForwardVector, RightHit.ImpactNormal) < -0.95f)
 		{
 			if (bIsWallRunning)
 			{
@@ -125,9 +114,12 @@ void URGWallRunMovement::CheckWallRun()
 				return;
 			}
 		}
-		if (FVector::DotProduct(RightHit.ImpactNormal, LastWallNormal) > 0.9f)
+		if (FVector::DotProduct(RightHit.ImpactNormal, LastWallNormal) >= 0.9f)
 		{
-			return;
+			if (FVector::Dist2D(Start, LastWallRunLocation) < 1300.0f)
+			{
+				return;
+			}
 		}
 
 		StartWallRun(RightHit, 1);
@@ -139,8 +131,9 @@ void URGWallRunMovement::StartWallRun(const FHitResult& Hit, int32 Wall)
 	bIsWallRunning = true;
 	CharacterMovementComponent->GravityScale = 0.0f;
 	CharacterMovementComponent->Velocity.Z = 0.0f;
-	CharacterOwner->JumpMaxCount = 2;
+	CharacterOwner->JumpCurrentCount = 0;
 	WallNormal = Hit.ImpactNormal;
+	StartWallRunDirection = FVector::VectorPlaneProject(CharacterOwner->GetActorForwardVector(), WallNormal).GetSafeNormal();
 	TargetRollRotation = (Wall == 1) ? -20.0f : 20.0f;
 	
 	OnWallRunStarted.Broadcast();
@@ -161,6 +154,7 @@ void URGWallRunMovement::StopWallRun()
 	GetWorld()->GetTimerManager().ClearTimer(WallRunTimerHandle);
 	CharacterMovementComponent->GravityScale = DefaultGravity;
 	LastWallNormal = WallNormal;
+	LastWallRunLocation = CharacterOwner->GetActorLocation();
 	TargetRollRotation = 0.0f;
 	OnWallRunStopped.Broadcast();
 }
@@ -173,10 +167,40 @@ void URGWallRunMovement::WallJump()
 	}
 
 	StopWallRun();
-	LastWallNormal = FVector::ZeroVector;
 	NextCanWallRunTime = GetWorld()->GetTimeSeconds() + 0.3f;
 	FVector JumpVelocity = (WallNormal * 600.0f) + (FVector::UpVector * 400.0f) + (CharacterOwner->GetActorForwardVector() * 200.0f);
 	CharacterOwner->LaunchCharacter(JumpVelocity, true, true);
+}
+
+void URGWallRunMovement::UpdateWallRun()
+{
+	FVector Start = CharacterOwner->GetActorLocation();
+	WallRunSpeed = CharacterMovementComponent->MaxWalkSpeed;
+	if (bIsWallRunning)
+	{
+		FVector End = Start + (-WallNormal * 100.0f);
+		FHitResult MaintainHit;
+		FCollisionQueryParams Params;
+		Params.AddIgnoredActor(CharacterOwner);
+
+		bool bHit = GetWorld()->LineTraceSingleByChannel(MaintainHit, Start, End, ECC_Visibility, Params);
+		if (!bHit || MaintainHit.Distance > CanWallRunDistance)
+		{
+			StopWallRun();
+		}
+		FVector ForwardDir = FVector::VectorPlaneProject(CharacterOwner->GetActorForwardVector(), WallNormal).GetSafeNormal();
+		if (FVector::DotProduct(StartWallRunDirection, ForwardDir) <= 0.0f)
+		{
+			StopWallRun();
+			return;
+		}
+
+		FVector PushDir = -WallNormal;
+		FVector FinalVelocity = (ForwardDir * WallRunSpeed) + (PushDir * 250.0f);
+		CharacterOwner->LaunchCharacter(FinalVelocity, true, false);
+
+		return;
+	}
 }
 
 void URGWallRunMovement::UpdateCameraTilt(float DeltaTime)
