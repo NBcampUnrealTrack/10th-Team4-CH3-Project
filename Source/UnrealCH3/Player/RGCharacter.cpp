@@ -12,6 +12,7 @@
 #include "GameMode/RGGameModeBase.h"
 #include "GameMode/RGProgressionSubsystem.h"
 #include "Component/RGWallRunMovement.h"
+#include "Component/RGGrappleComponent.h"
 
 ARGCharacter::ARGCharacter()
 {
@@ -31,8 +32,12 @@ ARGCharacter::ARGCharacter()
 	Camera->bUsePawnControlRotation = false;
 
 	WallRunMovement = CreateDefaultSubobject<URGWallRunMovement>(TEXT("WallRunMovement"));
-	WallRunMovement->OnWallRunStarted.AddDynamic(this, &ARGCharacter::StartWallRun);
-	WallRunMovement->OnWallRunStopped.AddDynamic(this, &ARGCharacter::StopWallRun);
+	WallRunMovement->OnWallRunStarted.AddDynamic(this, &ARGCharacter::OnStartWallRun);
+	WallRunMovement->OnWallRunStopped.AddDynamic(this, &ARGCharacter::OnStopWallRun);
+
+	GrappleComponent = CreateDefaultSubobject<URGGrappleComponent>(TEXT("GrappleComponent"));
+	GrappleComponent->OnGrappleStarted.AddDynamic(this, &ARGCharacter::OnCanGrapple);
+	GrappleComponent->OnGrappleStopped.AddDynamic(this, &ARGCharacter::OnStopGrapple);
 
 	JumpMaxCount = 2;
 	GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;
@@ -144,6 +149,10 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 		{
 			EnhancedInput->BindAction(PlayerController->CrouchAction, ETriggerEvent::Started, this, &ARGCharacter::ToggleCrouch);
 		}
+		if (PlayerController->GrappleAction)
+		{
+			EnhancedInput->BindAction(PlayerController->GrappleAction, ETriggerEvent::Started, this, &ARGCharacter::StartGrapple);
+		}
 		if (PlayerController->FireAction)
 		{
 			EnhancedInput->BindAction(PlayerController->FireAction, ETriggerEvent::Started, this, &ARGCharacter::StartFire);
@@ -194,22 +203,14 @@ void ARGCharacter::Falling()
 			StopSliding();
 		}
 
-		CurrentMovementState = EMovementState::Falling;
-		UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
+		SetMovementState(EMovementState::Falling);
 	}
 }
 
 void ARGCharacter::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
-
-	if (CurrentMovementState == EMovementState::Dashing || CurrentMovementState == EMovementState::Sliding)
-	{
-		return;
-	}
-
-	CurrentMovementState = EMovementState::Idle;
-	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
+	SetMovementState(EMovementState::Idle);
 }
 
 bool ARGCharacter::CanJumpInternal_Implementation() const
@@ -306,6 +307,33 @@ void ARGCharacter::SetSprintState(bool bCanSprint)
 {
 	bIsSprinting = bCanSprint;
 	GetCharacterMovement()->MaxWalkSpeed = bIsSprinting ? SprintSpeed : DefaultSpeed;
+}
+
+void ARGCharacter::SetMovementState(EMovementState NewState)
+{
+	if (CurrentMovementState == NewState)
+	{
+		return;
+	}
+
+	if (GetCharacterMovement()->IsFalling())
+	{
+		if (NewState == EMovementState::Idle || NewState == EMovementState::Walking || NewState == EMovementState::Sprinting)
+		{
+			return;
+		}
+	}
+
+	if (CurrentMovementState == EMovementState::Dashing || CurrentMovementState == EMovementState::Sliding || CurrentMovementState == EMovementState::Grappling)
+	{
+		if (NewState == EMovementState::Walking || NewState == EMovementState::Sprinting)
+		{
+			return;
+		}
+	}
+
+	CurrentMovementState = NewState;
+	UE_LOG(LogTemp, Warning, TEXT("Current Movement : %d"), CurrentMovementState);
 }
 
 void ARGCharacter::StartRegenerateHealth()
@@ -433,16 +461,8 @@ void ARGCharacter::Move(const FInputActionValue& value)
 {
 	MoveInput = value.Get<FVector2D>();
 
-	if (CurrentMovementState == EMovementState::Idle || CurrentMovementState == EMovementState::Walking || CurrentMovementState == EMovementState::Sprinting)
-	{
-		EMovementState NextMovementState = bIsSprinting ? EMovementState::Sprinting : EMovementState::Walking;
-
-		if (CurrentMovementState != NextMovementState)
-		{
-			CurrentMovementState = NextMovementState;
-			UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
-		}
-	}
+	EMovementState NextMovementState = bIsSprinting ? EMovementState::Sprinting : EMovementState::Walking;
+	SetMovementState(NextMovementState);
 
 	if (!FMath::IsNearlyZero(MoveInput.Y))
 	{
@@ -457,11 +477,7 @@ void ARGCharacter::Move(const FInputActionValue& value)
 void ARGCharacter::StopMove(const FInputActionValue& value)
 {
 	SetSprintState(false);
-	if (CurrentMovementState == EMovementState::Walking || CurrentMovementState == EMovementState::Sprinting)
-	{
-		CurrentMovementState = EMovementState::Idle;
-		UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
-	}
+	SetMovementState(EMovementState::Idle);
 }
 
 void ARGCharacter::Look(const FInputActionValue& value)
@@ -494,22 +510,19 @@ void ARGCharacter::StartJump(const FInputActionValue& value)
 void ARGCharacter::StopJump(const FInputActionValue& value)
 {
 	StopJumping();
-	
 }
 
 void ARGCharacter::Dash(const FInputActionValue& value)
 {
-	if (DashCount <= 0 || GetVelocity().IsNearlyZero() || CurrentMovementState == EMovementState::Dashing)
+	if (DashCount <= 0 || GetVelocity().IsNearlyZero() || CurrentMovementState == EMovementState::Dashing || CurrentMovementState == EMovementState::WallRunning)
 	{
 		return;
 	}
 
 	StopCrouch();
+	SetMovementState(EMovementState::Dashing);
 
-	CurrentMovementState = EMovementState::Dashing;
-	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
 	FVector DashDirection = FMath::IsNearlyZero(MoveInput.X) ? GetActorForwardVector() * MoveInput.Y : GetActorRightVector() * MoveInput.X;
-
 	DashStartLocation = GetActorLocation();
 	DashEndLocation = DashStartLocation + (DashDirection * DashDistance);
 
@@ -541,6 +554,47 @@ void ARGCharacter::ToggleCrouch(const FInputActionValue& value)
 	else
 	{
 		StartCrouch();
+	}
+}
+
+void ARGCharacter::StartGrapple(const FInputActionValue& value)
+{
+	if (GrappleComponent)
+	{
+		GrappleComponent->StartGrapple();
+	}
+}
+
+void ARGCharacter::OnCanGrapple()
+{
+	if (CurrentMovementState == EMovementState::WallRunning)
+	{
+		WallRunMovement->StopWallRun();
+	}
+	else if (CurrentMovementState == EMovementState::Dashing)
+	{
+		if (DashTimeline && DashTimeline->IsPlaying())
+		{
+			DashTimeline->Stop();
+		}
+	}
+	else if (CurrentMovementState == EMovementState::Sliding)
+	{
+		StopSliding();
+	}
+
+	SetMovementState(EMovementState::Grappling);
+}
+
+void ARGCharacter::OnStopGrapple()
+{
+	if (GetCharacterMovement()->IsFalling())
+	{
+		SetMovementState(EMovementState::Falling);
+	}
+	else
+	{
+		SetMovementState(EMovementState::Idle);
 	}
 }
 
@@ -631,10 +685,9 @@ void ARGCharacter::StopCrouch()
 
 void ARGCharacter::StartSliding()
 {
-	CurrentMovementState = EMovementState::Sliding;
-	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
-	int32 Slope = GetSlopeType();
+	SetMovementState(EMovementState::Sliding);
 
+	int32 Slope = GetSlopeType();
 	float SpeedMultipiler = 1.05f;
 	float SlideFriction = 0.25f;
 	if (Slope == 1)
@@ -659,30 +712,30 @@ void ARGCharacter::StartSliding()
 
 void ARGCharacter::StopSliding()
 {
+	SetMovementState(EMovementState::Idle);
 	GetCharacterMovement()->MaxWalkSpeedCrouched = 300.0f;
 	GetCharacterMovement()->MaxAcceleration = DefaultAccelration;
 	GetCharacterMovement()->GroundFriction = DefaultGroundFriction;
 	GetCharacterMovement()->BrakingDecelerationWalking = DefaultBreakingDecelerationWalking;
 	GetWorldTimerManager().ClearTimer(SlideTimerHandle);
 
-	CurrentMovementState = EMovementState::Idle;
-	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
-
 	GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, FString::Printf(TEXT("Sliding Unapply")));
 }
 
-void ARGCharacter::StartWallRun()
+void ARGCharacter::OnStartWallRun()
 {
-	CurrentMovementState = EMovementState::WallRunning;
-	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
+	SetMovementState(EMovementState::WallRunning);
 }
 
-void ARGCharacter::StopWallRun()
+void ARGCharacter::OnStopWallRun()
 {
-	if (CurrentMovementState != EMovementState::Falling)
+	if (GetCharacterMovement()->IsFalling())
 	{
-		CurrentMovementState = EMovementState::Idle;
-		UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
+		SetMovementState(EMovementState::Falling);
+	}
+	else
+	{
+		SetMovementState(EMovementState::Idle);
 	}
 }
 
@@ -698,8 +751,7 @@ void ARGCharacter::OnDashUpdate(float Alpha)
 
 void ARGCharacter::OnDashFinished()
 {
-	CurrentMovementState = EMovementState::Idle;
-	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
+	SetMovementState(EMovementState::Idle);
 }
 
 void ARGCharacter::OnAimUpdate(float Alpha)

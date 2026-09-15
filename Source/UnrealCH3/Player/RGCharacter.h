@@ -20,6 +20,7 @@ enum class EMovementState : uint8
 	Dashing,
 	Sliding,
 	WallRunning,
+	Grappling,
 	Falling
 };
 
@@ -44,19 +45,31 @@ public:
 	virtual void Landed(const FHitResult& Hit) override;
 	virtual bool CanJumpInternal_Implementation() const override;
 public:
-	// Dash 타임라인 함수
+	// Dash 타임라인
 	UFUNCTION()
 	void OnDashUpdate(float Alpha);
 	UFUNCTION()
 	void OnDashFinished();
 
-	// Aim 타임라인 함수
+	// Aim 타임라인
 	UFUNCTION()
 	void OnAimUpdate(float Alpha);
 
 	// Crouch 카메라 타임라인
 	UFUNCTION()
 	void OnCrouchCameraUpdate(float Alpha);
+
+	// 벽타기
+	UFUNCTION()
+	void OnStartWallRun();
+	UFUNCTION()
+	void OnStopWallRun();
+
+	// Grapple
+	UFUNCTION()
+	void OnCanGrapple();
+	UFUNCTION()
+	void OnStopGrapple();
 
 	// 애니메이션
 	UFUNCTION()
@@ -85,6 +98,7 @@ public:
 	void SetCheckPoint();
 	void SetAimState(bool bCanAim);
 	void SetSprintState(bool bCanSprint);
+	void SetMovementState(EMovementState NewState);
 
 public:
 	// Reset and Clear
@@ -108,31 +122,32 @@ private:
 	// 입력 함수들
 	void Move(const FInputActionValue& value);
 	void StopMove(const FInputActionValue& value);
+
 	void Look(const FInputActionValue& value);
+
 	void StartJump(const FInputActionValue& value);
 	void StopJump(const FInputActionValue& value);
-	void Dash(const FInputActionValue& value);
-	void ToggleSprint(const FInputActionValue& value);
-	void ToggleCrouch(const FInputActionValue& value);
-	void StartFire(const FInputActionValue& value);
-	void StopFire(const FInputActionValue& value);
-	void StartAim(const FInputActionValue& value);
-	void StopAim(const FInputActionValue& value);
-	void Reload(const FInputActionValue& value);
 
-	// 앉기
+	void Dash(const FInputActionValue& value);
+
+	void ToggleSprint(const FInputActionValue& value);
+
+	void ToggleCrouch(const FInputActionValue& value);
 	void StartCrouch();
 	void StopCrouch();
 
-	// 슬라이딩
 	void StartSliding();
 	void StopSliding();
 
-	// 벽달리기
-	UFUNCTION()
-	void StartWallRun();
-	UFUNCTION()
-	void StopWallRun();
+	void StartGrapple(const FInputActionValue& value);
+
+	void StartFire(const FInputActionValue& value);
+	void StopFire(const FInputActionValue& value);
+
+	void StartAim(const FInputActionValue& value);
+	void StopAim(const FInputActionValue& value);
+
+	void Reload(const FInputActionValue& value);
 
 private:
 	// 카메라
@@ -144,6 +159,8 @@ private:
 	// WallRun 컴포넌트
 	UPROPERTY(VisibleAnywhere, Category = "Movement")
 	TObjectPtr<class URGWallRunMovement> WallRunMovement;
+	UPROPERTY(VisibleAnywhere, Category = "Movement")
+	TObjectPtr<class URGGrappleComponent> GrappleComponent;
 
 	// 무기
 private:
