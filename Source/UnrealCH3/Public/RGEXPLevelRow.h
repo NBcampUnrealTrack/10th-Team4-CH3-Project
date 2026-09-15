@@ -6,9 +6,8 @@
 #include "RGEXPLevelRow.generated.h"
 
 /*
- DT_ExperienceCurve용 행 구조체.
- RowName은 "현재 레벨"을 문자열로 씀 (예: "1" = 1레벨일 때 다음 레벨까지 필요한 경험치).
- 명세 표 그대로: 1→2=100, 2→3=140, 3→4=190, 4→5=250, 5→6=320
+ RowName은 1 : 1 -> 2 레벨까지 필요한 경험치
+ 노션 표대로: 1→2=100, 2→3=140, 3→4=190, 4→5=250, 5→6=320
  */
 USTRUCT(BlueprintType)
 struct FRGEXPLevelRow : public FTableRowBase
