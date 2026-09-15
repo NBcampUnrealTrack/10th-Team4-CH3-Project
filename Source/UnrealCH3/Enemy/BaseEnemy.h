@@ -22,12 +22,14 @@ public:
     UFUNCTION()
     virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
     //virtual void Attack();
+    //virtual void WarningBeforAttack();
+    //vurtual void ReturnAttack();
     UFUNCTION()
     virtual void Die();
     UFUNCTION()
     bool IsTargetInAttackRange() const;
-    /*bool IsTargetInDetectRange() const;
-    void SetEnemyState(EEnemyState NewState);*/
+    //bool IsTargetInDetectRange() const;
+    
     UFUNCTION()
     EEnemyStateEnum GetEnemyState() const;
     UFUNCTION()
