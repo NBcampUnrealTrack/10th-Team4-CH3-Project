@@ -61,13 +61,12 @@ void AAIEnemyController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus
 	if (Stimulus.WasSuccessfullySensed())
 	{
 		Enemy->SetTargetActor(Actor);
-		BbComp->SetValueAsObject(TEXT("Target"), Actor);
+		
 	}
 	else
 	{
-		
 		Enemy->SetTargetActor(nullptr);
-		BbComp->SetValueAsObject(TEXT("Target"), nullptr);
+		
 	}
 }
 

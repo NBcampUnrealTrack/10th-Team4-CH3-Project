@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -10,36 +10,36 @@ class UUserWidget;
 
 
 // =========================================================
-// °ÔÀÓ ÁøÇà »óÅÂ
+// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 // =========================================================
 
 UENUM(BlueprintType)
 enum class ERunState : uint8
 {
-	Init        UMETA(DisplayName = "ÃÊ±âÈ­"),
-	Combat      UMETA(DisplayName = "ÀüÅõ Áß"),
-	Pause       UMETA(DisplayName = "ÀÏ½ÃÁ¤Áö"),
-	Upgrade     UMETA(DisplayName = "°­È­ Áß"),
-	RestHub     UMETA(DisplayName = "ÈÞ½ÄÃ³"),
-	Result      UMETA(DisplayName = "°á°ú È­¸é"),
-	Loading     UMETA(DisplayName = "·Îµù Áß")
+	Init        UMETA(DisplayName = "ï¿½Ê±ï¿½È­"),
+	Combat      UMETA(DisplayName = "ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½"),
+	Pause       UMETA(DisplayName = "ï¿½Ï½ï¿½ï¿½ï¿½ï¿½ï¿½"),
+	Upgrade     UMETA(DisplayName = "ï¿½ï¿½È­ ï¿½ï¿½"),
+	RestHub     UMETA(DisplayName = "ï¿½Þ½ï¿½Ã³"),
+	Result      UMETA(DisplayName = "ï¿½ï¿½ï¿½ È­ï¿½ï¿½"),
+	Loading     UMETA(DisplayName = "ï¿½Îµï¿½ ï¿½ï¿½")
 };
 
 
 // =========================================================
-// °ÔÀÓ Á¾·á ÀÌÀ¯
+// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 // =========================================================
 
 UENUM(BlueprintType)
 enum class EDeathReason : uint8
 {
-	Killed      UMETA(DisplayName = "»ç¸Á"),
-	TimeOut     UMETA(DisplayName = "½Ã°£ ÃÊ°ú")
+	Killed      UMETA(DisplayName = "ï¿½ï¿½ï¿½"),
+	TimeOut     UMETA(DisplayName = "ï¿½Ã°ï¿½ ï¿½Ê°ï¿½")
 };
 
 
 // =========================================================
-// ÀÔ·Â ¸ðµå
+// ï¿½Ô·ï¿½ ï¿½ï¿½ï¿½
 // =========================================================
 
 UENUM(BlueprintType)
@@ -56,19 +56,19 @@ enum class ERGInputMode : uint8
 // =========================================================
 
 /**
- * Run & Gun °øÅë GameMode
+ * Run & Gun ï¿½ï¿½ï¿½ï¿½ GameMode
  *
- * ´ã´ç ±â´É
+ * ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½
  *
- * 1. °ÔÀÓ »óÅÂ °ü¸®
- * 2. Á¦ÇÑ ½Ã°£ °ü¸®
- * 3. Kill Count °ü¸®
+ * 1. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
+ * 2. ï¿½ï¿½ï¿½ï¿½ ï¿½Ã°ï¿½ ï¿½ï¿½ï¿½ï¿½
+ * 3. Kill Count ï¿½ï¿½ï¿½ï¿½
  * 4. Stage Clear / Game Over
- * 5. ±âº» UI »ý¼º
- * 6. ±âº» Input Mode ¼³Á¤
+ * 5. ï¿½âº» UI ï¿½ï¿½ï¿½ï¿½
+ * 6. ï¿½âº» Input Mode ï¿½ï¿½ï¿½ï¿½
  *
- * ½ÇÁ¦ Pawn / Controller / HUD Class´Â
- * ÀÌ Å¬·¡½º¸¦ »ó¼ÓÇÑ Blueprint GameMode¿¡¼­ ¼³Á¤ÇÑ´Ù.
+ * ï¿½ï¿½ï¿½ï¿½ Pawn / Controller / HUD Classï¿½ï¿½
+ * ï¿½ï¿½ Å¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ Blueprint GameModeï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½.
  */
 UCLASS()
 class UNREALCH3_API ARGGameModeBase : public AGameModeBase
@@ -77,7 +77,7 @@ class UNREALCH3_API ARGGameModeBase : public AGameModeBase
 
 
 	// =========================================================
-	// Unreal ±âº»
+	// Unreal ï¿½âº»
 	// =========================================================
 
 public:
@@ -95,13 +95,13 @@ protected:
 
 
 	// =========================================================
-	// GameMode Type ¼³Á¤
+	// GameMode Type ï¿½ï¿½ï¿½ï¿½
 	// =========================================================
 
 public:
 
 	/**
-	 * ÀÌ GameMode¿¡¼­ °ÔÀÓ ÁøÇà ½Ã½ºÅÛÀ» ½ÃÀÛÇÒÁö ¿©ºÎ.
+	 * ï¿½ï¿½ GameModeï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ã½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.
 	 *
 	 * Combat GameMode:
 	 * True
@@ -124,7 +124,7 @@ public:
 public:
 
 	/**
-	 * ÇöÀç °ÔÀÓ »óÅÂ
+	 * ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	 */
 	UPROPERTY(
 		VisibleAnywhere,
@@ -135,7 +135,7 @@ public:
 
 
 	/**
-	 * °ÔÀÓ »óÅÂ º¯°æ
+	 * ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	 */
 	UFUNCTION(
 		BlueprintCallable,
@@ -147,7 +147,7 @@ public:
 
 
 	/**
-	 * ÇöÀç »óÅÂ Getter
+	 * ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ Getter
 	 */
 	UFUNCTION(
 		BlueprintPure,
@@ -166,7 +166,7 @@ public:
 protected:
 
 	/**
-	 * °ÔÀÓ ½Ã°£ Timer Handle
+	 * ï¿½ï¿½ï¿½ï¿½ ï¿½Ã°ï¿½ Timer Handle
 	 */
 	FTimerHandle RunTimerHandle;
 
@@ -178,9 +178,9 @@ protected:
 public:
 
 	/**
-	 * °ÔÀÓ Á¦ÇÑ ½Ã°£
+	 * ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ã°ï¿½
 	 *
-	 * BP_RGGameMode Class Defaults¿¡¼­ Á¶Á¤ °¡´É
+	 * BP_RGGameMode Class Defaultsï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -208,7 +208,7 @@ public:
 public:
 
 	/**
-	 * ÇöÀç Ã³Ä¡ ¼ö
+	 * ï¿½ï¿½ï¿½ï¿½ Ã³Ä¡ ï¿½ï¿½
 	 */
 	UPROPERTY(
 		VisibleAnywhere,
@@ -219,7 +219,7 @@ public:
 
 
 	/**
-	 * Stage Clear¿¡ ÇÊ¿äÇÑ Ã³Ä¡ ¼ö
+	 * Stage Clearï¿½ï¿½ ï¿½Ê¿ï¿½ï¿½ï¿½ Ã³Ä¡ ï¿½ï¿½
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -265,7 +265,7 @@ public:
 
 
 	// =========================================================
-	// °ÔÀÓ Á¾·á
+	// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	// =========================================================
 
 public:
@@ -315,13 +315,13 @@ public:
 public:
 
 	/**
-	 * BeginPlay ½Ã GameMode°¡ Á÷Á¢
-	 * WidgetÀ» »ý¼ºÇÒÁö ¿©ºÎ
+	 * BeginPlay ï¿½ï¿½ GameModeï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
+	 * Widgetï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	 *
 	 * MainMenu:
 	 * True
 	 *
-	 * Combat HUD Manager »ç¿ë:
+	 * Combat HUD Manager ï¿½ï¿½ï¿½:
 	 * False
 	 */
 	UPROPERTY(
@@ -333,9 +333,9 @@ public:
 
 
 	/**
-	 * GameMode°¡ Á÷Á¢ »ý¼ºÇÒ Widget
+	 * GameModeï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Widget
 	 *
-	 * ¿¹:
+	 * ï¿½ï¿½:
 	 * WBP_MainMenu
 	 */
 	UPROPERTY(
@@ -347,7 +347,7 @@ public:
 
 
 	/**
-	 * ½ÇÁ¦ »ý¼ºµÈ Widget
+	 * ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Widget
 	 */
 	UPROPERTY(
 		VisibleAnywhere,
@@ -369,7 +369,7 @@ public:
 
 
 	/**
-	 * ±âº» UI »ý¼º
+	 * ï¿½âº» UI ï¿½ï¿½ï¿½ï¿½
 	 */
 	UFUNCTION(
 		BlueprintCallable,
@@ -379,7 +379,7 @@ public:
 
 
 	/**
-	 * ±âº» UI Á¦°Å
+	 * ï¿½âº» UI ï¿½ï¿½ï¿½ï¿½
 	 */
 	UFUNCTION(
 		BlueprintCallable,
@@ -389,7 +389,7 @@ public:
 
 
 	/**
-	 * ÇöÀç »ý¼ºµÈ ±âº» UI
+	 * ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½âº» UI
 	 */
 	UFUNCTION(
 		BlueprintPure,
@@ -408,7 +408,7 @@ public:
 public:
 
 	/**
-	 * BeginPlay¿¡¼­ ÀÚµ¿ Input Mode Àû¿ë ¿©ºÎ
+	 * BeginPlayï¿½ï¿½ï¿½ï¿½ ï¿½Úµï¿½ Input Mode ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -430,7 +430,7 @@ public:
 
 
 	/**
-	 * ¸¶¿ì½º Ä¿¼­ Ç¥½Ã
+	 * ï¿½ï¿½ï¿½ì½º Ä¿ï¿½ï¿½ Ç¥ï¿½ï¿½
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -441,7 +441,7 @@ public:
 
 
 	/**
-	 * Input Mode ½ÇÁ¦ Àû¿ë
+	 * Input Mode ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	 */
 	UFUNCTION(
 		BlueprintCallable,

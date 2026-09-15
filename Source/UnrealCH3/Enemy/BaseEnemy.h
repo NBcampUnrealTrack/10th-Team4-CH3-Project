@@ -17,23 +17,38 @@ class UNREALCH3_API ABaseEnemy : public ACharacter
 public:
     // Sets default values for this character's properties
     ABaseEnemy();
+    UFUNCTION()
     virtual void BeginPlay() override;
+    UFUNCTION()
     virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
     //virtual void Attack();
+    UFUNCTION()
     virtual void Die();
+    UFUNCTION()
     bool IsTargetInAttackRange() const;
     /*bool IsTargetInDetectRange() const;
     void SetEnemyState(EEnemyState NewState);*/
+    UFUNCTION()
     EEnemyStateEnum GetEnemyState() const;
+    UFUNCTION()
     void SetTargetActor(AActor* NewTarget);
+    UFUNCTION()
     AActor* GetTargetActor() const;
+    UFUNCTION()
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+    UFUNCTION()
+    void SetEnemyTurn(bool bIsTurn);
+    UFUNCTION()
+    void MoveAwayFromTarget(float DeltaSeconds);
+
     float GetViewingAngle();
     float GetViewingDistance();
     float GetAttackMaxRange();
+    float GetAttackMinRange();
     float GetAttackDamage();
     int GetScore();
     float GetExp();
+    void SetState(EEnemyStateEnum State);
 
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
@@ -92,4 +107,6 @@ protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
     EEnemyStateEnum CurrentState;   // 현재 상태
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
+    EEnemyAttackType AttackType;    // 공격타입
 };
