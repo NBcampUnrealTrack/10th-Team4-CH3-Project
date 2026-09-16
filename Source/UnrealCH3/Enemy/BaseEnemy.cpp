@@ -6,7 +6,6 @@
 // 데미지 피드백 인터페이스 추가
 #include "Combat/DamageFeedbackReceiver.h"
 #include "Engine/DamageEvents.h"
-#include "GameMode/RGProgressionSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
@@ -133,11 +132,6 @@ void ABaseEnemy::Die()
 	bIsDead = true;
 	//죽은 객체 상태 변화
 	CurrentState = EEnemyStateEnum::Dead;
-
-	if (URGProgressionSubsystem* Progression = GetGameInstance()->GetSubsystem<URGProgressionSubsystem>())
-	{
-		Progression->GrantExperience(Exp); // Exp는 이미 있는 멤버 변수 그대로 사용
-	}
 
 	UE_LOG(LogTemp, Log, TEXT("Character is Dead!"));
 }

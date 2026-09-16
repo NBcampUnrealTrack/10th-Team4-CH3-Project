@@ -7,7 +7,6 @@
 #include "RGGameModeBase.generated.h"
 
 class UUserWidget;
-class UDataTable;
 
 
 // =========================================================
@@ -116,18 +115,6 @@ public:
 		Category = "GameMode|Run"
 	)
 	bool bStartRunSystem;
-
-	// =========================================================
-	// Progression (경험치/레벨/강화)
-	// =========================================================
-
-public:
-	// DT_ExperienceCurve 테이블 - > 언리얼 에디터 BP_RGGameMode Class Defaults 에서 지정
-	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Progression")
-	UDataTable* ExperienceCurveTable = nullptr;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Progression")
-	UDataTable* GeneralUpgradeTable = nullptr;
 
 
 	// =========================================================
