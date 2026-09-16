@@ -41,6 +41,7 @@ void UBTTask_EnemyMoveToPlayer::TickTask(UBehaviorTreeComponent& OwnerComp, uint
 	if (Target && TimeSinceLastMove>= MoveUpdateInterval)
 	{
 		FVector CurrentTargetLoc = Target->GetActorLocation();
+		CurrentTargetLoc.Z = EnemyCont->GetPawn()->GetActorLocation().Z;
 		EnemyCont->MoveToLocation(CurrentTargetLoc);
 	}
 }

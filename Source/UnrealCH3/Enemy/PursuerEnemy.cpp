@@ -58,8 +58,8 @@ void APursuerEnemy::Attack()
 	FHitResult Hit;
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(this);
-
-	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
+	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Pawn, Params);
+	DrawDebugLine(GetWorld(), Start, End, bHit ? FColor::Green : FColor::Red, false, 2.0f, 0, 2.f);
 
 	UE_LOG(LogTemp, Warning, TEXT("Attack Trace - Hit: %d, Actor: %s"),
 		bHit, Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("None"));
