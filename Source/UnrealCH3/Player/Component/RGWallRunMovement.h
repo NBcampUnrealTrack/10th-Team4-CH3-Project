@@ -20,14 +20,12 @@ protected:
 
 public:	
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
 public:
-	UFUNCTION()
-	void OnCharacterLanded(const FHitResult& Hit);
 	void CheckWallRun();
 	void StartWallRun(const FHitResult& Hit, int32 Wall);
 	void StopWallRun();
 	void WallJump();
-	void UpdateWallRun();
 	void UpdateCameraTilt(float DeltaTime);
 
 public:
@@ -37,26 +35,24 @@ public:
 	FOnWallRunStopped OnWallRunStopped;
 
 private:
-	UPROPERTY(VisibleAnywhere, Category = "Cache|Character")
+	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<ACharacter> CharacterOwner;
-	UPROPERTY(VisibleAnywhere, Category = "Cache|Component")
+	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<class UCharacterMovementComponent> CharacterMovementComponent;
-	UPROPERTY(VisibleAnywhere, Category = "Cache|Component")
+	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<class UCameraComponent> CharacterCameraComponent;
 
 private:
 	FTimerHandle WallRunTimerHandle;
 	FVector WallNormal = FVector::ZeroVector;
 	FVector LastWallNormal = FVector::ZeroVector;
-	FVector LastWallRunLocation = FVector::ZeroVector;
-	FVector StartWallRunDirection = FVector::ZeroVector;
 	int32 CheckWall = 0;
 	float DefaultGravity = 0.0f;
 	float TargetRollRotation = 0.0f;
 	float NextCanWallRunTime = 0.0f;
 	float WallRunSpeed = 0.0f;
 	float WallRunTime = 3.0f;
-	float CanWallRunDistance = 0.0f;
+	float TraceDistance = 0.0f;
 	bool bIsWallRunning = false;
 	
 };
