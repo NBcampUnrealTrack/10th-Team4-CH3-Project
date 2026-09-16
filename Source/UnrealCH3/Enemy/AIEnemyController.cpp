@@ -1,290 +1,98 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
+
 #include "Enemy/AIEnemyController.h"
 #include "Enemy/BaseEnemy.h"
 #include "Player/RGCharacter.h"
-
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardData.h"
 #include "BehaviorTree/BlackboardComponent.h"
-#include "BehaviorTree/BehaviorTreeComponent.h"
-
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISenseConfig_Sight.h"
 
-
 AAIEnemyController::AAIEnemyController()
 {
-	static ConstructorHelpers::FObjectFinder<UBlackboardData> BlackboardFinder(
-		TEXT("/Game/AI/BB_Enemy.BB_Enemy")
-	);
-
-	if (BlackboardFinder.Succeeded())
+	static ConstructorHelpers::FObjectFinder<UBlackboardData> bb(TEXT("/Game/AI/BB_Enemy.BB_Enemy"));
+	if (bb.Succeeded())
 	{
-		BbAsset = BlackboardFinder.Object;
+		BbAsset = bb.Object;
 	}
-	else
+	static ConstructorHelpers::FObjectFinder<UBehaviorTree> bt(TEXT("/Game/AI/BT_Enemy.BT_Enemy"));
+	if (bb.Succeeded())
 	{
-		BbAsset = nullptr;
-
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("[AIEnemyController] BB_Enemy not found.")
-		);
+		BtAsset = bt.Object;
 	}
+	Perception = CreateDefaultSubobject<UAIPerceptionComponent>(TEXT("AIPerceptionComponent"));
+	Sight = CreateDefaultSubobject<UAISenseConfig_Sight>(TEXT("Sight Config"));
 
+	Sight->SightRadius = 2200.0f;
+	Sight->LoseSightRadius = 3500.0f;
+	Sight->PeripheralVisionAngleDegrees = 70;
 
-	static ConstructorHelpers::FObjectFinder<UBehaviorTree> BehaviorTreeFinder(
-		TEXT("/Game/AI/BT_Enemy.BT_Enemy")
-	);
+	Sight->DetectionByAffiliation.bDetectEnemies = true;
+	Sight->DetectionByAffiliation.bDetectNeutrals = true;
+	Sight->DetectionByAffiliation.bDetectFriendlies = false;
 
-	if (BehaviorTreeFinder.Succeeded())
-	{
-		BtAsset = BehaviorTreeFinder.Object;
-	}
-	else
-	{
-		BtAsset = nullptr;
+	Perception->ConfigureSense(*Sight);
+	Perception->SetDominantSense(*Sight->GetSenseImplementation());
 
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("[AIEnemyController] BT_Enemy not found.")
-		);
-	}
-
-
-	Perception =
-		CreateDefaultSubobject<UAIPerceptionComponent>(
-			TEXT("AIPerceptionComponent")
-		);
-
-	Sight =
-		CreateDefaultSubobject<UAISenseConfig_Sight>(
-			TEXT("Sight Config")
-		);
-
-
-	if (Sight && Perception)
-	{
-		Sight->SightRadius = 2200.0f;
-		Sight->LoseSightRadius = 3500.0f;
-		Sight->PeripheralVisionAngleDegrees = 70.0f;
-
-		Sight->DetectionByAffiliation.bDetectEnemies = true;
-		Sight->DetectionByAffiliation.bDetectNeutrals = true;
-		Sight->DetectionByAffiliation.bDetectFriendlies = false;
-
-		Perception->ConfigureSense(*Sight);
-
-		Perception->SetDominantSense(
-			Sight->GetSenseImplementation()
-		);
-
-		Perception->OnTargetPerceptionUpdated.AddDynamic(
-			this,
-			&AAIEnemyController::OnPerceptionUpdated
-		);
-	}
+	Perception->OnTargetPerceptionUpdated.AddDynamic(this, &AAIEnemyController::OnPerceptionUpdated);
 }
-
 
 void AAIEnemyController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
-
-
-	ABaseEnemy* Enemy =
-		Cast<ABaseEnemy>(InPawn);
-
-	if (!Enemy)
+	ABaseEnemy* Enemy = Cast<ABaseEnemy>(InPawn);
+	if (Enemy)
 	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] Possessed pawn is not BaseEnemy."
-			)
-		);
-
-		return;
+		Sight->SightRadius = Enemy->GetViewingDistance();
+		Sight->LoseSightRadius = Enemy->GetViewingDistance() + 500.0f;
+		Sight->PeripheralVisionAngleDegrees = Enemy->GetViewingAngle() / 2.0f;
 	}
-
-
-	if (!Sight || !Perception)
-	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] Perception components are missing."
-			)
-		);
-
-		return;
-	}
-
-
-	Sight->SightRadius =
-		FMath::Max(
-			0.0f,
-			Enemy->GetViewingDistance()
-		);
-
-	Sight->LoseSightRadius =
-		Sight->SightRadius + 500.0f;
-
-	Sight->PeripheralVisionAngleDegrees =
-		FMath::Clamp(
-			Enemy->GetViewingAngle() / 2.0f,
-			0.0f,
-			180.0f
-		);
-
-
-	// 런타임 값 변경 후 다시 적용
-	Perception->ConfigureSense(*Sight);
-
-
 	RunAI();
 }
 
-
-void AAIEnemyController::OnPerceptionUpdated(
-	AActor* Actor,
-	FAIStimulus Stimulus
-)
+void AAIEnemyController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 {
-	ABaseEnemy* Enemy =
-		Cast<ABaseEnemy>(GetPawn());
-
-	if (!Enemy || !Actor)
-	{
-		return;
-	}
-
-
-	ARGCharacter* Player =
-		Cast<ARGCharacter>(Actor);
-
-	if (!Player)
-	{
-		return;
-	}
-
-
-	if (!BbComp)
-	{
-		return;
-	}
-
-
+	ABaseEnemy* Enemy = Cast<ABaseEnemy>(GetPawn());
+	if (!Enemy || !Actor) return;
+	ARGCharacter* Player = Cast<ARGCharacter>(Actor);
+	if (!Player) return;
 	if (Stimulus.WasSuccessfullySensed())
 	{
 		Enemy->SetTargetActor(Actor);
-
-		BbComp->SetValueAsObject(
-			TEXT("Target"),
-			Actor
-		);
+		
 	}
 	else
 	{
 		Enemy->SetTargetActor(nullptr);
-
-		BbComp->ClearValue(
-			TEXT("Target")
-		);
+		
 	}
 }
-
 
 void AAIEnemyController::RunAI()
 {
 	if (!BbAsset)
 	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] Blackboard asset is null."
-			)
-		);
-
-		return;
+		UE_LOG(LogTemp, Warning, TEXT("BbAsset NULL"));
 	}
-
-
-	if (!BtAsset)
+	if (UseBlackboard(BbAsset, BbComp))
 	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] BehaviorTree asset is null."
-			)
-		);
-
-		return;
+		RunBehaviorTree(BtAsset);
 	}
-
-
-	if (!UseBlackboard(BbAsset, BbComp))
+	else
 	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] UseBlackboard failed."
-			)
-		);
-
-		return;
+		UE_LOG(LogTemp, Error, TEXT("UseBlackboard Failed! BbAsset: %s"), BbAsset ? *BbAsset->GetName() : TEXT("NULL"));
 	}
-
-
 	if (!BbComp)
 	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] BlackboardComponent is null."
-			)
-		);
-
-		return;
-	}
-
-
-	if (!RunBehaviorTree(BtAsset))
-	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] RunBehaviorTree failed."
-			)
-		);
+		UE_LOG(LogTemp, Warning, TEXT("BbComponent NULL"));
 	}
 }
 
-
 void AAIEnemyController::StopAI()
 {
-	UBehaviorTreeComponent* BehaviorTreeComponent =
-		Cast<UBehaviorTreeComponent>(
-			BrainComponent
-		);
-
-	if (!BehaviorTreeComponent)
-	{
-		return;
-	}
-
-
-	BehaviorTreeComponent->StopTree(
-		EBTStopMode::Safe
-	);
+	UBehaviorTreeComponent* behaviorTreeComponent = Cast<UBehaviorTreeComponent>(BrainComponent);
+	if (nullptr == behaviorTreeComponent) return;
+	behaviorTreeComponent->StopTree(EBTStopMode::Safe);
 }

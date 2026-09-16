@@ -6,6 +6,7 @@
 // 데미지 피드백 인터페이스 추가
 #include "Combat/DamageFeedbackReceiver.h"
 #include "Engine/DamageEvents.h"
+#include "GameMode/RGProgressionSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
@@ -21,7 +22,7 @@ ABaseEnemy::ABaseEnemy()
 	CurrentState = EEnemyStateEnum::Idle;
 
 	GetCharacterMovement()->bOrientRotationToMovement = true;
-	GetCharacterMovement()->RotationRate = FRotator(0.0f, 480.0f, 0.0f);
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 120.0f, 0.0f);
 	bUseControllerRotationYaw = false;
 }
 
@@ -54,6 +55,14 @@ void ABaseEnemy::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 
 float ABaseEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("Enemy TakeDamage 호출! Damage = %f, Causer = %s"),
+		DamageAmount,
+		DamageCauser ? *DamageCauser->GetName() : TEXT("None")
+	);
+
 	//죽은 적에게 중복 피해 방지
 	if (bIsDead || CurrentHP<=0.f || DamageAmount <= 0.f)
 	{
@@ -125,7 +134,28 @@ void ABaseEnemy::Die()
 	//죽은 객체 상태 변화
 	CurrentState = EEnemyStateEnum::Dead;
 
+	if (URGProgressionSubsystem* Progression = GetGameInstance()->GetSubsystem<URGProgressionSubsystem>())
+	{
+		Progression->GrantExperience(Exp); // Exp는 이미 있는 멤버 변수 그대로 사용
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("Character is Dead!"));
+}
+
+void ABaseEnemy::SetEnemyTurn(bool bIsTurn)
+{
+	GetCharacterMovement()->bOrientRotationToMovement = bIsTurn;
+	bUseControllerRotationYaw = bIsTurn;
+}
+
+void ABaseEnemy::MoveAwayFromTarget(float DeltaSeconds)
+{
+	if (!TargetActor) return;
+	FVector Direction = (GetActorLocation() - TargetActor->GetActorLocation()).GetSafeNormal();
+	Direction.Z = 0.0f;
+	Direction = Direction.GetSafeNormal();
+
+	AddMovementInput(Direction, 1.0f);
 }
 
 bool ABaseEnemy::IsTargetInAttackRange() const
@@ -163,6 +193,11 @@ float ABaseEnemy::GetAttackMaxRange()
 	return AttackMaxRange;
 }
 
+float ABaseEnemy::GetAttackMinRange()
+{
+	return AttackMinRange;
+}
+
 float ABaseEnemy::GetAttackDamage()
 {
 	return AttackDamage;
@@ -176,4 +211,9 @@ int ABaseEnemy::GetScore()
 float ABaseEnemy::GetExp()
 {
 	return Exp;
+}
+
+void ABaseEnemy::SetState(EEnemyStateEnum State)
+{
+	CurrentState = State;
 }

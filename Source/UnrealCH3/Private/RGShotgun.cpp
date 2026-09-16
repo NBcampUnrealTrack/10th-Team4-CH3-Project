@@ -14,7 +14,7 @@ void ARGShotgun::StartFire()
 
 void ARGShotgun::Fire()
 {
-	// 카메라 위치/방향은 돌격소총과 동일하게 한 번만 구함 (펠릿마다 다시 구할 필요 없음
+	// 카메라 위치/방향은 돌격소총과 동일하게 한 번만 구함 
 	FVector StartLocation, FireDirection;
 	if (!GetMuzzleAimTransform(StartLocation, FireDirection))
 	{
