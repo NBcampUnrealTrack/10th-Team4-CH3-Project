@@ -157,7 +157,7 @@ void ABaseEnemy::FaceTarget(float DeltaTime, float RotationSpeed)
 	if (!TargetActor) return;
 
 	FVector ToTarget = TargetActor->GetActorLocation() - GetActorLocation();
-	ToTarget.Z = 0.f;
+	//ToTarget.Z = 0.f;
 
 	if (ToTarget.IsNearlyZero()) return;
 
