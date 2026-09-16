@@ -49,7 +49,18 @@ void ARGBaseWeapon::BeginPlay()
 		}
 	}
 
-	CurrentAmmo = WeaponStats.MagazineCapacity;
+	CurrentAmmo = GetMagazineCapacity();
+
+	// 강화 즉시 반영을 위한 구독
+	
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			LastKnownMagazineStack = Progression->GetUpgradeStackCount(FName(TEXT("MagazineUp")));
+			Progression->OnUpgradeApplied.AddDynamic(this, &ARGBaseWeapon::HandleUpgradeApplied);
+		}
+	}
 	
 }
 
@@ -106,9 +117,16 @@ void ARGBaseWeapon::StartFireTimer()
 	{
 		return;
 	}
+	const float FireInterval = GetFireInterval();
+	float InitialDelay = 0.f;
+	if (GetWorld())
+	{
+		const float TimeSinceLastFire = GetWorld()->GetTimeSeconds() - LastFireTime;
+		InitialDelay = FMath::Max(0.f, FireInterval - TimeSinceLastFire);
+	}
 	//FireTimerHandle = 이름표 / this = 무기 자신 / &ARGBaseWeapon::HandleFireTick = 호출할 함수 / 
 	//FMath::Max(0.01f, WeaponStats.FireInterval) = 반복간격 / true -> 계속 반복  / 0.f = 눌렀을 때 지연시간 (0.f 이므로 누르자마자 나감)
-	GetWorldTimerManager().SetTimer(FireTimerHandle, this, &ARGBaseWeapon::HandleFireTick, FMath::Max(0.01f, WeaponStats.FireInterval), true, 0.f);
+	GetWorldTimerManager().SetTimer(FireTimerHandle, this, &ARGBaseWeapon::HandleFireTick, FireInterval, true, InitialDelay);
 }
 
 void ARGBaseWeapon::StopFireTimer()
@@ -125,6 +143,13 @@ void ARGBaseWeapon::HandleFireTick()
 		StopFireTimer();
 		return;
 	}
+	// 여기서 기록 — Fire()가 어떤 자식 클래스에서 오버라이드되든 항상 거쳐감
+	//스팸 클릭 막기 위한 코드,
+	if (GetWorld())
+	{
+		LastFireTime = GetWorld()->GetTimeSeconds();
+	}
+
 	//그렇다면 발사
 	Fire();
 	//탄약 줄이기 
@@ -133,7 +158,7 @@ void ARGBaseWeapon::HandleFireTick()
 	OnShotFired.Broadcast();
 
 	// 탄약이 바뀌는 이 시점에만 딱 한 번 방송. 누가 듣고 있는지는 몰라도 됨.
-	OnAmmoChanged.Broadcast(CurrentAmmo, WeaponStats.MagazineCapacity);
+	OnAmmoChanged.Broadcast(CurrentAmmo, GetMagazineCapacity());
 	//탄약이 0이라면 
 	if (CurrentAmmo <= 0)
 	{
@@ -180,6 +205,7 @@ void ARGBaseWeapon::Fire()
 	{
 		return;
 	}
+
 	// 조준 여부에 맞는 탄퍼짐을 적용해서 실제 발사 방향을 흩뜨림
 	const FVector SpreadDirection = ApplySpread(FireDirection);
 
@@ -320,7 +346,7 @@ bool ARGBaseWeapon::CanReloaded() const
 	//조건은 외부 창이 동작하고있는가 -> 이미 리로딩중인가 -> 지금 총알이 풀인가. 전부 아니여야 true 반환
 	if (!bExternalActionsAllowed) return false;
 	if (bIsReloading) return false;
-	if (CurrentAmmo >= WeaponStats.MagazineCapacity) return false;
+	if (CurrentAmmo >= GetMagazineCapacity()) return false;
 	return true;
 }
 
@@ -337,7 +363,10 @@ void ARGBaseWeapon::StartReloaded()
 
 	bIsReloading = true;
 
-	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &ARGBaseWeapon::OnReloadTimerComplete, FMath::Max(0.01f, WeaponStats.ReloadTime), false);
+	// 재장전을 시작할 때 현재 최대 탄창을 저장
+	ReloadTargetMagazine = GetMagazineCapacity();
+
+	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &ARGBaseWeapon::OnReloadTimerComplete, GetReloadTime(), false);
 	
 	OnReloadStarted.Broadcast();	
 }
@@ -370,18 +399,19 @@ void ARGBaseWeapon::CompleteReload()
 	//bReloadWholeMagazine가 true라면 탄창 한번에 교환(돌격소총이나 레일건으로 예상)
 	if (WeaponStats.bReloadWholeMagazine)
 	{
-		CurrentAmmo = WeaponStats.MagazineCapacity;
+		CurrentAmmo = ReloadTargetMagazine;
 	}
 	//bReloadWholeMagazine가 false라면 장전 한번에 총알 하나씩 장전됨(샷건)
 	else
 	{
-		CurrentAmmo = FMath::Min(WeaponStats.MagazineCapacity, CurrentAmmo + 1);
+		CurrentAmmo = FMath::Min(ReloadTargetMagazine, CurrentAmmo + 1);
 	}
 
-	OnAmmoChanged.Broadcast(CurrentAmmo, WeaponStats.MagazineCapacity);
+	OnAmmoChanged.Broadcast(CurrentAmmo, GetMagazineCapacity());
+
 	OnReloadCompleted.Broadcast();
 
-	if (!WeaponStats.bReloadWholeMagazine && CurrentAmmo < WeaponStats.MagazineCapacity && bExternalActionsAllowed)
+	if (!WeaponStats.bReloadWholeMagazine && CurrentAmmo < ReloadTargetMagazine && bExternalActionsAllowed)
 	{
 		StartReloaded();
 	}
@@ -443,6 +473,8 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 	{
 		return;
 	}
+
+
 	//최종 데미지 계산
 	float FinalDamage = BaseDamage;
 	//강화 데미지 계산
@@ -450,7 +482,7 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 	//거리별 감쇠 데미지 계산
 	const float Distance = FVector::Dist(ShotStart, Hit.ImpactPoint);
 	FinalDamage *= CalculateDistanceFalloffMultiplier(Distance);
-	//약점에 맞았으면 WeakSpotDamageMultiplier 배율만큼 데미지 추가
+	
 	const bool bIsWeakSpot = Hit.Component.IsValid() && Hit.Component->ComponentHasTag(WeakSpotTag);
 	if (bIsWeakSpot)
 	{
@@ -477,4 +509,103 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 	// ===== UI , 게임모드에서 받아야함 =====
 	//명중 처치 피드백 용 델리게이트 방송
 	OnWeaponHit.Broadcast(HitActor, FinalDamage, bIsWeakSpot, Hit.ImpactPoint);
+}
+
+float ARGBaseWeapon::GetFireInterval() const
+{
+	float FireInterval = WeaponStats.FireInterval;
+
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks =
+				Progression->GetUpgradeStackCount(FName(TEXT("RateUp")));
+
+			const float EffectAmount =
+				Progression->GetUpgradeEffectAmount(FName(TEXT("RateUp")));
+
+			// 발사 간격 감소
+			FireInterval /= (1.0f + EffectAmount * Stacks);
+		}
+	}
+
+	// 너무 작아지는 것 방지
+	return FMath::Max(0.01f, FireInterval);
+}
+
+float ARGBaseWeapon::GetReloadTime() const
+{
+	float ReloadTime = WeaponStats.ReloadTime;
+
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks =
+				Progression->GetUpgradeStackCount(FName(TEXT("RateUp")));
+
+			const float EffectAmount =
+				Progression->GetUpgradeEffectAmount(FName(TEXT("RateUp")));
+
+			ReloadTime /= (1.0f + EffectAmount * Stacks);
+		}
+	}
+
+	return FMath::Max(0.01f, ReloadTime);
+}
+
+int32 ARGBaseWeapon::GetMagazineCapacity() const
+{
+	float MagazineCapacity = WeaponStats.MagazineCapacity;
+
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks =
+				Progression->GetUpgradeStackCount(FName(TEXT("MagazineUp")));
+
+			const float EffectAmount =
+				Progression->GetUpgradeEffectAmount(FName(TEXT("MagazineUp")));
+
+			MagazineCapacity *= (1.0f + EffectAmount * Stacks);
+		}
+	}
+
+	return FMath::Max(1, FMath::RoundToInt(MagazineCapacity));
+}
+
+void ARGBaseWeapon::HandleUpgradeApplied(FName UpgradeId, int32 NewStackCount)
+{
+	if (UpgradeId != FName(TEXT("MagazineUp")))
+	{
+		return;
+	}
+
+	const int32 OldCapacity = GetCapacityForStack(LastKnownMagazineStack);
+	LastKnownMagazineStack = NewStackCount;
+	const int32 NewCapacity = GetMagazineCapacity();
+
+	const int32 CapacityDelta = NewCapacity - OldCapacity;
+	if (CapacityDelta > 0)
+	{
+		CurrentAmmo = FMath::Clamp(CurrentAmmo + CapacityDelta, 0, NewCapacity);
+		OnAmmoChanged.Broadcast(CurrentAmmo, NewCapacity);
+	}
+}
+
+// 특정 스택 수 기준 탄창 계산 (GetMagazineCapacity 로직 재사용)
+int32 ARGBaseWeapon::GetCapacityForStack(int32 Stacks) const
+{
+	float EffectAmount = 0.f;
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			EffectAmount = Progression->GetUpgradeEffectAmount(FName(TEXT("MagazineUp")));
+		}
+	}
+	float Capacity = WeaponStats.MagazineCapacity * (1.0f + EffectAmount * Stacks);
+	return FMath::Max(1, FMath::RoundToInt(Capacity));
 }
