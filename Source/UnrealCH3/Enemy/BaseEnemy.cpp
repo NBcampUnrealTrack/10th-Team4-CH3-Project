@@ -15,8 +15,7 @@ ABaseEnemy::ABaseEnemy()
 	PrimaryActorTick.bCanEverTick = false;
 	AIControllerClass = AAIEnemyController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
-	ViewingAngle = 140;
-	ViewingDistance = 3500.0f;
+	
 
 	CurrentState = EEnemyStateEnum::Idle;
 
@@ -51,6 +50,22 @@ void ABaseEnemy::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
 }
+
+void ABaseEnemy::Attack()
+{
+	UE_LOG(LogTemp, Warning, TEXT("%s Attack"), *EnemyName.ToString());
+}
+
+void ABaseEnemy::WarningBeforAttack()
+{
+	UE_LOG(LogTemp, Warning, TEXT("%s Warning Attack"), *EnemyName.ToString());
+}
+
+void ABaseEnemy::CoolTime()
+{
+	UE_LOG(LogTemp, Warning, TEXT("%s CoolTime"), *EnemyName.ToString());
+}
+
 
 float ABaseEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
@@ -136,6 +151,36 @@ void ABaseEnemy::Die()
 	UE_LOG(LogTemp, Log, TEXT("Character is Dead!"));
 }
 
+// ABaseEnemy.cpp
+void ABaseEnemy::FaceTarget(float DeltaTime, float RotationSpeed)
+{
+	if (!TargetActor) return;
+
+	FVector ToTarget = TargetActor->GetActorLocation() - GetActorLocation();
+	ToTarget.Z = 0.f;
+
+	if (ToTarget.IsNearlyZero()) return;
+
+	FRotator TargetRotation = ToTarget.Rotation();
+	FRotator NewRotation = FMath::RInterpTo(GetActorRotation(), TargetRotation, DeltaTime, RotationSpeed);
+	SetActorRotation(NewRotation);
+}
+
+void ABaseEnemy::ShowAttackRangeLine()
+{
+	FVector Center = GetActorLocation() + GetActorForwardVector() * (AttackMaxRange / 2.0f);
+	FRotator Rot = GetActorRotation();
+
+	AttackRangeMesh->SetWorldLocation(Center);
+	AttackRangeMesh->SetWorldRotation(Rot);
+	AttackRangeMesh->SetVisibility(true);
+}
+
+void ABaseEnemy::HideAttackRangeLine()
+{
+	AttackRangeMesh->SetVisibility(false);
+}
+
 void ABaseEnemy::SetEnemyTurn(bool bIsTurn)
 {
 	GetCharacterMovement()->bOrientRotationToMovement = bIsTurn;
@@ -195,6 +240,11 @@ float ABaseEnemy::GetAttackMinRange()
 float ABaseEnemy::GetAttackDamage()
 {
 	return AttackDamage;
+}
+
+float ABaseEnemy::GetWarningTime()
+{
+	return WarningTime;
 }
 
 int ABaseEnemy::GetScore()
