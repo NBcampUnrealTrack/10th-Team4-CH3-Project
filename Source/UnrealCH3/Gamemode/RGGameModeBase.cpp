@@ -1,7 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RGGameModeBase.h"
-
+#include "Gamemode/RGProgressionSubsystem.h"
 #include "Blueprint/UserWidget.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -78,6 +78,17 @@ ARGGameModeBase::ARGGameModeBase()
 void ARGGameModeBase::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 시작할 때 URGProgressionSubsystem의 Progression 호출
+	// 만들어둔 경험치 테이블에 따라 경험치 커브 셋팅
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			Progression->InitializeExperienceCurve(ExperienceCurveTable);
+			Progression->InitializeGeneralUpgrades(GeneralUpgradeTable);
+		}
+	}
 
 
 	// -----------------------------------------------------
