@@ -31,6 +31,11 @@ void UBTTask_MoveAwayFromTarget::TickTask(UBehaviorTreeComponent& OwnerComp, uin
 	AActor* Target = Enemy->GetTargetActor();
 	EnemyController->StopMovement();
 	Enemy->SetEnemyTurn(false);
+	if (!Target)
+	{
+		FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
+		return;
+	}
 	float Dist = FVector::Distance(Target->GetActorLocation(), Enemy->GetActorLocation());
 	float MinRange = Enemy->GetAttackMinRange();
 	if (Dist >= MinRange)
