@@ -11,6 +11,7 @@
 #include "GameMode/RGGameModeBase.h"
 #include "Component/RGWallRunMovement.h"
 #include "Component/RGGrappleComponent.h"
+#include "Gamemode/RGProgressionSubsystem.h"
 
 ARGCharacter::ARGCharacter()
 {
@@ -30,12 +31,7 @@ ARGCharacter::ARGCharacter()
 	Camera->bUsePawnControlRotation = false;
 
 	WallRunMovement = CreateDefaultSubobject<URGWallRunMovement>(TEXT("WallRunMovement"));
-	WallRunMovement->OnWallRunStarted.AddDynamic(this, &ARGCharacter::OnStartWallRun);
-	WallRunMovement->OnWallRunStopped.AddDynamic(this, &ARGCharacter::OnStopWallRun);
-
 	GrappleComponent = CreateDefaultSubobject<URGGrappleComponent>(TEXT("GrappleComponent"));
-	GrappleComponent->OnGrappleStarted.AddDynamic(this, &ARGCharacter::OnCanGrapple);
-	GrappleComponent->OnGrappleStopped.AddDynamic(this, &ARGCharacter::OnStopGrapple);
 
 	JumpMaxCount = 2;
 	GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;
@@ -56,6 +52,17 @@ void ARGCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	MeshRelativeLocation = GetMesh()->GetRelativeLocation();
+
+	if (WallRunMovement)
+	{
+		WallRunMovement->OnWallRunStarted.AddDynamic(this, &ARGCharacter::OnStartWallRun);
+		WallRunMovement->OnWallRunStopped.AddDynamic(this, &ARGCharacter::OnStopWallRun);
+	}
+	if (GrappleComponent)
+	{
+		GrappleComponent->OnGrappleStarted.AddDynamic(this, &ARGCharacter::OnCanGrapple);
+		GrappleComponent->OnGrappleStopped.AddDynamic(this, &ARGCharacter::OnStopGrapple);
+	}
 
 	// 대쉬 타임라인
 	if (DashTimeline == nullptr || DashCurve == nullptr)
@@ -208,7 +215,14 @@ void ARGCharacter::Falling()
 void ARGCharacter::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
-	SetMovementState(EMovementState::Idle);
+	if (GetCharacterMovement()->GetCurrentAcceleration().SizeSquared2D() > 0.0f)
+	{
+		SetMovementState(bIsSprinting ? EMovementState::Sprinting : EMovementState::Walking);
+	}
+	else
+	{
+		SetMovementState(EMovementState::Idle, true);
+	}
 }
 
 bool ARGCharacter::CanJumpInternal_Implementation() const
@@ -312,26 +326,29 @@ void ARGCharacter::SetSprintState(bool bCanSprint)
 		* MoveSpeedMultiplier;
 }
 
-void ARGCharacter::SetMovementState(EMovementState NewState)
+void ARGCharacter::SetMovementState(EMovementState NewState, bool bForce)
 {
 	if (CurrentMovementState == NewState)
 	{
 		return;
 	}
 
-	if (GetCharacterMovement()->IsFalling())
+	if (!bForce)
 	{
-		if (NewState == EMovementState::Idle || NewState == EMovementState::Walking || NewState == EMovementState::Sprinting)
+		if (GetCharacterMovement()->IsFalling())
 		{
-			return;
+			if (NewState == EMovementState::Idle || NewState == EMovementState::Walking || NewState == EMovementState::Sprinting)
+			{
+				return;
+			}
 		}
-	}
 
-	if (CurrentMovementState == EMovementState::Dashing || CurrentMovementState == EMovementState::Sliding || CurrentMovementState == EMovementState::Grappling)
-	{
-		if (NewState == EMovementState::Walking || NewState == EMovementState::Sprinting)
+		if (CurrentMovementState == EMovementState::Dashing || CurrentMovementState == EMovementState::Sliding || CurrentMovementState == EMovementState::Grappling)
 		{
-			return;
+			if (NewState == EMovementState::Walking || NewState == EMovementState::Sprinting)
+			{
+				return;
+			}
 		}
 	}
 

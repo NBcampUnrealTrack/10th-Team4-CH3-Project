@@ -98,7 +98,7 @@ public:
 	void SetCheckPoint();
 	void SetAimState(bool bCanAim);
 	void SetSprintState(bool bCanSprint);
-	void SetMovementState(EMovementState NewState);
+	void SetMovementState(EMovementState NewState, bool bForce = false);
 
 public:
 	// Reset and Clear

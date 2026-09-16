@@ -36,11 +36,7 @@ void URGWallRunMovement::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 
 	if (CharacterMovementComponent->IsFalling())
 	{
-		if (CharacterMovementComponent->GetCurrentAcceleration().SizeSquared2D() <= 0.0f)
-		{
-			StopWallRun();
-		}
-		else
+		if (CharacterMovementComponent->GetCurrentAcceleration().SizeSquared2D() > 0.0f)
 		{
 			if (bIsWallRunning)
 			{
@@ -49,6 +45,13 @@ void URGWallRunMovement::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 			else
 			{
 				CheckWallRun();
+			}
+		}
+		else
+		{
+			if (bIsWallRunning)
+			{
+				StopWallRun();
 			}
 		}
 	}
