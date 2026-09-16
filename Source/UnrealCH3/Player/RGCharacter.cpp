@@ -180,7 +180,7 @@ float ARGCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DmageEven
 	// 5초 타이머 시작
 	GetWorldTimerManager().SetTimer(StartRegenerationTimerHandle, this, &ARGCharacter::StartRegenerateHealth, StartRegenerationDelay, false);
 	
-	CurrentHealth = FMath::Clamp(CurrentHealth - DamageAmount, 0.0f, MaxHealth);
+	CurrentHealth = FMath::Clamp(CurrentHealth - DamageAmount, 0.0f, GetMaxHealthWithUpgrade());
 
 	if (CurrentHealth <= 0.0f)
 	{
@@ -259,7 +259,7 @@ void ARGCharacter::AddHealth(float Amount)
 		return;
 	}
 
-	CurrentHealth = FMath::Clamp(CurrentHealth + Amount, 0.0f, MaxHealth);
+	CurrentHealth = FMath::Clamp(CurrentHealth + Amount, 0.0f, GetMaxHealthWithUpgrade());
 }
 
 void ARGCharacter::SetCheckPoint()
@@ -304,7 +304,12 @@ void ARGCharacter::SetAimState(bool bCanAim)
 void ARGCharacter::SetSprintState(bool bCanSprint)
 {
 	bIsSprinting = bCanSprint;
-	GetCharacterMovement()->MaxWalkSpeed = bIsSprinting ? SprintSpeed : DefaultSpeed;
+
+	const float MoveSpeedMultiplier = GetMoveSpeedMultiplier();
+
+	GetCharacterMovement()->MaxWalkSpeed =
+		(bIsSprinting ? SprintSpeed : DefaultSpeed)
+		* MoveSpeedMultiplier;
 }
 
 void ARGCharacter::SetMovementState(EMovementState NewState)
@@ -341,10 +346,11 @@ void ARGCharacter::StartRegenerateHealth()
 
 void ARGCharacter::TickRegenerateHealth()
 {
-	float HealthAmount = MaxHealth * RegenerationMultipiler;
+	const float HealthAmount = GetRegenerationPerSecond() * TickRegenerationInterval;
+
 	AddHealth(HealthAmount);
 
-	if (CurrentHealth >= MaxHealth)
+	if (CurrentHealth >= GetMaxHealthWithUpgrade())
 	{
 		GetWorldTimerManager().ClearTimer(TickRegenerationTimerHandle);
 	}
@@ -780,10 +786,22 @@ void ARGCharacter::StopFireAnimation()
 
 void ARGCharacter::PlayReloadAnimation()
 {
-	if (ReloadMontage)
+	if (!ReloadMontage || !CurrentWeapon)
 	{
-		PlayAnimMontage(ReloadMontage);
+		return;
 	}
+
+	const float MontageLength = ReloadMontage->GetPlayLength();
+	const float ActualReloadTime = CurrentWeapon->GetReloadTime();
+
+	// 방어 코드: 몽타주 길이나 재장전 시간이 비정상이면 기본 배속(1.0)으로
+	float PlayRate = 1.0f;
+	if (MontageLength > 0.f && ActualReloadTime > 0.f)
+	{
+		PlayRate = MontageLength / ActualReloadTime;
+	}
+
+	PlayAnimMontage(ReloadMontage, PlayRate);
 }
 
 void ARGCharacter::StopReloadAnimation()
@@ -794,3 +812,71 @@ void ARGCharacter::StopReloadAnimation()
 	}
 }
 
+float ARGCharacter::GetMoveSpeedMultiplier() const
+{
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks =
+				Progression->GetUpgradeStackCount(FName(TEXT("MoveSpeedUp")));
+
+			const float EffectAmount =
+				Progression->GetUpgradeEffectAmount(FName(TEXT("MoveSpeedUp")));
+
+			return 1.0f + (EffectAmount * Stacks);
+		}
+	}
+
+	return 1.0f;
+}
+
+float ARGCharacter::GetMaxHealthWithUpgrade() const
+{
+	float Result = MaxHealth;
+
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks =
+				Progression->GetUpgradeStackCount(FName(TEXT("MaxHealthUp")));
+
+			const float EffectAmount =
+				Progression->GetUpgradeEffectAmount(FName(TEXT("MaxHealthUp")));
+
+			Result += EffectAmount * Stacks;
+		}
+	}
+
+	return FMath::RoundToFloat(Result);
+}
+
+float ARGCharacter::GetCurrentMaxHealth() const
+{
+	return GetMaxHealthWithUpgrade();
+}
+
+float ARGCharacter::GetRegenerationPerSecond() const
+{
+	float RegenPerSecond = MaxHealth * RegenerationMultipiler;
+
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks =
+				Progression->GetUpgradeStackCount(FName(TEXT("RegenUp")));
+
+			const float EffectAmount =
+				Progression->GetUpgradeEffectAmount(FName(TEXT("RegenUp")));
+
+			RegenPerSecond += EffectAmount * Stacks;
+		}
+	}
+
+	return RegenPerSecond;
+}
