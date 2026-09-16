@@ -17,10 +17,5 @@ class UNREALCH3_API APursuerEnemy : public ABaseEnemy
 public:
 	APursuerEnemy();
 	
-	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Data")
-	UDataTable* EnemyData;
-	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Data")
-	UDataTable* EnemyAttackData;
-	
 	virtual void Attack() override;
 };

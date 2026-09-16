@@ -3,6 +3,9 @@
 
 #include "Enemy/BaseEnemy.h"
 #include "Enemy/AIEnemyController.h"
+#include "Enemy/DataTableStruct/StructEnemyState.h"
+#include "Enemy/DataTableStruct/StructEnemyAttackType.h"
+#include "UObject/ConstructorHelpers.h"
 // 데미지 피드백 인터페이스 추가
 #include "Combat/DamageFeedbackReceiver.h"
 #include "Engine/DamageEvents.h"
@@ -16,6 +19,16 @@ ABaseEnemy::ABaseEnemy()
 	AIControllerClass = AAIEnemyController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 	
+	static ConstructorHelpers::FObjectFinder<UDataTable> StateTable(TEXT("/Script/Engine.DataTable'/Game/Enemy/EnemyData.EnemyData'"));
+	if (StateTable.Succeeded())
+	{
+		EnemyStateDataTable = StateTable.Object;
+	}
+	static ConstructorHelpers::FObjectFinder<UDataTable> AttackTypeTable(TEXT("/Script/Engine.DataTable'/Game/Enemy/EnemyAttackData.EnemyAttackData'"));
+	if (AttackTypeTable.Succeeded())
+	{
+		EnemyAttackTypeDataTable = AttackTypeTable.Object;
+	}
 
 	CurrentState = EEnemyStateEnum::Idle;
 
@@ -29,6 +42,7 @@ void ABaseEnemy::BeginPlay()
 {
 	Super::BeginPlay();
 
+	InitializeData();
 	//설정된 최대 체력으로 시작
 	CurrentHP = FMath::Max(0.f, MaxHP);
 
@@ -49,6 +63,42 @@ void ABaseEnemy::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
+}
+
+void ABaseEnemy::InitializeData()
+{
+	if (!EnemyStateDataTable)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Don't Find StateData Init"));
+		return;
+	}
+	if (!EnemyAttackTypeDataTable)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Don't Find AttackData Init"));
+		return;
+	}
+
+	if (FStructEnemyState* StateDataRow = EnemyStateDataTable->FindRow<FStructEnemyState>(EnemyName, TEXT("InitializeData")))
+	{
+		MaxHP = StateDataRow->MaxHP;
+		Defense = StateDataRow->Defense;
+		AttackDamage = StateDataRow->AttackDamage;
+		Score = StateDataRow->Score;
+		Exp = StateDataRow->EXP;
+	}
+	
+	if (FStructEnemyAttackType* AttackDataRow = EnemyAttackTypeDataTable->FindRow<FStructEnemyAttackType>(EnemyName, TEXT("InitializeData")))
+	{
+		ViewingDistance = AttackDataRow->ViewingDistance;
+		ViewingAngle = AttackDataRow->ViewingAngle;
+		HearingDistance = AttackDataRow->HearingDistance;
+		TargetChangeTime = AttackDataRow->TargetChangeTime;
+		AttackMinRange = AttackDataRow->MinAttackRange;
+		AttackMaxRange = AttackDataRow->MaxAttackRange;
+		AttackCoolTime = AttackDataRow->CoolTime;
+		WarningTime = AttackDataRow->WarningTime;
+		AttackType = AttackDataRow->AttackType;
+	}
 }
 
 void ABaseEnemy::Attack()
