@@ -5,7 +5,6 @@
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
-#include "GameMode/RGProgressionSubsystem.h"
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
 
@@ -415,15 +414,6 @@ void ARGBaseWeapon::SetExternalActionsAllowed(bool bAllowed)
 //강화 데미지 계산 
 float ARGBaseWeapon::GetUpgradeDamageMultiplier() const
 {
-	if (const UGameInstance* GI = GetGameInstance())
-	{
-		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
-		{
-			const int32 Stacks = Progression->GetUpgradeStackCount(FName(TEXT("DamageUp")));
-			const float EffectAmount = Progression->GetUpgradeEffectAmount(FName(TEXT("DamageUp")));
-			return 1.0f + (EffectAmount * Stacks);
-		}
-	}
 	return 1.0f;
 }
 //거리에 따른 데미지 감쇠
