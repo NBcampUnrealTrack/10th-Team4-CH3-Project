@@ -159,6 +159,10 @@ protected:
 	FTimerHandle FireTimerHandle;
 	FTimerHandle ReloadTimerHandle;
 
+	UFUNCTION()
+	void HandleUpgradeApplied(FName UpgradeId, int32 NewStackCount);
+	UPROPERTY()
+	int32 LastKnownMagazineStack = 0;
 private:
 	// 타이머 관련 함수들
 	UFUNCTION()
@@ -221,11 +225,20 @@ public:
 	int32 GetCurrentAmmo() const { return CurrentAmmo; }
 
 	UFUNCTION(BlueprintPure, Category = "Weapon")
-	int32 GetMagazineCapacity() const { return WeaponStats.MagazineCapacity; }
-
-	UFUNCTION(BlueprintPure, Category = "Weapon")
 	float GetADSFOV() const { return WeaponStats.ADSFOV; }
 
 	UFUNCTION(BlueprintPure, Category = "Weapon")
 	float GetReloadProgress() const;
+
+	float GetFireInterval() const;
+	float GetReloadTime() const;
+	int32 GetMagazineCapacity() const;
+
+	//버그 수정 시 추가로 들어감
+	UPROPERTY()
+	int32 ReloadTargetMagazine = 0;
+	int32 GetCapacityForStack(int32 Stacks) const;
+	UPROPERTY()
+	float LastFireTime = -1000.f;
+
 };

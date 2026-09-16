@@ -19,6 +19,10 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
+
+	UFUNCTION(Exec, Category = "Progression|Debug")
+	void DebugForceLevelUp();
+
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputMappingContext> DefaultIMC;
 

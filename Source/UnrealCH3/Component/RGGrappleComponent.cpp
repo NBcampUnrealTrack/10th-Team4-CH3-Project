@@ -1,4 +1,5 @@
 ﻿#include "Component/RGGrappleComponent.h"
+#include "Gamemode/RGProgressionSubsystem.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -52,6 +53,28 @@ void URGGrappleComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 	}
 }
 
+float URGGrappleComponent::GetGrappleDelay() const
+{
+	float Delay = GrappleDelay;
+
+	if (const UWorld* World = GetWorld())
+	{
+		if (const UGameInstance* GI = World->GetGameInstance())
+		{
+			if (const URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+			{
+				const int32 Stacks = Progression->GetUpgradeStackCount(FName(TEXT("GrabbingUp")));
+				const float EffectAmount = Progression->GetUpgradeEffectAmount(FName(TEXT("GrabbingUp")));
+
+				// 감소형 강화이므로 나눗셈 공식 사용 (FireInterval/ReloadTime과 동일 패턴)
+				Delay /= (1.0f + EffectAmount * Stacks);
+			}
+		}
+	}
+
+	return FMath::Max(0.01f, Delay);
+}
+
 void URGGrappleComponent::StartGrapple()
 {
 	if (bIsGrappling || !bCanGrapple || !CheckTrace())
@@ -66,7 +89,7 @@ void URGGrappleComponent::StartGrapple()
 	OnGrappleStarted.Broadcast();
 
 	TWeakObjectPtr<URGGrappleComponent> WeakPtr = this;
-	GetWorld()->GetTimerManager().SetTimer(GrappleTimerHandle, [WeakPtr]() { if (WeakPtr.IsValid()) { WeakPtr.Get()->bCanGrapple = true; } }, GrappleDelay, false);
+	GetWorld()->GetTimerManager().SetTimer(GrappleTimerHandle, [WeakPtr]() { if (WeakPtr.IsValid()) { WeakPtr.Get()->bCanGrapple = true; } }, GetGrappleDelay(), false);
 }
 
 void URGGrappleComponent::StopGrapple()

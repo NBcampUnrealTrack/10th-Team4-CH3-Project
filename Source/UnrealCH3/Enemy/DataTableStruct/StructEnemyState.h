@@ -16,9 +16,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float MaxHP;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float Defanse;
+	float Defense;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float Attack;
+	float AttackDamage;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float Score;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)

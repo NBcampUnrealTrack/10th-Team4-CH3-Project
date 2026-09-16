@@ -1,4 +1,5 @@
 ﻿#include "Player/RGPlayerController.h"
+#include "Gamemode/RGProgressionSubsystem.h"
 #include "EnhancedInputSubsystems.h"
 
 ARGPlayerController::ARGPlayerController()
@@ -29,6 +30,18 @@ void ARGPlayerController::BeginPlay()
 			{
 				Subsystem->AddMappingContext(DefaultIMC, 0);
 			}
+		}
+	}
+}
+
+void ARGPlayerController::DebugForceLevelUp()
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			Progression->DebugForceLevelUp();
 		}
 	}
 }
