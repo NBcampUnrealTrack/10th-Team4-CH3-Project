@@ -59,6 +59,7 @@ void URGProgressionSubsystem::GrantExperience(float Amount)
 //디버깅용 강제 레벨업
 void URGProgressionSubsystem::DebugForceLevelUp()
 {
+	UE_LOG(LogTemp, Warning, TEXT("DebugForceLevelUp 호출됨"));
 	CurrentLevel += 1;
 	PendingLevelUpCount += 1;
 	PresentNextPendingLevelUpIfAny();
@@ -158,7 +159,7 @@ void URGProgressionSubsystem::PresentNextPendingLevelUpIfAny()
 	{
 		return; // 대기 중인 레벨업 없음
 	}
-
+	UE_LOG(LogTemp, Warning, TEXT("PresentNextPendingLevelUpIfAny 호출됨"));
 	// 카드 몇 장을 보여줄지는 "지금 막 올라간 그 레벨"의 데이터 기준
 	const FRGEXPLevelRow* Row = FindCurrentLevelRow();
 	const int32 ChoiceCount = Row ? Row->UpgradeChoiceCount : 3;
@@ -166,7 +167,7 @@ void URGProgressionSubsystem::PresentNextPendingLevelUpIfAny()
 	LastPresentedOptions = GenerateUpgradeOptions(ChoiceCount);
 	//업글중임.
 	bIsPresentingUpgradeChoice = true;
-
+	UE_LOG(LogTemp, Warning, TEXT("OnLevelUpReady Broadcast!"));
 	OnLevelUpReady.Broadcast(LastPresentedOptions);
 }
 
