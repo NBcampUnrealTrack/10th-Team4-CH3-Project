@@ -7,7 +7,7 @@
 #include "RGGameModeBase.generated.h"
 
 class UUserWidget;
-
+class UDataTable;
 
 // =========================================================
 // ���� ���� ����
@@ -448,4 +448,28 @@ public:
 		Category = "Input"
 	)
 	void ApplyDefaultInputSettings();
+
+	public:
+
+		/**
+		 * 레벨별 필요 경험치 데이터테이블
+		 * URGProgressionSubsystem::InitializeExperienceCurve로 전달됨
+		 */
+		UPROPERTY(
+			EditDefaultsOnly,
+			BlueprintReadOnly,
+			Category = "Progression"
+		)
+		TObjectPtr<UDataTable> ExperienceCurveTable;
+
+		/**
+		 * 강화 후보 데이터테이블
+		 * URGProgressionSubsystem::InitializeGeneralUpgrades로 전달됨
+		 */
+		UPROPERTY(
+			EditDefaultsOnly,
+			BlueprintReadOnly,
+			Category = "Progression"
+		)
+		TObjectPtr<UDataTable> GeneralUpgradeTable;
 };
