@@ -61,8 +61,14 @@ public:
     int GetScore();
     float GetExp();
     void SetState(EEnemyStateEnum State);
+    void InitializeData();
 
 protected:
+    UPROPERTY(EditDefaultsOnly, Category = "Enemy|Data")
+    TObjectPtr<UDataTable> EnemyStateDataTable;
+    UPROPERTY(EditDefaultsOnly, Category = "Enemy|Data")
+    TObjectPtr<UDataTable> EnemyAttackTypeDataTable;
+
     UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "AttackRangeMesh")
     UStaticMeshComponent* AttackRangeMesh;
     UPROPERTY()
