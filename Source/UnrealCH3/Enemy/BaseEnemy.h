@@ -21,13 +21,18 @@ public:
     virtual void BeginPlay() override;
     UFUNCTION()
     virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
-    //virtual void Attack();
+    UFUNCTION()
+    virtual void Attack();
+    UFUNCTION()
+    virtual void WarningBeforAttack();
+    UFUNCTION()
+    virtual void CoolTime();
     UFUNCTION()
     virtual void Die();
     UFUNCTION()
     bool IsTargetInAttackRange() const;
-    /*bool IsTargetInDetectRange() const;
-    void SetEnemyState(EEnemyState NewState);*/
+    //bool IsTargetInDetectRange() const;
+    
     UFUNCTION()
     EEnemyStateEnum GetEnemyState() const;
     UFUNCTION()
@@ -40,17 +45,28 @@ public:
     void SetEnemyTurn(bool bIsTurn);
     UFUNCTION()
     void MoveAwayFromTarget(float DeltaSeconds);
+    UFUNCTION()
+    virtual void ShowAttackRangeLine();
+    UFUNCTION()
+    virtual void HideAttackRangeLine();
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void FaceTarget(float DeltaTime, float RotationSpeed = 10.f);
 
     float GetViewingAngle();
     float GetViewingDistance();
     float GetAttackMaxRange();
     float GetAttackMinRange();
     float GetAttackDamage();
+    float GetWarningTime();
     int GetScore();
     float GetExp();
     void SetState(EEnemyStateEnum State);
 
 protected:
+    UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "AttackRangeMesh")
+    UStaticMeshComponent* AttackRangeMesh;
+    UPROPERTY()
+    FName EnemyName;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     float MaxHP;            // 최대 체력
 
