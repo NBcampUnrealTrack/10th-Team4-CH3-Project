@@ -269,4 +269,13 @@ private:
 	float DefaultAirControl = 0.45;
 	float DefaultGroundFriction = 0.0f;
 	float DefaultBreakingDecelerationWalking = 0.0f;
+
+	public:
+		//강화용 함수
+		float GetMoveSpeedMultiplier() const;
+		float GetDefaultMoveSpeed() const;
+		float GetSprintSpeed() const;
+		float GetMaxHealthWithUpgrade() const;
+		float GetCurrentMaxHealth() const;
+		float GetRegenerationPerSecond() const;
 };

@@ -11,6 +11,7 @@
 class UDataTable;
 //레벨 업 시 UI가 받는 신호
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnLevelUpReady, const TArray<FRGUpgradeOption>&, Options);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnUpgradeApplied, FName, UpgradeId, int32, NewStackCount);
 //경험치 바 UI 갱신용 신호 (경험치 바 없다면 무시)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnExperienceChanged, float, CurrentExperience, float, RequiredExperience, int32, CurrentLevel);
 
@@ -74,6 +75,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Progression|Events")
 	FOnExperienceChanged OnExperienceChanged;
 
+	UPROPERTY(BlueprintAssignable)
+	FOnUpgradeApplied OnUpgradeApplied;
+
 private:
 	// 현재 레벨(1부터 시작)에서 다음 레벨까지 필요한 경험치를 데이터테이블에서 찾아옴.
 	// 테이블에 더 높은 레벨 행이 없으면(최종레벨) nullptr 반환 -> 그 이상은 레벨업 안 함.
@@ -108,5 +112,9 @@ private:
 	// 방금 UI에 띄운 후보 배열. ApplyUpgradeByIndex()가 CardIndex -> UpgradeId를 여기서 찾음.
 	UPROPERTY()
 	TArray<FRGUpgradeOption> LastPresentedOptions;
+
+protected:
+	// 현재 플레이어가 들고 있는 무기를 가져옴 (없으면 nullptr)
+	ARGBaseWeapon* GetCurrentEquippedWeapon() const;
 
 };

@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
+#include "RGBaseWeapon.h"
 #include "RGUpgradeOption.generated.h"
 
 /*
@@ -59,4 +60,5 @@ struct FRGGeneralUpgradeRow : public FTableRowBase
 	// 스택 1당 실제 효과량 (예: DamageUp이면 0.08 = +8%). 무기/캐릭터 스탯 계산에서 사용.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Upgrade")
 	float EffectAmountPerStack = 0.08f;
+
 };

@@ -59,4 +59,7 @@ protected:
 
 	// 다음 발사가 가능한 시각 , 한번 발사하고 유예시간
 	float NextChargeAllowedTime = 0.f;
+
+	// ChargeSpeedUp 강화 배율 (1.0 = 기본, 스택당 EffectAmount만큼 증가)
+	float GetChargeSpeedMultiplier() const;
 };

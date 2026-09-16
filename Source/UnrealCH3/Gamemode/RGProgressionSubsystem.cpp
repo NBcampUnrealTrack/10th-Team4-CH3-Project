@@ -2,6 +2,9 @@
 #include "RGProgressionSubsystem.h"
 #include "RGEXPLevelRow.h"
 #include "Engine/DataTable.h"
+#include "Player/RGCharacter.h"
+#include "RGBaseWeapon.h"
+#include "Kismet/GameplayStatics.h"
 
 //GameMode의 BeginPlay에서 초기화
 //이미 만들어진 경험치커브 데이터테이블을 세팅해준다.
@@ -99,7 +102,9 @@ TArray<FRGUpgradeOption> URGProgressionSubsystem::GenerateUpgradeOptions(int32 C
 	{
 		return Result;
 	}
-	
+	// 현재 무기를 한 번만 가져와서 전체 후보 순회에 재사용
+	ARGBaseWeapon* EquippedWeapon = GetCurrentEquippedWeapon();
+
 	TArray<FName> ValidRowNames;
 	static const FString ContextString(TEXT("UpgradeCandidateGen"));
 	//강화 테이블 가져와서 행 이름 가져옴
@@ -116,6 +121,7 @@ TArray<FRGUpgradeOption> URGProgressionSubsystem::GenerateUpgradeOptions(int32 C
 		{
 			continue;
 		}
+
 		ValidRowNames.Add(RowName);
 	}
 
@@ -198,6 +204,9 @@ void URGProgressionSubsystem::ApplyUpgrade(FName UpgradeId)
 	int32& StackCount = UpgradeStacks.FindOrAdd(UpgradeId);
 	StackCount += 1;
 
+	UE_LOG(LogTemp, Warning, TEXT("[Upgrade] %s 적용됨 (현재 Stack: %d)"), *UpgradeId.ToString(), StackCount);
+	OnUpgradeApplied.Broadcast(UpgradeId, StackCount);
+
 	PendingLevelUpCount = FMath::Max(0, PendingLevelUpCount - 1);
 	bIsPresentingUpgradeChoice = false;
 
@@ -238,4 +247,21 @@ void URGProgressionSubsystem::ResetRun()
 	const FRGEXPLevelRow* Row = FindCurrentLevelRow();
 	const float RequiredExperience = Row ? Row->RequiredExperience : 0.f;
 	OnExperienceChanged.Broadcast(CurrentExperience, RequiredExperience, CurrentLevel);
+}
+
+ARGBaseWeapon* URGProgressionSubsystem::GetCurrentEquippedWeapon() const
+{
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	ARGCharacter* PlayerCharacter = Cast<ARGCharacter>(UGameplayStatics::GetPlayerCharacter(World, 0));
+	if (!PlayerCharacter)
+	{
+		return nullptr;
+	}
+
+	return PlayerCharacter->GetCurrentWeapon();
 }

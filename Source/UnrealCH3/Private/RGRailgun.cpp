@@ -2,6 +2,7 @@
 
 
 #include "RGRailgun.h"
+#include "gamemode/RGProgressionSubsystem.h"
 #include "Engine/World.h"
 
 //충전 시작만 하는 함수
@@ -36,10 +37,12 @@ float ARGRailgun::GetChargeRatio01() const {
 	if (!bIsCharging) {
 		return 0.f;
 	}
-	//차징 시간 Elapsed에 저장
-	const float Elapsed = GetWorld()->GetTimeSeconds() - ChargeStartTime;
+	// 실제 흐른 시간에 강화 배율을 곱해서 "체감 충전 시간"을 늘림
+	const float RawElapsed = GetWorld()->GetTimeSeconds() - ChargeStartTime;
+	//차징 시간 ScaledElapsed에 저장
+	const float ScaledElapsed = RawElapsed * GetChargeSpeedMultiplier();
 	//차징 시간 0~MaxChargeTime으로 한정시킴
-	const float ClampedElapsed = FMath::Clamp(Elapsed, 0.f, MaxChargeTime);
+	const float ClampedElapsed = FMath::Clamp(ScaledElapsed, 0.f, MaxChargeTime);
 	// 0~1비율로 반환
 	return ClampedElapsed / MaxChargeTime;
 }
@@ -49,7 +52,9 @@ void ARGRailgun::ReleaseChargeAndFire() {
 		return;
 	}
 	//차징시간
-	const float Elapsed = GetWorld()->GetTimeSeconds() - ChargeStartTime;
+	
+	const float RawElapsed = GetWorld()->GetTimeSeconds() - ChargeStartTime;
+	const float Elapsed = RawElapsed * GetChargeSpeedMultiplier();
 	//차징이 끝났으므로
 	bIsCharging = false;
 	//최소 충전 시간 미만족시 그냥 리턴
@@ -64,7 +69,7 @@ void ARGRailgun::ReleaseChargeAndFire() {
 
 	//탄환 한발 소모 및 브로드캐스팅
 	CurrentAmmo = FMath::Max(0, CurrentAmmo - 1);
-	OnAmmoChanged.Broadcast(CurrentAmmo, WeaponStats.MagazineCapacity);
+	OnAmmoChanged.Broadcast(CurrentAmmo, GetMagazineCapacity());
 
 	if (CurrentAmmo <= 0) {
 		StartReloaded();
@@ -95,4 +100,19 @@ void ARGRailgun::FireChargedShot(float ChargeRatio01) {
 			break;
 		}
 	}
+}
+
+float ARGRailgun::GetChargeSpeedMultiplier() const
+{
+	float Multiplier = 1.0f;
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks = Progression->GetUpgradeStackCount(FName(TEXT("RateUp")));
+			const float EffectAmount = Progression->GetUpgradeEffectAmount(FName(TEXT("RateUp")));
+			Multiplier += EffectAmount * Stacks; // 덧셈형이라 음수/0 될 일 없음
+		}
+	}
+	return Multiplier;
 }
