@@ -9,6 +9,7 @@ UBTS_FaceTarget::UBTS_FaceTarget()
 {
 	NodeName = TEXT("Face Target");
 	Interval = 0.2f;
+	RandomDeviation = 0.05f;
 }
 
 void UBTS_FaceTarget::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)

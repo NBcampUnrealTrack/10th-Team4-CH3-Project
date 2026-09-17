@@ -10,6 +10,8 @@
 UBTS_FindPlayer::UBTS_FindPlayer()
 {
 	NodeName = "Find Player";
+	Interval = 0.2f;
+	RandomDeviation = 0.05f;
 }
 
 void UBTS_FindPlayer::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
@@ -17,27 +19,36 @@ void UBTS_FindPlayer::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMem
 	Super::TickNode(OwnerComp, NodeMemory, DeltaSeconds);
 
 	UBlackboardComponent* BlackboardComp = OwnerComp.GetBlackboardComponent();
-	
 	if (!BlackboardComp) return;
 
 	AAIController* AIController = OwnerComp.GetAIOwner();
 	ABaseEnemy* Enemy = Cast<ABaseEnemy>(AIController->GetPawn());
+	if (!Enemy) return;
+	
 	AActor* TargetActor = Cast<AActor>(Enemy->GetTargetActor());
+
 	BlackboardComp->SetValueAsObject(TEXT("Target"), TargetActor);
 	
 	MaxRange = Enemy->GetAttackMaxRange();
 	MinRange = Enemy->GetAttackMinRange();
 	
 	bool bHasTarget = (TargetActor != nullptr);
+	bool bCanAttack = Enemy->CanAttack();
 	
+	BlackboardComp->SetValueAsBool(TEXT("bIsCombat"), bCanAttack);
 	BlackboardComp->SetValueAsBool(TEXT("bIsPlayer"), bHasTarget);
+	
 	if (!TargetActor)
 	{
+		Interval = 1.0f;
+		
 		BlackboardComp->SetValueAsEnum(TEXT("EnemyState"), static_cast<uint8>(EEnemyStateEnum::Patrol));
 		Enemy->SetState(EEnemyStateEnum::Patrol);
+		
 		return;
 	}
 	
+	Interval = 0.2f;
 	float Distance = FVector::Dist(TargetActor->GetActorLocation(), Enemy->GetActorLocation());
 	bool bInAttackRange = (Distance <= MaxRange && Distance >= MinRange);
 	

@@ -45,6 +45,10 @@ void ABaseEnemy::BeginPlay()
 	Super::BeginPlay();
 
 	InitializeData();
+	if (AAIEnemyController* EnemyCont = Cast<AAIEnemyController>(GetController()))
+	{
+		EnemyCont->UpdateSight();
+	}
 	//설정된 최대 체력으로 시작
 	CurrentHP = FMath::Max(0.f, MaxHP);
 
@@ -232,7 +236,6 @@ void ABaseEnemy::ShowAttackRangeLine()
 {
 	FVector Center = GetActorLocation() + GetActorForwardVector() * (AttackMaxRange / 2.0f);
 	FRotator Rot = GetActorRotation();
-
 	AttackRangeMesh->SetWorldLocation(Center);
 	AttackRangeMesh->SetWorldRotation(Rot);
 	AttackRangeMesh->SetVisibility(true);
@@ -257,6 +260,23 @@ void ABaseEnemy::MoveAwayFromTarget(float DeltaSeconds)
 	Direction = Direction.GetSafeNormal();
 
 	AddMovementInput(Direction, 1.0f);
+}
+
+void ABaseEnemy::StartAttackCooldown()
+{
+	bCanAttack = false;
+	GetWorldTimerManager().SetTimer(
+		AttackCoolTimer,
+		this,
+		&ABaseEnemy::ResetAttackCooldown,
+		AttackCoolTime,
+		false
+	);
+}
+
+void ABaseEnemy::ResetAttackCooldown()
+{
+	bCanAttack = true;
 }
 
 bool ABaseEnemy::IsTargetInAttackRange() const
@@ -327,4 +347,9 @@ float ABaseEnemy::GetExp()
 void ABaseEnemy::SetState(EEnemyStateEnum State)
 {
 	CurrentState = State;
+}
+
+bool ABaseEnemy::CanAttack()
+{
+	return bCanAttack;
 }

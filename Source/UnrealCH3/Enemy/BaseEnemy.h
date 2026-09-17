@@ -52,6 +52,10 @@ public:
     virtual void HideAttackRangeLine();
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void FaceTarget(float DeltaTime, float RotationSpeed = 10.f);
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void StartAttackCooldown();
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void ResetAttackCooldown();
 
     UBehaviorTree* GetEnemyBehaviorTree() const;
     float GetViewingAngle();
@@ -62,6 +66,7 @@ public:
     float GetWarningTime();
     int GetScore();
     float GetExp();
+    bool CanAttack();
     void SetState(EEnemyStateEnum State);
     void InitializeData();
 
@@ -130,6 +135,8 @@ protected:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     bool bIsDead = false;           // 사망 여부
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    bool bCanAttack;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
     EEnemyStateEnum CurrentState;   // 현재 상태
