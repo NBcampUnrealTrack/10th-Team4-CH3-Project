@@ -94,11 +94,11 @@ protected:
 	virtual void Fire();
 	//라인트레이스 -> 맞았으면 ApplyHitDamage호출 ( AlreadyHitActors 를 넘기면 이 안의 엑터는 다시 처리하지 않음 ( 관통 무기용 중복 방지) )
 	//맞췄으면 true 반환 못맞췄으면 false 반환
-	virtual bool FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors , FHitResult* OutHit = nullptr);
+	virtual bool FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors , FHitResult* OutHit = nullptr , bool bTriggerCoreEffects = true);
 	//피해 로직 : 기본 피해 * 강화 배율 * 거리 감쇠(선택) -> 최종 피해 전달.
 	// if 강화 X 에 거리감쇠 효과 0으로 한다면 -> 기본피해 == 최종피해
 	// 실제 체력 차감은 맞은 대상 (적) 에서 처리하는 것으로 구현 + 적 체력 여기서 건드리지 않음
-	virtual void ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart, bool bIsDirectHit);
+	virtual void ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart, bool bIsDirectHit , bool bTriggerCoreEffects = true);
 	// 발사 시작 지점/방향을 구함 기본은 캐릭터의 카메라 기준. 실패 시 false.
 	virtual bool GetMuzzleAimTransform(FVector& OutStart, FVector& OutDirection) const;
 	//재장전 타이머 끝났을 때 실제 재장전 처리
@@ -240,5 +240,14 @@ public:
 	int32 GetCapacityForStack(int32 Stacks) const;
 	UPROPERTY()
 	float LastFireTime = -1000.f;
+
+	//=============== 핵심 강화 함수 ===================
+	protected:
+		// 핵심 강화 효과 분기 진입점
+		// bTriggerCoreEffects: 후속 효과(도탄/전이 등)가 자기 자신을 또 트리거하지 않도록 막는 플래그
+		void TryTriggerCoreUpgradeEffects(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
+
+		// 개별 효과 구현
+		void TriggerDoubleShot(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
 
 };

@@ -15,6 +15,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnUpgradeApplied, FName, UpgradeId
 //경험치 바 UI 갱신용 신호 (경험치 바 없다면 무시)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnExperienceChanged, float, CurrentExperience, float, RequiredExperience, int32, CurrentLevel);
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCoreUpgradeReady, const TArray<FRGUpgradeOption>&, Options);
+
 //레벨과 강화 스택을 들고 있을 저장소
 
 UCLASS()
@@ -23,6 +25,18 @@ class UNREALCH3_API URGProgressionSubsystem : public UGameInstanceSubsystem
 	GENERATED_BODY()
 
 public:
+
+	// ===== UI가 바인딩할 델리게이트 ==================================================
+	UPROPERTY(BlueprintAssignable, Category = "Progression|Events")
+	FOnLevelUpReady OnLevelUpReady;
+
+	UPROPERTY(BlueprintAssignable, Category = "Progression|Events")
+	FOnExperienceChanged OnExperienceChanged;
+
+	UPROPERTY(BlueprintAssignable)
+	FOnUpgradeApplied OnUpgradeApplied;
+
+	// ========== 레벨 및 일반 강화 함수 ================================================
 	//게임모드에서 호출
 	UFUNCTION(BlueprintCallable , Category = "Progression")
 	void InitializeExperienceCurve(UDataTable* InExperienceCurveTable);
@@ -39,6 +53,7 @@ public:
 	//디버깅용 강제 레벨업 -> 콘솔 창에 등록해서 사용 예정
 	UFUNCTION(BlueprintCallable, Category = "Progression|Debug")
 	void DebugForceLevelUp();
+
 
 	// UI의 "HandleUpgradeSelected(CardIndex)" 이벤트에서 그대로 호출하면 됨.
 	// 카드 몇 번째를 클릭했는지 index로 적용
@@ -68,16 +83,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Progression")
 	void ResetRun();
 
-	// ===== UI가 바인딩할 델리게이트 =====
-	UPROPERTY(BlueprintAssignable, Category = "Progression|Events")
-	FOnLevelUpReady OnLevelUpReady;
-
-	UPROPERTY(BlueprintAssignable, Category = "Progression|Events")
-	FOnExperienceChanged OnExperienceChanged;
-
-	UPROPERTY(BlueprintAssignable)
-	FOnUpgradeApplied OnUpgradeApplied;
-
 private:
 	// 현재 레벨(1부터 시작)에서 다음 레벨까지 필요한 경험치를 데이터테이블에서 찾아옴.
 	// 테이블에 더 높은 레벨 행이 없으면(최종레벨) nullptr 반환 -> 그 이상은 레벨업 안 함.
@@ -91,10 +96,20 @@ private:
 
 	TArray<FRGUpgradeOption> GenerateUpgradeOptions(int32 Count) const;
 
+protected:
+	// 현재 플레이어가 들고 있는 무기를 가져옴 (없으면 nullptr)
+	ARGBaseWeapon* GetCurrentEquippedWeapon() const;
+	//====================================================================================
+	
+	// ================ 일반 강화 및 경험치 변수 ===========================================
+	//강화 및 경험치 로직 데이터테이블
 	UPROPERTY()
 	UDataTable* ExperienceCurveTable = nullptr;
 	UPROPERTY()
 	UDataTable* GeneralUpgradeTable = nullptr;
+	UPROPERTY()
+	UDataTable* CoreUpgradeTable = nullptr;
+	
 
 	int32 CurrentLevel = 1;
 	float CurrentExperience = 0.f;
@@ -113,8 +128,48 @@ private:
 	UPROPERTY()
 	TArray<FRGUpgradeOption> LastPresentedOptions;
 
-protected:
-	// 현재 플레이어가 들고 있는 무기를 가져옴 (없으면 nullptr)
-	ARGBaseWeapon* GetCurrentEquippedWeapon() const;
+	//=================================================================================
 
+
+public:
+	// ======= 핵심 강화 함수 ==========================================================
+	void InitializeCoreUpgrades(UDataTable* InCoreUpgradeTable);
+	bool HasCoreUpgrade(FName UpgradeId) const;
+	bool CanAcquireMoreCoreUpgrades() const;
+	TArray<FRGUpgradeOption> GenerateCoreUpgradeOptions(int32 Count) const;
+	// 맵 전환 시 GameMode가 호출
+	void PresentCoreUpgradeChoice();
+	// 카드 선택 시 호출
+	void ApplyCoreUpgrade(FName UpgradeId);
+
+	const FRGCoreUpgradeRow* FindCoreUpgradeRow(FName UpgradeId) const;
+
+	UPROPERTY()
+	TArray<FName> ActiveCoreUpgrades;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CoreUpgrade")
+	int32 MaxCoreUpgradeCount = 2;
+
+	
+
+public:
+	UPROPERTY(BlueprintAssignable)
+	FOnCoreUpgradeReady OnCoreUpgradeReady;
+
+protected:
+	UPROPERTY()
+	TArray<FRGUpgradeOption> LastPresentedCoreOptions;
+
+	UPROPERTY()
+	bool bIsPresentingCoreUpgradeChoice = false;
+
+public:
+	// 추가: 디버깅용 강제 핵심강화 선택 트리거 -> 콘솔 창에 등록해서 사용 예정
+	UFUNCTION(BlueprintCallable, Category = "Progression|Debug")
+	void DebugForceCoreUpgradeChoice();
+
+	// 추가: 디버깅용 이름으로 직접 핵심강화 적용 (예: "Ricochet")
+	UFUNCTION(BlueprintCallable, Category = "Progression|Debug")
+	void DebugApplyCoreUpgradeByName(const FString& UpgradeName);
+
+	//===================================================================================
 };

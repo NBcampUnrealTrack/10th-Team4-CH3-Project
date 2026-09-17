@@ -455,21 +455,15 @@ public:
 		 * 레벨별 필요 경험치 데이터테이블
 		 * URGProgressionSubsystem::InitializeExperienceCurve로 전달됨
 		 */
-		UPROPERTY(
-			EditDefaultsOnly,
-			BlueprintReadOnly,
-			Category = "Progression"
-		)
+		UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Progression")
 		TObjectPtr<UDataTable> ExperienceCurveTable;
-
 		/**
 		 * 강화 후보 데이터테이블
 		 * URGProgressionSubsystem::InitializeGeneralUpgrades로 전달됨
 		 */
-		UPROPERTY(
-			EditDefaultsOnly,
-			BlueprintReadOnly,
-			Category = "Progression"
-		)
+		UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Progression")
 		TObjectPtr<UDataTable> GeneralUpgradeTable;
+
+		UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Progression")
+		TObjectPtr<UDataTable> CoreUpgradeTable;
 };
