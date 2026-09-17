@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Enemy/Interface/EnemyRecoveryProvider.h"
 #include "EnemySpawnPoint.generated.h"
 
 class ABaseEnemy;
