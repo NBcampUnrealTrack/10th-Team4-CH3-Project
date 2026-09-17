@@ -255,6 +255,11 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 
 	const float BaseDamage = (DamageOverride >= 0.f) ? DamageOverride : WeaponStats.BaseDamage;
 
+	if (AlreadyHitActors)
+	{
+		AlreadyHitActors->Add(Hit.GetActor());
+	}
+
 	// "직격"의 기준은 무기 종류가 아니라 관통 순서임.
 	// AlreadyHitActors가 없으면(nullptr) 애초에 관통을 아예 안 쓰는 무기 -> 항상 직격.
 	// AlreadyHitActors가 있으면(관통 무기) -> 이 트레이스에서 "처음" 맞은 대상일 때만 직격으로 인정.
