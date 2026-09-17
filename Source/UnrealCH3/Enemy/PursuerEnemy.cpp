@@ -29,11 +29,11 @@ void APursuerEnemy::Attack()
 	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Pawn, Params);
 	DrawDebugLine(GetWorld(), Start, End, bHit ? FColor::Green : FColor::Red, false, 2.0f, 0, 2.f);
 
-	UE_LOG(LogTemp, Warning, TEXT("Attack Trace - Hit: %d, Actor: %s"),
-		bHit, Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("None"));
 
 	if (bHit && Hit.GetActor() == TargetActor)
 	{
 		UGameplayStatics::ApplyDamage(Hit.GetActor(), AttackDamage, GetController(), this, UDamageType::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("Attack Trace - Hit: %d, Actor: %s"),
+			bHit, Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("None"));
 	}
 }

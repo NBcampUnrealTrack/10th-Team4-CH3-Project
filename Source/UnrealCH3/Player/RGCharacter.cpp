@@ -178,10 +178,13 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 
 float ARGCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DmageEvent, AController* EventIntigator, AActor* DamageCauser)
 {
+
 	if (bIsGodMode || bIsDead)
 	{
 		return 0.0f;
 	}
+	UE_LOG(LogTemp, Warning, TEXT("Player TakeDamage called! Amount: %f, Causer: %s"),
+		DamageAmount, DamageCauser ? *DamageCauser->GetName() : TEXT("None"));
 	// 1초 재생타이머 정리
 	GetWorldTimerManager().ClearTimer(TickRegenerationTimerHandle);
 	// 5초 타이머 시작
