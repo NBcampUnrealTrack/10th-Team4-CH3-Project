@@ -35,6 +35,7 @@ void UBTTask_WarningAttack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* N
 	*ElapsedTime += DeltaSeconds;
 	if (*ElapsedTime >= WarningTime)
 	{
+		WarningTime = 0.0f;
 		Enemy->HideAttackRangeLine();
 		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
 	}

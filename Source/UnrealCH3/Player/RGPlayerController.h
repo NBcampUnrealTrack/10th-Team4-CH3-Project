@@ -23,6 +23,12 @@ public:
 	UFUNCTION(Exec, Category = "Progression|Debug")
 	void DebugForceLevelUp();
 
+	UFUNCTION(Exec)
+	void DebugForceCoreUpgradeChoice();
+
+	UFUNCTION(Exec)
+	void DebugApplyCoreUpgradeByName(const FString& UpgradeName);
+
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputMappingContext> DefaultIMC;
 

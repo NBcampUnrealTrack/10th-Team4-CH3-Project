@@ -10,6 +10,7 @@
 // 데미지 피드백 인터페이스 추가
 #include "Combat/DamageFeedbackReceiver.h"
 #include "Engine/DamageEvents.h"
+#include "Gamemode/RGProgressionSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
@@ -44,6 +45,10 @@ void ABaseEnemy::BeginPlay()
 	Super::BeginPlay();
 
 	InitializeData();
+	if (AAIEnemyController* EnemyCont = Cast<AAIEnemyController>(GetController()))
+	{
+		EnemyCont->UpdateSight();
+	}
 	//설정된 최대 체력으로 시작
 	CurrentHP = FMath::Max(0.f, MaxHP);
 
@@ -199,6 +204,16 @@ void ABaseEnemy::Die()
 	//죽은 객체 상태 변화
 	CurrentState = EEnemyStateEnum::Dead;
 
+	if (URGProgressionSubsystem* Progression = GetGameInstance()->GetSubsystem<URGProgressionSubsystem>())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 경험치 지급 요청: %.1f"), *GetName(), Exp);   // 추가
+		Progression->GrantExperience(Exp);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[%s] URGProgressionSubsystem을 찾을 수 없음!"), *GetName());   // 추가
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("Character is Dead!"));
 }
 
@@ -221,7 +236,6 @@ void ABaseEnemy::ShowAttackRangeLine()
 {
 	FVector Center = GetActorLocation() + GetActorForwardVector() * (AttackMaxRange / 2.0f);
 	FRotator Rot = GetActorRotation();
-
 	AttackRangeMesh->SetWorldLocation(Center);
 	AttackRangeMesh->SetWorldRotation(Rot);
 	AttackRangeMesh->SetVisibility(true);
@@ -246,6 +260,23 @@ void ABaseEnemy::MoveAwayFromTarget(float DeltaSeconds)
 	Direction = Direction.GetSafeNormal();
 
 	AddMovementInput(Direction, 1.0f);
+}
+
+void ABaseEnemy::StartAttackCooldown()
+{
+	bCanAttack = false;
+	GetWorldTimerManager().SetTimer(
+		AttackCoolTimer,
+		this,
+		&ABaseEnemy::ResetAttackCooldown,
+		AttackCoolTime,
+		false
+	);
+}
+
+void ABaseEnemy::ResetAttackCooldown()
+{
+	bCanAttack = true;
 }
 
 bool ABaseEnemy::IsTargetInAttackRange() const
@@ -316,4 +347,9 @@ float ABaseEnemy::GetExp()
 void ABaseEnemy::SetState(EEnemyStateEnum State)
 {
 	CurrentState = State;
+}
+
+bool ABaseEnemy::CanAttack()
+{
+	return bCanAttack;
 }

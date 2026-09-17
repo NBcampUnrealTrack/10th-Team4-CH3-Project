@@ -62,3 +62,53 @@ struct FRGGeneralUpgradeRow : public FTableRowBase
 	float EffectAmountPerStack = 0.08f;
 
 };
+
+// ======================= 핵심 강화 ============================
+
+UENUM(BlueprintType)
+enum class ECoreUpgradeEffectType : uint8
+{
+	None,
+	//돌격소총 강화
+	DoubleShot,
+	ChainPulse,
+	ExplosiveRound,
+	//샷건 강화
+	PiercingPellet,
+	FocusedSpread,
+	ShardBurst,
+	//레일건 강화
+	MultiPierce,
+	ChargeBlast,
+	KillDetonation
+};
+
+USTRUCT(BlueprintType)
+struct FRGCoreUpgradeRow : public FTableRowBase
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	FText CategoryText;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	FText NameText;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	FText DescriptionText;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	FText ValueChangeText;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	TSubclassOf<ARGBaseWeapon> RequiredWeaponClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	ECoreUpgradeEffectType EffectType = ECoreUpgradeEffectType::None;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	float DamagePercent = 1.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	int32 MaxTargets = 1;
+};
