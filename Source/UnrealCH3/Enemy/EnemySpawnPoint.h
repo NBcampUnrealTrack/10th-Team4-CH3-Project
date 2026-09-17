@@ -19,19 +19,19 @@ public:
 	// Sets default values for this actor's properties
 	AEnemySpawnPoint();
 
-	//���� �Ǵܿ�
+	//스폰 판단용
 	UFUNCTION(BlueprintPure, Category = "Enemy|Spawn Point")
 	bool CanBeUsedForSpawn() const;
 
-	//���� �Ǵܿ�
+	//복귀 판단용
 	UFUNCTION(BlueprintPure, Category = "Enemy|Spawn Point")
 	bool CanBeUsedForRecovery() const;
 
-	//���� �ȁ�ġ�� �����ϴ� �뵵
+	//땅에 안후“ 스폰하는 용도
 	UFUNCTION(BlueprintPure, Category = "Enemy|Spawn Point")
 	FTransform GetEnemySpawnTransform(TSubclassOf<ABaseEnemy> EnemyClass) const;
 
-	//���� �� �÷��̾���� �ּ� �Ÿ� ���� �˻�
+	//스폰 시 플레이어와의 최소 거리 조건 검사
 	UFUNCTION(BlueprintPure, Category = "Enemy|Spawn Point")
 	bool PassesSpawnDistanceCheck(const AActor* PlayerActor) const;
 
