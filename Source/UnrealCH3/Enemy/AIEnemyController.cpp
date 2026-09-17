@@ -32,19 +32,7 @@ AAIEnemyController::AAIEnemyController()
 void AAIEnemyController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
-	ABaseEnemy* Enemy = Cast<ABaseEnemy>(InPawn);
-	if (Enemy)
-	{
-		Sight->SightRadius = Enemy->GetViewingDistance();
-		Sight->LoseSightRadius = Enemy->GetViewingDistance() + 500.0f;
-		Sight->PeripheralVisionAngleDegrees = Enemy->GetViewingAngle() / 2.0f;
-		Perception->ConfigureSense(*Sight);
-
-		if (Enemy->GetEnemyBehaviorTree())
-		{
-			RunBehaviorTree(Enemy->GetEnemyBehaviorTree());
-		}
-	}
+	
 }
 
 void AAIEnemyController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
@@ -79,4 +67,21 @@ void AAIEnemyController::StopAI()
 	UBehaviorTreeComponent* behaviorTreeComponent = Cast<UBehaviorTreeComponent>(BrainComponent);
 	if (nullptr == behaviorTreeComponent) return;
 	behaviorTreeComponent->StopTree(EBTStopMode::Safe);
+}
+
+void AAIEnemyController::UpdateSight()
+{
+	ABaseEnemy* Enemy = Cast<ABaseEnemy>(GetPawn());
+	if (Enemy)
+	{
+		Sight->SightRadius = Enemy->GetViewingDistance();
+		Sight->LoseSightRadius = Enemy->GetViewingDistance() + 500.0f;
+		Sight->PeripheralVisionAngleDegrees = Enemy->GetViewingAngle() / 2.0f;
+		Perception->ConfigureSense(*Sight);
+
+		if (Enemy->GetEnemyBehaviorTree())
+		{
+			RunBehaviorTree(Enemy->GetEnemyBehaviorTree());
+		}
+	}
 }

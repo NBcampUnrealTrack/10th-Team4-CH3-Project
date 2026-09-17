@@ -21,6 +21,8 @@ public:
 	void OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus);
 	UFUNCTION()
 	void StopAI();
+	UFUNCTION()
+	void UpdateSight();
 
 protected:
 	UAIPerceptionComponent* Perception;
