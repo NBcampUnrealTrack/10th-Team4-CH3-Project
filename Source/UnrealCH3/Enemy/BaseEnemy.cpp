@@ -6,6 +6,7 @@
 #include "Enemy/DataTableStruct/StructEnemyState.h"
 #include "Enemy/DataTableStruct/StructEnemyAttackType.h"
 #include "UObject/ConstructorHelpers.h"
+#include "BehaviorTree/BehaviorTree.h"
 // 데미지 피드백 인터페이스 추가
 #include "Combat/DamageFeedbackReceiver.h"
 #include "Engine/DamageEvents.h"
@@ -276,6 +277,11 @@ void ABaseEnemy::SetTargetActor(AActor* NewTarget)
 AActor* ABaseEnemy::GetTargetActor() const
 {
 	return TargetActor;
+}
+
+UBehaviorTree* ABaseEnemy::GetEnemyBehaviorTree() const
+{
+	return EnemyBehaviorTree;
 }
 
 float ABaseEnemy::GetViewingAngle()
