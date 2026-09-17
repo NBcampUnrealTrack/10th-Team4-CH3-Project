@@ -8,6 +8,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "RGBaseWeapon.h"
+#include "RGRailgun.h" 
 #include "GameMode/RGGameModeBase.h"
 #include "Component/RGWallRunMovement.h"
 #include "Component/RGGrappleComponent.h"
@@ -433,6 +434,16 @@ void ARGCharacter::Dead()
 	bIsDead = true;
 	// TODO 죽었을때 로직
 	ResetAllState();
+
+	//만약 죽는다면 서브시스템의 강화 효과 및 경험치 초기화
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			Progression->ResetRun();
+		}
+	}
+
 	if (ARGGameModeBase* GameMode = Cast<ARGGameModeBase>(UGameplayStatics::GetGameMode(this)))
 	{
 		GameMode->CheckEndCondition(true, false);
@@ -629,7 +640,14 @@ void ARGCharacter::StopFire(const FInputActionValue& value)
 		return;
 	}
 
-	CurrentWeapon->StopFire();
+	if (ARGRailgun* Railgun = Cast<ARGRailgun>(CurrentWeapon))
+	{
+		Railgun->ReleaseChargeAndFire();
+	}
+	else
+	{
+		CurrentWeapon->StopFire();
+	}
 }
 
 void ARGCharacter::StartAim(const FInputActionValue& value)

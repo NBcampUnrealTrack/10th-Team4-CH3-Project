@@ -6,6 +6,8 @@
 #include "RGBaseWeapon.h"
 #include "Kismet/GameplayStatics.h"
 
+
+// =============================경험치 및 일반 강화 ====================
 //GameMode의 BeginPlay에서 초기화
 //이미 만들어진 경험치커브 데이터테이블을 세팅해준다.
 void URGProgressionSubsystem::InitializeExperienceCurve(UDataTable* InExperienceCurveTable)
@@ -16,6 +18,10 @@ void URGProgressionSubsystem::InitializeExperienceCurve(UDataTable* InExperience
 void URGProgressionSubsystem::InitializeGeneralUpgrades(UDataTable* InGeneralUpgradeTable)
 {
 	GeneralUpgradeTable = InGeneralUpgradeTable;
+}
+
+void URGProgressionSubsystem::InitializeCoreUpgrades(UDataTable* InCoreUpgradeTable) {
+	CoreUpgradeTable = InCoreUpgradeTable;
 }
 
 //현재 레벨이 몇 레벨인지 데이터테이블에서 찾아오는 함수.
@@ -109,7 +115,7 @@ TArray<FRGUpgradeOption> URGProgressionSubsystem::GenerateUpgradeOptions(int32 C
 	static const FString ContextString(TEXT("UpgradeCandidateGen"));
 	//강화 테이블 가져와서 행 이름 가져옴
 	for (const FName& RowName : GeneralUpgradeTable->GetRowNames())
-	{	
+	{
 		//이름이 일치하는 행 불러와서 예외사항이 없으면 ValidRowNames에 해당하는 행 이름 넣음
 		const FRGGeneralUpgradeRow* Row = GeneralUpgradeTable->FindRow<FRGGeneralUpgradeRow>(RowName, ContextString);
 		if (!Row)
@@ -244,6 +250,9 @@ void URGProgressionSubsystem::ResetRun()
 	bIsPresentingUpgradeChoice = false;
 	UpgradeStacks.Empty();
 
+	ActiveCoreUpgrades.Empty();   
+	bIsPresentingCoreUpgradeChoice = false;
+
 	const FRGEXPLevelRow* Row = FindCurrentLevelRow();
 	const float RequiredExperience = Row ? Row->RequiredExperience : 0.f;
 	OnExperienceChanged.Broadcast(CurrentExperience, RequiredExperience, CurrentLevel);
@@ -264,4 +273,148 @@ ARGBaseWeapon* URGProgressionSubsystem::GetCurrentEquippedWeapon() const
 	}
 
 	return PlayerCharacter->GetCurrentWeapon();
+}
+
+// =================================================================================================
+
+// ==========================핵심 강화 함수 ==============================================
+
+// ActiveCoreUpgrades 는 TArray<FName> 형.
+bool URGProgressionSubsystem::HasCoreUpgrade(FName UpgradeId) const
+{
+	return ActiveCoreUpgrades.Contains(UpgradeId);
+}
+// 활성화된 업그레이드가 MaxCoreUpgradeCount(2개 예정) 보다 작으면 아직 업글 가능.
+bool URGProgressionSubsystem::CanAcquireMoreCoreUpgrades() const
+{
+	return ActiveCoreUpgrades.Num() < MaxCoreUpgradeCount;
+}
+
+TArray<FRGUpgradeOption> URGProgressionSubsystem::GenerateCoreUpgradeOptions(int32 Count) const {
+	TArray<FRGUpgradeOption> Result;
+
+	if (!CoreUpgradeTable)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[CoreUpgrade] CoreUpgradeTable이 nullptr! BP_RGGameModeBase 연결 확인 필요"));
+		return Result;
+	}
+	if (!CanAcquireMoreCoreUpgrades())
+	{
+		return Result;
+	}
+
+	ARGBaseWeapon* EquippedWeapon = GetCurrentEquippedWeapon();
+	UE_LOG(LogTemp, Warning, TEXT("[CoreUpgrade] 현재 장착 무기: %s"), EquippedWeapon ? *EquippedWeapon->GetClass()->GetName() : TEXT("nullptr"));
+
+	TArray<FName> ValidRowNames;
+	static const FString ContextString(TEXT("CoreUpgradeCandidateGen"));
+
+	UE_LOG(LogTemp, Warning, TEXT("[CoreUpgrade] 데이터테이블 총 행 개수: %d"), CoreUpgradeTable->GetRowNames().Num());
+
+	for (const FName& RowName : CoreUpgradeTable->GetRowNames()) {
+		if (ActiveCoreUpgrades.Contains(RowName)) {
+			continue;
+		}
+		const FRGCoreUpgradeRow* Row = CoreUpgradeTable->FindRow<FRGCoreUpgradeRow>(RowName, ContextString);
+		if (!Row) { continue; }
+
+		if (Row->RequiredWeaponClass) {
+			UE_LOG(LogTemp, Warning, TEXT("[CoreUpgrade] %s의 필요무기: %s"), *RowName.ToString(), *Row->RequiredWeaponClass->GetName());
+			if (!EquippedWeapon || !EquippedWeapon->IsA(Row->RequiredWeaponClass)) {
+				UE_LOG(LogTemp, Warning, TEXT("[CoreUpgrade] %s 필터에서 제외됨"), *RowName.ToString());
+				continue;
+			}
+		}
+		ValidRowNames.Add(RowName);
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[CoreUpgrade] 최종 유효 후보 개수: %d"), ValidRowNames.Num());
+	//섞어
+	for (int32 i = ValidRowNames.Num() - 1; i > 0; --i)
+	{
+		const int32 j = FMath::RandRange(0, i);
+		ValidRowNames.Swap(i, j);
+	}
+
+	const int32 PickCount = FMath::Min(Count, ValidRowNames.Num());
+	for (int32 i = 0; i < PickCount; ++i)
+	{
+		const FRGCoreUpgradeRow* Row = CoreUpgradeTable->FindRow<FRGCoreUpgradeRow>(ValidRowNames[i], ContextString);
+		if (!Row) continue;
+		//실제 카드 데이터로 변환
+		FRGUpgradeOption Option;
+		Option.UpgradeId = ValidRowNames[i];
+		Option.CategoryText = Row->CategoryText;
+		Option.NameText = Row->NameText;
+		Option.DescriptionText = Row->DescriptionText;
+		Option.ValueChangeText = Row->ValueChangeText;
+		Result.Add(Option);
+	}
+	return Result;
+}
+
+void URGProgressionSubsystem::PresentCoreUpgradeChoice()
+{
+	if (!CanAcquireMoreCoreUpgrades())
+	{
+		return;   // 이미 2개 다 채웠으면 맵 넘어가도 카드 안 뜸
+	}
+
+	TArray<FRGUpgradeOption> Options = GenerateCoreUpgradeOptions(3);
+	if (Options.Num() == 0)
+	{
+		return;   // 이 무기로 고를 수 있는 핵심 강화가 더 없음
+	}
+
+	LastPresentedCoreOptions = Options;
+	bIsPresentingCoreUpgradeChoice = true;
+	OnCoreUpgradeReady.Broadcast(Options);   // 일반 강화와 다른 델리게이트 -> UI에서 다르게 렌더링
+}
+
+void URGProgressionSubsystem::ApplyCoreUpgrade(FName UpgradeId)
+{
+	if (!bIsPresentingCoreUpgradeChoice || !CanAcquireMoreCoreUpgrades())
+	{
+		return;
+	}
+	if (ActiveCoreUpgrades.Contains(UpgradeId))
+	{
+		return;   // 방어 코드: 중복 획득 방지
+	}
+
+	ActiveCoreUpgrades.Add(UpgradeId);
+	bIsPresentingCoreUpgradeChoice = false;
+
+	UE_LOG(LogTemp, Warning, TEXT("[CoreUpgrade] %s 획득 (%d/%d)"), *UpgradeId.ToString(), ActiveCoreUpgrades.Num(), MaxCoreUpgradeCount);
+}
+
+const FRGCoreUpgradeRow* URGProgressionSubsystem::FindCoreUpgradeRow(FName UpgradeId) const
+{
+	if (!CoreUpgradeTable)
+	{
+		return nullptr;
+	}
+	return CoreUpgradeTable->FindRow<FRGCoreUpgradeRow>(UpgradeId, TEXT("CoreUpgradeEffectLookup"));
+}
+
+void URGProgressionSubsystem::DebugForceCoreUpgradeChoice()
+{
+	UE_LOG(LogTemp, Warning, TEXT("DebugForceCoreUpgradeChoice 호출됨"));
+	PresentCoreUpgradeChoice();
+
+	if (LastPresentedCoreOptions.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CoreUpgrade] 후보 없음 (이미 %d/%d 보유 중이거나 이 무기로 고를 강화가 없음)"), ActiveCoreUpgrades.Num(), MaxCoreUpgradeCount);
+		return;
+	}
+
+	for (const FRGUpgradeOption& Option : LastPresentedCoreOptions)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CoreUpgrade 후보] %s"), *Option.UpgradeId.ToString());
+	}
+}
+
+void URGProgressionSubsystem::DebugApplyCoreUpgradeByName(const FString& UpgradeName)
+{
+	ApplyCoreUpgrade(FName(*UpgradeName));
 }

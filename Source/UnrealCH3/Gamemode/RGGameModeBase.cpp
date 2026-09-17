@@ -87,6 +87,7 @@ void ARGGameModeBase::BeginPlay()
 		{
 			Progression->InitializeExperienceCurve(ExperienceCurveTable);
 			Progression->InitializeGeneralUpgrades(GeneralUpgradeTable);
+			Progression->InitializeCoreUpgrades(CoreUpgradeTable);
 		}
 	}
 
@@ -638,7 +639,14 @@ void ARGGameModeBase::ExecuteStageClear()
 	ChangeRunState(
 		ERunState::RestHub
 	);
-
+	//PresentCoreUpgradeChoice 이 핵심 강화 띄워주는 함수
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			Progression->PresentCoreUpgradeChoice();
+		}
+	}
 
 	UE_LOG(
 		LogTemp,

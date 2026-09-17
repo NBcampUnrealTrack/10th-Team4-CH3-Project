@@ -6,7 +6,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
+#include "Gamemode/RGProgressionSubsystem.h"
 #include "DrawDebugHelpers.h"
+#include "Engine/OverlapResult.h"
 
 ARGBaseWeapon::ARGBaseWeapon()
 {
@@ -213,7 +215,7 @@ void ARGBaseWeapon::Fire()
 	FireHitscan(StartLocation, SpreadDirection, -1.f, nullptr);
 }
 
-bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors , FHitResult* OutHit)
+bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors , FHitResult* OutHit , bool bTriggerCoreEffects)
 {	
 	//광선의 끝 지점을 계산 
 	const FVector EndLocation = StartLocation + FireDirection * TraceRange;
@@ -254,13 +256,18 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 
 	const float BaseDamage = (DamageOverride >= 0.f) ? DamageOverride : WeaponStats.BaseDamage;
 
+	if (AlreadyHitActors)
+	{
+		AlreadyHitActors->Add(Hit.GetActor());
+	}
+
 	// "직격"의 기준은 무기 종류가 아니라 관통 순서임.
 	// AlreadyHitActors가 없으면(nullptr) 애초에 관통을 아예 안 쓰는 무기 -> 항상 직격.
 	// AlreadyHitActors가 있으면(관통 무기) -> 이 트레이스에서 "처음" 맞은 대상일 때만 직격으로 인정.
 	//   (Add는 이 아래 if문에서 이미 실행됐으므로, 여기서는 "방금 추가되기 전엔 비어있었는지"를 따로 셈)
-	const bool bIsDirectHit = (AlreadyHitActors == nullptr) || (AlreadyHitActors->Num() == 1);
+	const bool bIsDirectHit = bTriggerCoreEffects && ((AlreadyHitActors == nullptr) || (AlreadyHitActors->Num() == 1));
 
-	ApplyHitDamage(Hit, BaseDamage, StartLocation, bIsDirectHit);
+	ApplyHitDamage(Hit, BaseDamage, StartLocation, bIsDirectHit , bTriggerCoreEffects);
 	if (OutHit) {
 		*OutHit = Hit;
 	}
@@ -444,6 +451,15 @@ void ARGBaseWeapon::SetExternalActionsAllowed(bool bAllowed)
 //강화 데미지 계산 
 float ARGBaseWeapon::GetUpgradeDamageMultiplier() const
 {
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks = Progression->GetUpgradeStackCount(FName(TEXT("DamageUp")));
+			const float EffectAmount = Progression->GetUpgradeEffectAmount(FName(TEXT("DamageUp")));
+			return 1.0f + (EffectAmount * Stacks);
+		}
+	}
 	return 1.0f;
 }
 //거리에 따른 데미지 감쇠
@@ -466,37 +482,29 @@ float ARGBaseWeapon::CalculateDistanceFalloffMultiplier(float Distance) const
 	return FMath::Lerp(1.f, WeaponStats.MinFalloffDamageMultiplier, Alpha);
 }
 
-void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart , bool bIsDirectHit)
+void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart, bool bIsDirectHit , bool bTriggerCoreEffects)
 {
 	AActor* HitActor = Hit.GetActor();
 	if (!HitActor)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[ApplyHitDamage] 데미지 적용 안됨"));
 		return;
 	}
 
-
-	//최종 데미지 계산
-	float FinalDamage = BaseDamage;
-	//강화 데미지 계산
-	FinalDamage *= GetUpgradeDamageMultiplier();
-	//거리별 감쇠 데미지 계산
+	const float UpgradeMult = GetUpgradeDamageMultiplier();
 	const float Distance = FVector::Dist(ShotStart, Hit.ImpactPoint);
-	FinalDamage *= CalculateDistanceFalloffMultiplier(Distance);
-	
+	const float FalloffMult = CalculateDistanceFalloffMultiplier(Distance);
 	const bool bIsWeakSpot = Hit.Component.IsValid() && Hit.Component->ComponentHasTag(WeakSpotTag);
-	if (bIsWeakSpot)
-	{
-		FinalDamage *= WeakSpotDamageMultiplier;
-	}
-	// ===== 데이터코어 에서 받아야함 =====
-	// 직격 히트스캔이면 URGDirectHitDamageType, 관통이면 그냥 기본 UDamageType으로 전달.
-	// 데이터 코어 쪽은 TakeDamage에서 이 타입을 확인해 관통/도탄/폭발/전이 피해를 걸러낼 수 있음.
+	const float WeakSpotMult = bIsWeakSpot ? WeakSpotDamageMultiplier : 1.0f;
+
+	float FinalDamage = BaseDamage * UpgradeMult * FalloffMult * WeakSpotMult;
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("[Weapon Damage] Target: %s | Base: %.1f | UpgradeMult: %.2f | Falloff: %.2f | WeakSpot: %.2f | Final: %.1f"),
+		*HitActor->GetName(), BaseDamage, UpgradeMult, FalloffMult, WeakSpotMult, FinalDamage);
+
 	TSubclassOf<UDamageType> DamageTypeClass = bIsDirectHit ? URGDirectHitDamageType::StaticClass() : UDamageType::StaticClass();
 
-	// ===== 적 AI 에서 받아야함 =====
-	// 실제 전달은 언리얼 기본 데미지 시스템 사용.
-	//내부적으로 HitActor->TakeDamage()를 대신 호출
-	//그러므로 적을 담당하는 분은 적 코드에 언리얼에서 제공하는 TakeDamage() 함수 시그니쳐에 따라서 TakeDamage() 코드를 만들어 놓으면 됨
 	UGameplayStatics::ApplyPointDamage(
 		HitActor,
 		FinalDamage,
@@ -506,9 +514,14 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 		this,
 		DamageTypeClass
 	);
-	// ===== UI , 게임모드에서 받아야함 =====
-	//명중 처치 피드백 용 델리게이트 방송
+
 	OnWeaponHit.Broadcast(HitActor, FinalDamage, bIsWeakSpot, Hit.ImpactPoint);
+
+	//bTriggerCoreEffects가 false면 강화 후속 효과 분기로 들어가지 않음 (도탄된 공격이 또 도탄되지 않게 막음)
+	if (bTriggerCoreEffects)
+	{
+		TryTriggerCoreUpgradeEffects(Hit, FinalDamage, ShotStart);
+	}
 }
 
 float ARGBaseWeapon::GetFireInterval() const
@@ -608,4 +621,60 @@ int32 ARGBaseWeapon::GetCapacityForStack(int32 Stacks) const
 	}
 	float Capacity = WeaponStats.MagazineCapacity * (1.0f + EffectAmount * Stacks);
 	return FMath::Max(1, FMath::RoundToInt(Capacity));
+}
+
+// ======================== 핵심 강화 ============================================================
+
+void ARGBaseWeapon::TryTriggerCoreUpgradeEffects(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart)
+{
+	UGameInstance* GI = GetGameInstance();
+	URGProgressionSubsystem* Progression = GI ? GI->GetSubsystem<URGProgressionSubsystem>() : nullptr;
+	if (!Progression)
+	{
+		return;
+	}
+
+	// 보유한 핵심 강화를 하나씩 확인하면서 해당하는 효과만 발동
+	// (현재 무기와 무관한 핵심 강화는 애초에 GenerateCoreUpgradeOptions에서
+	//  무기 필터로 걸러졌으므로, 여기서는 "가지고 있냐"만 체크하면 됨)
+	if (Progression->HasCoreUpgrade(FName(TEXT("DoubleShot"))))
+	{
+		TriggerDoubleShot(Hit, DealtDamage, ShotStart);
+	}
+}
+
+void ARGBaseWeapon::TriggerDoubleShot(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart)
+{
+	UGameInstance* GI = GetGameInstance();
+	URGProgressionSubsystem* Progression = GI ? GI->GetSubsystem<URGProgressionSubsystem>() : nullptr;
+	if (!Progression)
+	{
+		return;
+	}
+
+	const FRGCoreUpgradeRow* Row = Progression->FindCoreUpgradeRow(FName(TEXT("DoubleShot")));
+	if (!Row || !Hit.GetActor())
+	{
+		return;
+	}
+
+	// 더블샷: 같은 대상에게 직접 한 번 더 데미지 적용 (트레이스 재발사 없이, 위치도 이미 아는 상태)
+	const bool bIsDirectHit = false;   // 후속 데미지이므로 코어는 이 데미지를 안 받음
+	TSubclassOf<UDamageType> DamageTypeClass = UDamageType::StaticClass();
+
+	const float SecondShotDamage = DealtDamage * Row->DamagePercent;
+
+	UGameplayStatics::ApplyPointDamage(
+		Hit.GetActor(),
+		SecondShotDamage,
+		(Hit.ImpactPoint - ShotStart).GetSafeNormal(),
+		Hit,
+		OwningCharacter ? OwningCharacter->GetController() : nullptr,
+		this,
+		DamageTypeClass
+	);
+
+	UE_LOG(LogTemp, Warning, TEXT("[DoubleShot] %s 더블샷 추가 데미지: %.1f"), *Hit.GetActor()->GetName(), SecondShotDamage);
+
+	OnWeaponHit.Broadcast(Hit.GetActor(), SecondShotDamage, false, Hit.ImpactPoint);
 }
