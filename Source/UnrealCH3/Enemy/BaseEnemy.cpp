@@ -247,6 +247,27 @@ void ABaseEnemy::Die()
 
 	OnEnemyDeath.Broadcast(this);
 
+	// [추가] 사망한 적은 즉시 화면/충돌에서 제거하고,
+	// 같은 프레임의 데미지 피드백(히트마커/킬마커/데미지 숫자)이 끝난 뒤
+	// 안전하게 실제 Actor가 파괴되도록 짧은 LifeSpan을 건다.
+	// 여기서 Destroy()를 즉시 호출하지 않는 이유는 TakeDamage()가 Die() 이후에도
+	// ReceiveDamageFeedback(..., this, ...)를 호출하기 때문이다.
+	SetActorEnableCollision(false);
+	SetActorHiddenInGame(true);
+
+	if (AAIController* EnemyController = Cast<AAIController>(GetController()))
+	{
+		EnemyController->StopMovement();
+	}
+
+	if (GetCharacterMovement())
+	{
+		GetCharacterMovement()->StopMovementImmediately();
+		GetCharacterMovement()->DisableMovement();
+	}
+
+	SetLifeSpan(0.1f);
+
 	UE_LOG(LogTemp, Log, TEXT("Character is Dead!"));
 }
 

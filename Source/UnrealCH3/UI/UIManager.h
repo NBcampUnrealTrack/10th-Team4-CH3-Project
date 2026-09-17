@@ -13,15 +13,16 @@ class UUserWidget;
 class UWeaponInfoWidget;
 class ARGBaseWeapon;
 class UCrosshairWidget;
+class ARGCharacter;
 
 /**
- * 
+ *
  */
 UCLASS()
 class UNREALCH3_API AUIManager : public AHUD
 {
 	GENERATED_BODY()
-	
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -72,6 +73,20 @@ protected:
 	// Controll 에서 확정된 피해 정보를 BP로 전달
 	void HandleDamageNumberRequested(float AppliedDamage, AActor* TargetActor, FVector WorldLocation);
 
+	// [추가] 플레이어 캐릭터의 무기 장착 이벤트에 연결한다.
+	// BeginPlay 순서와 관계없이, 이미 무기가 있으면 즉시 바인딩하고 아직 없으면 장착 이벤트를 기다린다.
+	void TryBindPlayerWeaponSource();
+
+	// [추가] EndPlay 시 Character Delegate 연결을 정리한다.
+	void UnbindPlayerWeaponSource();
+
+	// [추가] Character가 새 무기를 장착했을 때 HUDController에 실제 무기를 연결한다.
+	UFUNCTION()
+	void HandlePlayerWeaponEquipped(ARGBaseWeapon* NewWeapon);
+
+	// [추가] 현재 구독 중인 플레이어 캐릭터를 약한 참조로 보관한다.
+	TWeakObjectPtr<ARGCharacter> BoundPlayerCharacter;
+
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI|Damage")
 	void OnDamageNumberDisplayRequested(float AppliedDamage, AActor* TargetActor, FVector WorldLocation);
 
@@ -93,10 +108,10 @@ public:
 
 	UFUNCTION(Exec)
 	void TestLowHealthEffect(float CurrentHealth, float MaxHealth);
-	
+
 	UFUNCTION(Exec)
 	void TestOpenSelection();
-	
+
 	UFUNCTION(Exec)
 	void TestCloseSelection();
 
