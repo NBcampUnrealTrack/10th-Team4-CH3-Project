@@ -9,37 +9,38 @@
 class UUserWidget;
 class UDataTable;
 
+
 // =========================================================
-// ���� ���� ����
+// Run State
 // =========================================================
 
 UENUM(BlueprintType)
 enum class ERunState : uint8
 {
-	Init        UMETA(DisplayName = "�ʱ�ȭ"),
-	Combat      UMETA(DisplayName = "���� ��"),
-	Pause       UMETA(DisplayName = "�Ͻ�����"),
-	Upgrade     UMETA(DisplayName = "��ȭ ��"),
-	RestHub     UMETA(DisplayName = "�޽�ó"),
-	Result      UMETA(DisplayName = "��� ȭ��"),
-	Loading     UMETA(DisplayName = "�ε� ��")
+	Init        UMETA(DisplayName = "Initialize"),
+	Combat      UMETA(DisplayName = "Combat"),
+	Pause       UMETA(DisplayName = "Pause"),
+	Upgrade     UMETA(DisplayName = "Upgrade"),
+	RestHub     UMETA(DisplayName = "Rest Hub"),
+	Result      UMETA(DisplayName = "Result"),
+	Loading     UMETA(DisplayName = "Loading")
 };
 
 
 // =========================================================
-// ���� ���� ����
+// Death Reason
 // =========================================================
 
 UENUM(BlueprintType)
 enum class EDeathReason : uint8
 {
-	Killed      UMETA(DisplayName = "���"),
-	TimeOut     UMETA(DisplayName = "�ð� �ʰ�")
+	Killed      UMETA(DisplayName = "Killed"),
+	TimeOut     UMETA(DisplayName = "Time Out")
 };
 
 
 // =========================================================
-// �Է� ���
+// Input Mode
 // =========================================================
 
 UENUM(BlueprintType)
@@ -52,23 +53,71 @@ enum class ERGInputMode : uint8
 
 
 // =========================================================
+// GameMode Event Delegates
+// =========================================================
+
+/**
+ * Run State가 변경되었을 때 발생
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+	FOnRunStateChanged,
+	ERunState, OldState,
+	ERunState, NewState
+);
+
+
+/**
+ * 남은 시간이 변경되었을 때 발생
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FOnRemainingTimeChanged,
+	float, NewRemainingTime
+);
+
+
+/**
+ * Kill Count가 변경되었을 때 발생
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+	FOnKillCountChanged,
+	int32, CurrentKills,
+	int32, TargetKills
+);
+
+
+/**
+ * Stage Clear가 발생했을 때
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(
+	FOnStageCleared
+);
+
+
+/**
+ * Game Over가 발생했을 때
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FOnGameOver,
+	EDeathReason, Reason
+);
+
+
+// =========================================================
 // GameMode
 // =========================================================
 
 /**
- * Run & Gun ���� GameMode
+ * Run & Gun 기본 GameMode
  *
- * ��� ���
+ * 담당:
+ * - Run State
+ * - Run Timer
+ * - Kill Count
+ * - Stage Clear / Game Over
+ * - 기본 UI
+ * - 기본 Input Mode
  *
- * 1. ���� ���� ����
- * 2. ���� �ð� ����
- * 3. Kill Count ����
- * 4. Stage Clear / Game Over
- * 5. �⺻ UI ����
- * 6. �⺻ Input Mode ����
- *
- * ���� Pawn / Controller / HUD Class��
- * �� Ŭ������ ����� Blueprint GameMode���� �����Ѵ�.
+ * 다른 시스템과의 연결은 Delegate를 통해 느슨하게 유지한다.
  */
 UCLASS()
 class UNREALCH3_API ARGGameModeBase : public AGameModeBase
@@ -77,7 +126,7 @@ class UNREALCH3_API ARGGameModeBase : public AGameModeBase
 
 
 	// =========================================================
-	// Unreal �⺻
+	// Unreal 기본
 	// =========================================================
 
 public:
@@ -95,19 +144,77 @@ protected:
 
 
 	// =========================================================
-	// GameMode Type ����
+	// GameMode Events
 	// =========================================================
 
 public:
 
 	/**
-	 * �� GameMode���� ���� ���� �ý����� �������� ����.
+	 * Run State 변경 알림
+	 *
+	 * Blueprint에서 Bind / Assign 가능
+	 */
+	UPROPERTY(
+		BlueprintAssignable,
+		Category = "Run|Event"
+	)
+	FOnRunStateChanged OnRunStateChanged;
+
+
+	/**
+	 * 남은 시간 변경 알림
+	 */
+	UPROPERTY(
+		BlueprintAssignable,
+		Category = "Run|Event"
+	)
+	FOnRemainingTimeChanged OnRemainingTimeChanged;
+
+
+	/**
+	 * Kill Count 변경 알림
+	 */
+	UPROPERTY(
+		BlueprintAssignable,
+		Category = "Run|Event"
+	)
+	FOnKillCountChanged OnKillCountChanged;
+
+
+	/**
+	 * Stage Clear 알림
+	 */
+	UPROPERTY(
+		BlueprintAssignable,
+		Category = "Run|Event"
+	)
+	FOnStageCleared OnStageCleared;
+
+
+	/**
+	 * Game Over 알림
+	 */
+	UPROPERTY(
+		BlueprintAssignable,
+		Category = "Run|Event"
+	)
+	FOnGameOver OnGameOver;
+
+
+	// =========================================================
+	// GameMode Type
+	// =========================================================
+
+public:
+
+	/**
+	 * 이 GameMode에서 Run System을 사용할지 여부
 	 *
 	 * Combat GameMode:
-	 * True
+	 * true
 	 *
 	 * MainMenu GameMode:
-	 * False
+	 * false
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -124,7 +231,7 @@ public:
 public:
 
 	/**
-	 * ���� ���� ����
+	 * 현재 Run State
 	 */
 	UPROPERTY(
 		VisibleAnywhere,
@@ -135,7 +242,7 @@ public:
 
 
 	/**
-	 * ���� ���� ����
+	 * Run State 변경
 	 */
 	UFUNCTION(
 		BlueprintCallable,
@@ -147,7 +254,7 @@ public:
 
 
 	/**
-	 * ���� ���� Getter
+	 * 현재 Run State Getter
 	 */
 	UFUNCTION(
 		BlueprintPure,
@@ -166,7 +273,7 @@ public:
 protected:
 
 	/**
-	 * ���� �ð� Timer Handle
+	 * Run Timer Handle
 	 */
 	FTimerHandle RunTimerHandle;
 
@@ -178,9 +285,9 @@ protected:
 public:
 
 	/**
-	 * ���� ���� �ð�
+	 * 현재 남은 시간
 	 *
-	 * BP_RGGameMode Class Defaults���� ���� ����
+	 * BP_RGGameModeBase Class Defaults에서 설정 가능
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -208,7 +315,7 @@ public:
 public:
 
 	/**
-	 * ���� óġ ��
+	 * 현재 처치 수
 	 */
 	UPROPERTY(
 		VisibleAnywhere,
@@ -219,7 +326,7 @@ public:
 
 
 	/**
-	 * Stage Clear�� �ʿ��� óġ ��
+	 * Stage Clear에 필요한 처치 수
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -230,6 +337,11 @@ public:
 	int32 TargetKillsToClear;
 
 
+	/**
+	 * Enemy Death가 GameMode로 들어오는 진입점
+	 *
+	 * 기존 Blueprint 호환성을 위해 이름 유지
+	 */
 	UFUNCTION(
 		BlueprintCallable,
 		Category = "Run|Kill"
@@ -237,6 +349,9 @@ public:
 	void OnEnemyDied();
 
 
+	/**
+	 * 현재 Stage Clear 조건 확인
+	 */
 	UFUNCTION(
 		BlueprintPure,
 		Category = "Run|Logic"
@@ -265,11 +380,14 @@ public:
 
 
 	// =========================================================
-	// ���� ����
+	// End Logic
 	// =========================================================
 
 public:
 
+	/**
+	 * Player Death / TimeOut / Stage Clear 조건 확인
+	 */
 	UFUNCTION(
 		BlueprintCallable,
 		Category = "Run|Logic"
@@ -315,14 +433,8 @@ public:
 public:
 
 	/**
-	 * BeginPlay �� GameMode�� ����
-	 * Widget�� �������� ����
-	 *
-	 * MainMenu:
-	 * True
-	 *
-	 * Combat HUD Manager ���:
-	 * False
+	 * BeginPlay 시 GameMode가 직접
+	 * 기본 Widget을 생성할지 여부
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -333,10 +445,7 @@ public:
 
 
 	/**
-	 * GameMode�� ���� ������ Widget
-	 *
-	 * ��:
-	 * WBP_MainMenu
+	 * GameMode가 직접 생성할 기본 Widget
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -347,7 +456,7 @@ public:
 
 
 	/**
-	 * ���� ������ Widget
+	 * 현재 생성된 기본 Widget
 	 */
 	UPROPERTY(
 		VisibleAnywhere,
@@ -358,7 +467,7 @@ public:
 
 
 	/**
-	 * UI ZOrder
+	 * 기본 UI ZOrder
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -369,7 +478,7 @@ public:
 
 
 	/**
-	 * �⺻ UI ����
+	 * 기본 UI 생성
 	 */
 	UFUNCTION(
 		BlueprintCallable,
@@ -379,7 +488,7 @@ public:
 
 
 	/**
-	 * �⺻ UI ����
+	 * 기본 UI 제거
 	 */
 	UFUNCTION(
 		BlueprintCallable,
@@ -389,7 +498,7 @@ public:
 
 
 	/**
-	 * ���� ������ �⺻ UI
+	 * 현재 생성된 기본 UI Getter
 	 */
 	UFUNCTION(
 		BlueprintPure,
@@ -408,7 +517,7 @@ public:
 public:
 
 	/**
-	 * BeginPlay���� �ڵ� Input Mode ���� ����
+	 * BeginPlay에서 자동 Input Mode 적용 여부
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -430,7 +539,7 @@ public:
 
 
 	/**
-	 * ���콺 Ŀ�� ǥ��
+	 * 마우스 커서 표시 여부
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -441,7 +550,7 @@ public:
 
 
 	/**
-	 * Input Mode ���� ����
+	 * Input Mode 설정 적용
 	 */
 	UFUNCTION(
 		BlueprintCallable,
@@ -449,21 +558,42 @@ public:
 	)
 	void ApplyDefaultInputSettings();
 
-	public:
 
-		/**
-		 * 레벨별 필요 경험치 데이터테이블
-		 * URGProgressionSubsystem::InitializeExperienceCurve로 전달됨
-		 */
-		UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Progression")
-		TObjectPtr<UDataTable> ExperienceCurveTable;
-		/**
-		 * 강화 후보 데이터테이블
-		 * URGProgressionSubsystem::InitializeGeneralUpgrades로 전달됨
-		 */
-		UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "Progression")
-		TObjectPtr<UDataTable> GeneralUpgradeTable;
+	// =========================================================
+	// Progression
+	// =========================================================
 
-		UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Progression")
-		TObjectPtr<UDataTable> CoreUpgradeTable;
+public:
+
+	/**
+	 * 레벨별 필요 경험치 DataTable
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Progression"
+	)
+	TObjectPtr<UDataTable> ExperienceCurveTable;
+
+
+	/**
+	 * 일반 강화 DataTable
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Progression"
+	)
+	TObjectPtr<UDataTable> GeneralUpgradeTable;
+
+
+	/**
+	 * 핵심 강화 DataTable
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Progression"
+	)
+	TObjectPtr<UDataTable> CoreUpgradeTable;
 };

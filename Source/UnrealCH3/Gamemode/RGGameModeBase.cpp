@@ -1,7 +1,9 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RGGameModeBase.h"
+
 #include "Gamemode/RGProgressionSubsystem.h"
+
 #include "Blueprint/UserWidget.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -15,7 +17,7 @@
 ARGGameModeBase::ARGGameModeBase()
 {
 	// -----------------------------------------------------
-	// Tick ��� �� ��
+	// Tick
 	// -----------------------------------------------------
 
 	PrimaryActorTick.bCanEverTick = false;
@@ -79,21 +81,35 @@ void ARGGameModeBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 시작할 때 URGProgressionSubsystem의 Progression 호출
-	// 만들어둔 경험치 테이블에 따라 경험치 커브 셋팅
+
+	// -----------------------------------------------------
+	// Progression 초기화
+	// -----------------------------------------------------
+
 	if (UGameInstance* GI = GetGameInstance())
 	{
-		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		if (
+			URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>()
+			)
 		{
-			Progression->InitializeExperienceCurve(ExperienceCurveTable);
-			Progression->InitializeGeneralUpgrades(GeneralUpgradeTable);
-			Progression->InitializeCoreUpgrades(CoreUpgradeTable);
+			Progression->InitializeExperienceCurve(
+				ExperienceCurveTable
+			);
+
+			Progression->InitializeGeneralUpgrades(
+				GeneralUpgradeTable
+			);
+
+			Progression->InitializeCoreUpgrades(
+				CoreUpgradeTable
+			);
 		}
 	}
 
 
 	// -----------------------------------------------------
-	// 1. �ý��� ����
+	// 1. System Validation
 	// -----------------------------------------------------
 
 	if (!VerifySystems())
@@ -122,7 +138,7 @@ void ARGGameModeBase::BeginPlay()
 
 
 	// -----------------------------------------------------
-	// 2. �⺻ UI ����
+	// 2. Default UI
 	// -----------------------------------------------------
 
 	if (bCreateDefaultUI)
@@ -132,10 +148,7 @@ void ARGGameModeBase::BeginPlay()
 
 
 	// -----------------------------------------------------
-	// 3. �⺻ �Է� ����
-	//
-	// UIOnly�� ��� Widget�� ���� �����ؾ�
-	// SetWidgetToFocus ��� ����
+	// 3. Default Input
 	// -----------------------------------------------------
 
 	if (bApplyDefaultInputMode)
@@ -145,10 +158,7 @@ void ARGGameModeBase::BeginPlay()
 
 
 	// -----------------------------------------------------
-	// 4. ���� Run �ý��� ����
-	//
-	// MainMenu GameMode��
-	// bStartRunSystem = false �� ����
+	// 4. Run System Start
 	// -----------------------------------------------------
 
 	if (bStartRunSystem)
@@ -213,7 +223,7 @@ void ARGGameModeBase::ChangeRunState(
 
 
 	// -----------------------------------------------------
-	// ���� ���¸� ����
+	// 동일 상태면 변경하지 않음
 	// -----------------------------------------------------
 
 	if (CurrentState == NewState)
@@ -223,8 +233,8 @@ void ARGGameModeBase::ChangeRunState(
 
 
 	// -----------------------------------------------------
-	// Result / Loading ���¿�����
-	// �Ϲ� ���� ���� ����
+	// Result / Loading 상태에서는
+	// 일반 상태 변경 차단
 	// -----------------------------------------------------
 
 	if (
@@ -252,7 +262,15 @@ void ARGGameModeBase::ChangeRunState(
 	}
 
 
-	CurrentState = NewState;
+	// -----------------------------------------------------
+	// State 변경
+	// -----------------------------------------------------
+
+	const ERunState OldState =
+		CurrentState;
+
+	CurrentState =
+		NewState;
 
 
 	UE_LOG(
@@ -260,11 +278,24 @@ void ARGGameModeBase::ChangeRunState(
 		Log,
 		TEXT(
 			"[RGGameMode] "
-			"State changed: %d"
+			"State changed: %d -> %d"
 		),
+		static_cast<int32>(
+			OldState
+			),
 		static_cast<int32>(
 			CurrentState
 			)
+	);
+
+
+	// -----------------------------------------------------
+	// 외부 시스템에 State 변경 알림
+	// -----------------------------------------------------
+
+	OnRunStateChanged.Broadcast(
+		OldState,
+		CurrentState
 	);
 
 
@@ -273,7 +304,7 @@ void ARGGameModeBase::ChangeRunState(
 
 
 	// -----------------------------------------------------
-	// Combat
+	// Combat 진입
 	// -----------------------------------------------------
 
 	if (
@@ -309,7 +340,7 @@ void ARGGameModeBase::ChangeRunState(
 
 
 	// -----------------------------------------------------
-	// Combat �̿�
+	// Combat 이외 상태
 	// -----------------------------------------------------
 
 	else
@@ -355,14 +386,33 @@ void ARGGameModeBase::UpdateRunTimer()
 	}
 
 
+	// -----------------------------------------------------
+	// 남은 시간 감소
+	// -----------------------------------------------------
+
 	RemainingTime -= 1.0f;
 
+	RemainingTime = FMath::Max(
+		RemainingTime,
+		0.0f
+	);
+
+
+	// -----------------------------------------------------
+	// 외부 시스템에 Timer 변경 알림
+	// -----------------------------------------------------
+
+	OnRemainingTimeChanged.Broadcast(
+		RemainingTime
+	);
+
+
+	// -----------------------------------------------------
+	// Time Out
+	// -----------------------------------------------------
 
 	if (RemainingTime <= 0.0f)
 	{
-		RemainingTime = 0.0f;
-
-
 		if (GetWorld())
 		{
 			GetWorld()
@@ -431,7 +481,7 @@ void ARGGameModeBase::CheckEndCondition(
 
 
 	// -----------------------------------------------------
-	// 3. TimeOut
+	// 3. Time Out
 	// -----------------------------------------------------
 
 	if (bIsTimeOut)
@@ -497,9 +547,9 @@ bool ARGGameModeBase::VerifySystems()
 
 
 		/*
-		 * MainMenu ���� ��Ȳ������
-		 * BeginPlay ������ ���� ��� ���� �� �ֱ� ������
-		 * ���⼭�� false ó������ �ʴ´�.
+		 * MainMenu 등의 경우 BeginPlay 시점에
+		 * PlayerController가 없을 수도 있으므로
+		 * 여기서는 false 처리하지 않는다.
 		 */
 	}
 
@@ -529,7 +579,21 @@ void ARGGameModeBase::OnEnemyDied()
 	}
 
 
+	// -----------------------------------------------------
+	// Kill Count 증가
+	// -----------------------------------------------------
+
 	CurrentKills++;
+
+
+	// -----------------------------------------------------
+	// 외부 시스템에 Kill Count 변경 알림
+	// -----------------------------------------------------
+
+	OnKillCountChanged.Broadcast(
+		CurrentKills,
+		TargetKillsToClear
+	);
 
 
 	UE_LOG(
@@ -543,6 +607,10 @@ void ARGGameModeBase::OnEnemyDied()
 		TargetKillsToClear
 	);
 
+
+	// -----------------------------------------------------
+	// Stage Clear 확인
+	// -----------------------------------------------------
 
 	if (CheckStageClearCondition())
 	{
@@ -572,10 +640,27 @@ void ARGGameModeBase::ExecuteGameOver(
 	}
 
 
+	// -----------------------------------------------------
+	// Result 상태 전환
+	// -----------------------------------------------------
+
 	ChangeRunState(
 		ERunState::Result
 	);
 
+
+	// -----------------------------------------------------
+	// 외부 시스템에 Game Over 알림
+	// -----------------------------------------------------
+
+	OnGameOver.Broadcast(
+		Reason
+	);
+
+
+	// -----------------------------------------------------
+	// Log
+	// -----------------------------------------------------
 
 	switch (Reason)
 	{
@@ -636,17 +721,40 @@ void ARGGameModeBase::ExecuteStageClear()
 	bIsStageCleared = true;
 
 
+	// -----------------------------------------------------
+	// RestHub 상태 전환
+	// -----------------------------------------------------
+
 	ChangeRunState(
 		ERunState::RestHub
 	);
-	//PresentCoreUpgradeChoice 이 핵심 강화 띄워주는 함수
+
+
+	// -----------------------------------------------------
+	// 외부 시스템에 Stage Clear 알림
+	// -----------------------------------------------------
+
+	OnStageCleared.Broadcast();
+
+
+	// -----------------------------------------------------
+	// 기존 Progression 처리
+	// -----------------------------------------------------
+	// 기존 팀원 작업을 건드리지 않기 위해 그대로 유지
+	// PresentCoreUpgradeChoice = 핵심 강화 선택지 표시
+	// -----------------------------------------------------
+
 	if (UGameInstance* GI = GetGameInstance())
 	{
-		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		if (
+			URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>()
+			)
 		{
 			Progression->PresentCoreUpgradeChoice();
 		}
 	}
+
 
 	UE_LOG(
 		LogTemp,
@@ -666,7 +774,7 @@ void ARGGameModeBase::ExecuteStageClear()
 UUserWidget* ARGGameModeBase::CreateDefaultUI()
 {
 	// -----------------------------------------------------
-	// �̹� UI ����
+	// 이미 UI가 존재
 	// -----------------------------------------------------
 
 	if (DefaultUIWidget)
@@ -676,7 +784,7 @@ UUserWidget* ARGGameModeBase::CreateDefaultUI()
 
 
 	// -----------------------------------------------------
-	// UI Class �̼���
+	// UI Class 미설정
 	// -----------------------------------------------------
 
 	if (!DefaultUIClass)
@@ -695,7 +803,7 @@ UUserWidget* ARGGameModeBase::CreateDefaultUI()
 
 
 	// -----------------------------------------------------
-	// PlayerController ã��
+	// PlayerController 찾기
 	// -----------------------------------------------------
 
 	APlayerController* PlayerController =
@@ -721,7 +829,7 @@ UUserWidget* ARGGameModeBase::CreateDefaultUI()
 
 
 	// -----------------------------------------------------
-	// Widget ����
+	// Widget 생성
 	// -----------------------------------------------------
 
 	DefaultUIWidget =
@@ -747,7 +855,7 @@ UUserWidget* ARGGameModeBase::CreateDefaultUI()
 
 
 	// -----------------------------------------------------
-	// Viewport �߰�
+	// Viewport 추가
 	// -----------------------------------------------------
 
 	DefaultUIWidget->AddToViewport(
