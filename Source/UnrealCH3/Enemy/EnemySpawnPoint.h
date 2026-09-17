@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Enemy/Interface/EnemyRecoveryProvider.h"
 #include "EnemySpawnPoint.generated.h"
 
 // 적 클래스와 컴포넌트 포인터 선언에 사용할 전방 선언

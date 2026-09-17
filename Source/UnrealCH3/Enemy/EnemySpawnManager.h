@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Enemy/DataTableStruct/RGEnemySpawnData.h"
+#include "Enemy/Interface/EnemyRecoveryProvider.h"
 #include "EnemySpawnManager.generated.h"
 
 // 포인터와 클래스 참조에 사용할 전방 선언
@@ -14,7 +15,7 @@ class UDataTable;
 
 // 스테이지별 스폰 예산과 현재 활성 적을 관리하는 레벨 배치용 Actor
 UCLASS()
-class UNREALCH3_API AEnemySpawnManager : public AActor
+class UNREALCH3_API AEnemySpawnManager : public AActor, public IEnemyRecoveryProvider
 {
 	GENERATED_BODY()
 
@@ -91,6 +92,8 @@ public:
 	// 적 생성 후보로 사용할 스폰 포인트 목록이다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Spawn")
 	TArray<TObjectPtr<AEnemySpawnPoint>> SpawnPoints;
+
+	virtual bool FindRecoveryTransform_Implementation(AActor* Requester, FTransform& OutRecoveryTransform) override;
 
 protected:
 	// 보충 타이머가 실행될 때 활성화 상태를 확인하고 빈자리 보충을 요청한다.
