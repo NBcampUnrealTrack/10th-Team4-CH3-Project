@@ -8,6 +8,7 @@
 #include "GameFramework/Character.h"
 #include "BaseEnemy.generated.h"
 
+class UBehaviorTree;
 
 UCLASS()
 class UNREALCH3_API ABaseEnemy : public ACharacter
@@ -52,6 +53,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void FaceTarget(float DeltaTime, float RotationSpeed = 10.f);
 
+    UBehaviorTree* GetEnemyBehaviorTree() const;
     float GetViewingAngle();
     float GetViewingDistance();
     float GetAttackMaxRange();
@@ -68,6 +70,8 @@ protected:
     TObjectPtr<UDataTable> EnemyStateDataTable;
     UPROPERTY(EditDefaultsOnly, Category = "Enemy|Data")
     TObjectPtr<UDataTable> EnemyAttackTypeDataTable;
+    UPROPERTY(EditDefaultsOnly, Category = "BehaivorTree")
+    TObjectPtr<UBehaviorTree> EnemyBehaviorTree;
 
     UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "AttackRangeMesh")
     UStaticMeshComponent* AttackRangeMesh;

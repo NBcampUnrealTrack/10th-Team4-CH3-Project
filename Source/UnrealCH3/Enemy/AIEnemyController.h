@@ -20,27 +20,9 @@ public:
 	UFUNCTION()
 	void OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus);
 	UFUNCTION()
-	void RunAI();
-	UFUNCTION()
 	void StopAI();
-
-	UPROPERTY(EditAnywhere, Category = "AI")
-	class UBehaviorTree* BtAsset;
-
-	UPROPERTY(EditAnywhere, Category = "AI")
-	class UBlackboardData* BbAsset;
-
-	//UPROPERTY(EditAnywhere, Category = "AI")
-	UPROPERTY()
-	class UBlackboardComponent* BbComp;
 
 protected:
 	UAIPerceptionComponent* Perception;
 	class UAISenseConfig_Sight* Sight;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-	bool bCanAttack;        // 공격 가능 여부
-	UPROPERTY()
-	FVector TargetLocation;
-
 };
