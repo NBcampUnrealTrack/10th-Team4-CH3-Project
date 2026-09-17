@@ -13,6 +13,12 @@ class ABaseEnemy;
 class AEnemySpawnPoint;
 class UDataTable;
 
+// [추가] SpawnManager가 관리하는 적의 정상 처치를 외부에 알리는 이벤트
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FOnEnemyKilled,
+	ABaseEnemy*, DeadEnemy
+);
+
 // 스테이지별 스폰 예산과 현재 활성 적을 관리하는 레벨 배치용 Actor
 UCLASS()
 class UNREALCH3_API AEnemySpawnManager : public AActor, public IEnemyRecoveryProvider
@@ -23,6 +29,10 @@ public:
 	// Sets default values for this actor's properties
 	// 스폰 매니저의 Tick 사용 여부와 기본 상태를 설정한다.
 	AEnemySpawnManager();
+
+	// [추가] BP_GameFlowBridge가 Bind하여 GameMode::OnEnemyDied()로 전달한다.
+	UPROPERTY(BlueprintAssignable, Category = "Enemy|Spawn|Event")
+	FOnEnemyKilled OnEnemyKilled;
 
 protected:
 	// Called when the game starts or when spawned
@@ -99,6 +109,10 @@ protected:
 	// 보충 타이머가 실행될 때 활성화 상태를 확인하고 빈자리 보충을 요청한다.
 	UFUNCTION()
 	void HandleRefillTimer();
+
+	// [추가] BaseEnemy의 정상 사망 이벤트를 받아 활성 목록 정리 + 처치 이벤트 전달
+	UFUNCTION()
+	void HandleEnemyDeath(ABaseEnemy* DeadEnemy);
 
 	// 매니저가 생성한 적 Actor가 Destroy되었을 때 활성 적 목록에서 제거한다.
 	UFUNCTION()

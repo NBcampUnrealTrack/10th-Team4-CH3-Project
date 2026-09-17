@@ -26,6 +26,14 @@ void AEnemySpawnManager::BeginPlay()
 {
 	Super::BeginPlay();
 
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("=== SPAWN MANAGER BeginPlay | Name=%s | This=%p ==="),
+		*GetName(),
+		this
+	);
+
 	// 자동 검색이 활성화되어 있으면 레벨의 모든 스폰 포인트를 수집한다.
 	if (bAutoFindSpawnPoints)
 	{
@@ -244,6 +252,9 @@ void AEnemySpawnManager::RemoveActiveEnemy(ABaseEnemy* Enemy)
 	// 목록에 존재했던 적이 실제로 제거된 경우에만 후속 작업을 수행한다.
 	if (RemovedCount > 0)
 	{
+		// [추가] 정상 사망 이벤트 연결도 해제하여 중복 처리를 방지한다.
+		Enemy->OnEnemyDeath.RemoveDynamic(this, &AEnemySpawnManager::HandleEnemyDeath);
+
 		// 명시적으로 비활성 처리된 적이 나중에 Destroy될 때 중복 처리되지 않도록 이벤트 연결을 해제한다.
 		Enemy->OnDestroyed.RemoveDynamic(this, &AEnemySpawnManager::HandleSpawnedEnemyDestroyed);
 
@@ -259,6 +270,38 @@ void AEnemySpawnManager::RemoveActiveEnemy(ABaseEnemy* Enemy)
 			ActiveEnemies.Num()
 		);
 	}
+}
+
+// [추가] BaseEnemy가 정상 사망했을 때 호출된다.
+void AEnemySpawnManager::HandleEnemyDeath(ABaseEnemy* DeadEnemy)
+{
+	if (!IsValid(DeadEnemy))
+	{
+		return;
+	}
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("=== SPAWN MANAGER HandleEnemyDeath | Manager=%s | This=%p | Enemy=%s | OnEnemyKilled.IsBound=%s ==="),
+		*GetName(),
+		this,
+		*DeadEnemy->GetName(),
+		OnEnemyKilled.IsBound() ? TEXT("TRUE") : TEXT("FALSE")
+	);
+
+	RemoveActiveEnemy(DeadEnemy);
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("=== SPAWN MANAGER OnEnemyKilled BROADCAST | Manager=%s | This=%p | IsBound=%s ==="),
+		*GetName(),
+		this,
+		OnEnemyKilled.IsBound() ? TEXT("TRUE") : TEXT("FALSE")
+	);
+
+	OnEnemyKilled.Broadcast(DeadEnemy);
 }
 
 bool AEnemySpawnManager::FindRecoveryTransform_Implementation(AActor* Requester, FTransform& OutRecoveryTransform)
@@ -624,6 +667,15 @@ bool AEnemySpawnManager::SpawnEnemy(TSubclassOf<ABaseEnemy> EnemyClass, bool bEl
 			continue;
 		}
 
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("=== SPAWN MANAGER SpawnEnemy | Manager=%s | This=%p | Enemy=%s ==="),
+			*GetName(),
+			this,
+			*GetNameSafe(SpawnedEnemy)
+		);
+
 		// 생성에 성공한 적을 현재 활성 적 목록에 등록한다.
 		ActiveEnemies.Add(SpawnedEnemy);
 
@@ -635,6 +687,9 @@ bool AEnemySpawnManager::SpawnEnemy(TSubclassOf<ABaseEnemy> EnemyClass, bool bEl
 		{
 			++TotalEliteSpawnedCount;
 		}
+
+		// [추가] 정상 사망 시 SpawnManager가 처치 사실을 받을 수 있도록 연결한다.
+		SpawnedEnemy->OnEnemyDeath.AddDynamic(this, &AEnemySpawnManager::HandleEnemyDeath);
 
 		// 적이 Destroy될 때 활성 적 목록에서 자동 제거되도록 이벤트를 연결한다.
 		SpawnedEnemy->OnDestroyed.AddDynamic(this, &AEnemySpawnManager::HandleSpawnedEnemyDestroyed);
