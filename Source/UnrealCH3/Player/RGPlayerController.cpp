@@ -45,3 +45,28 @@ void ARGPlayerController::DebugForceLevelUp()
 		}
 	}
 }
+
+// 추가
+void ARGPlayerController::DebugForceCoreUpgradeChoice()
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			Progression->DebugForceCoreUpgradeChoice();
+		}
+	}
+}
+
+void ARGPlayerController::DebugApplyCoreUpgradeByName(const FString& UpgradeName)
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			Progression->DebugApplyCoreUpgradeByName(UpgradeName);
+		}
+	}
+}

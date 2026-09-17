@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -19,19 +19,19 @@ public:
 	// Sets default values for this actor's properties
 	AEnemySpawnPoint();
 
-	//½ºÆù ÆÇ´Ü¿ë
+	//ìŠ¤í° íŒë‹¨ìš©
 	UFUNCTION(BlueprintPure, Category = "Enemy|Spawn Point")
 	bool CanBeUsedForSpawn() const;
 
-	//º¹±Í ÆÇ´Ü¿ë
+	//ë³µê·€ íŒë‹¨ìš©
 	UFUNCTION(BlueprintPure, Category = "Enemy|Spawn Point")
 	bool CanBeUsedForRecovery() const;
 
-	//¶¥¿¡ ¾ÈÈÄ¡°Ô ½ºÆùÇÏ´Â ¿ëµµ
+	//ë•…ì— ì•ˆÂí›„â€œ ìŠ¤í°í•˜ëŠ” ìš©ë„
 	UFUNCTION(BlueprintPure, Category = "Enemy|Spawn Point")
 	FTransform GetEnemySpawnTransform(TSubclassOf<ABaseEnemy> EnemyClass) const;
 
-	//½ºÆù ½Ã ÇÃ·¹ÀÌ¾î¿ÍÀÇ ÃÖ¼Ò °Å¸® Á¶°Ç °Ë»ç
+	//ìŠ¤í° ì‹œ í”Œë ˆì´ì–´ì™€ì˜ ìµœì†Œ ê±°ë¦¬ ì¡°ê±´ ê²€ì‚¬
 	UFUNCTION(BlueprintPure, Category = "Enemy|Spawn Point")
 	bool PassesSpawnDistanceCheck(const AActor* PlayerActor) const;
 

@@ -10,6 +10,7 @@
 // 데미지 피드백 인터페이스 추가
 #include "Combat/DamageFeedbackReceiver.h"
 #include "Engine/DamageEvents.h"
+#include "Gamemode/RGProgressionSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
@@ -198,6 +199,16 @@ void ABaseEnemy::Die()
 	bIsDead = true;
 	//죽은 객체 상태 변화
 	CurrentState = EEnemyStateEnum::Dead;
+
+	if (URGProgressionSubsystem* Progression = GetGameInstance()->GetSubsystem<URGProgressionSubsystem>())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[%s] 경험치 지급 요청: %.1f"), *GetName(), Exp);   // 추가
+		Progression->GrantExperience(Exp);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[%s] URGProgressionSubsystem을 찾을 수 없음!"), *GetName());   // 추가
+	}
 
 	UE_LOG(LogTemp, Log, TEXT("Character is Dead!"));
 }
