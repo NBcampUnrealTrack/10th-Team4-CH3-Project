@@ -8,6 +8,8 @@
 #include "Enemy/EnemySpawnPoint.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
+#include "Components/CapsuleComponent.h"
+#include "GameFramework/Character.h"
 
 // Sets default values
 AEnemySpawnManager::AEnemySpawnManager()
@@ -258,6 +260,99 @@ void AEnemySpawnManager::RemoveActiveEnemy(ABaseEnemy* Enemy)
 		);
 	}
 }
+
+bool AEnemySpawnManager::FindRecoveryTransform_Implementation(AActor* Requester, FTransform& OutRecoveryTransform)
+{
+	if (!IsValid(Requester))
+	{
+		return false;
+	}
+
+	AActor* PlayerActor = UGameplayStatics::GetPlayerPawn(this, 0);
+
+	AEnemySpawnPoint* SelectedPoint = nullptr;
+	float BestDistanceSquared = TNumericLimits<float>::Max();
+
+	for (AEnemySpawnPoint* SpawnPoint : SpawnPoints)
+	{
+		if (!IsValid(SpawnPoint))
+		{
+			continue;
+		}
+
+		if (!SpawnPoint->CanBeUsedForRecovery())
+		{
+			continue;
+		}
+
+		const FVector PointLocation = SpawnPoint->GetActorLocation();
+
+		if (IsValid(PlayerActor))
+		{
+			FVector DirectionToPoint = PointLocation - PlayerActor->GetActorLocation();
+
+			DirectionToPoint.Z = 0.0f;
+
+			if (DirectionToPoint.IsNearlyZero())
+			{
+				continue;
+			}
+
+			DirectionToPoint.Normalize();
+
+			FVector PlayerForward = PlayerActor->GetActorForwardVector();
+
+			PlayerForward.Z = 0.0f;
+
+			if (!PlayerForward.Normalize())
+			{
+				continue;
+			}
+
+			const float DirectionDot = FVector::DotProduct(PlayerForward, DirectionToPoint);
+
+			if (DirectionDot > 0.85f)
+			{
+				continue;
+			}
+
+			if (DirectionDot < -0.85f)
+			{
+				continue;
+			}
+		}
+
+		const float DistanceSquared = FVector::DistSquared(Requester->GetActorLocation(), PointLocation);
+
+		if (DistanceSquared < BestDistanceSquared)
+		{
+			BestDistanceSquared = DistanceSquared;
+			SelectedPoint = SpawnPoint;
+		}
+
+		if (!IsValid(SelectedPoint))
+		{
+			return false;
+		}
+	}
+
+	OutRecoveryTransform = SelectedPoint->GetActorTransform();
+
+	if (const ACharacter* Character = Cast<ACharacter>(Requester))
+	{
+		if (const UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
+		{
+			FVector RecoveryLocation = OutRecoveryTransform.GetLocation();
+
+			RecoveryLocation.Z += Capsule->GetScaledCapsuleHalfHeight();
+
+			OutRecoveryTransform.SetLocation(RecoveryLocation);
+		}
+	}
+
+	return true;
+}
+
 
 // DataTable에 설정된 보충 간격마다 호출된다.
 void AEnemySpawnManager::HandleRefillTimer()
