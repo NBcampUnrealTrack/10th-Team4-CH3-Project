@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Enemy/EnemySpawnPoint.h"
@@ -11,17 +11,23 @@ AEnemySpawnPoint::AEnemySpawnPoint()
 
 }
 
-// Called when the game starts or when spawned
-void AEnemySpawnPoint::BeginPlay()
+bool AEnemySpawnPoint::CanBeUsedForSpawn() const
 {
-	Super::BeginPlay();
-	
+	return false;
 }
 
-// Called every frame
-void AEnemySpawnPoint::Tick(float DeltaTime)
+bool AEnemySpawnPoint::CanBeUsedForRecovery() const
 {
-	Super::Tick(DeltaTime);
+	return false;
+}
 
+FTransform AEnemySpawnPoint::GetEnemySpawnTransform(TSubclassOf<ABaseEnemy> EnemyClass) const
+{
+	return FTransform();
+}
+
+bool AEnemySpawnPoint::PassesSpawnDistanceCheck(const AActor* PlayerActor) const
+{
+	return false;
 }
 

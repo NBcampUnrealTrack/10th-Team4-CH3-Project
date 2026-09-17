@@ -6,6 +6,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
+#include "Gamemode/RGProgressionSubsystem.h"
 #include "DrawDebugHelpers.h"
 
 ARGBaseWeapon::ARGBaseWeapon()
@@ -444,6 +445,15 @@ void ARGBaseWeapon::SetExternalActionsAllowed(bool bAllowed)
 //강화 데미지 계산 
 float ARGBaseWeapon::GetUpgradeDamageMultiplier() const
 {
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks = Progression->GetUpgradeStackCount(FName(TEXT("DamageUp")));
+			const float EffectAmount = Progression->GetUpgradeEffectAmount(FName(TEXT("DamageUp")));
+			return 1.0f + (EffectAmount * Stacks);
+		}
+	}
 	return 1.0f;
 }
 //거리에 따른 데미지 감쇠
@@ -466,37 +476,29 @@ float ARGBaseWeapon::CalculateDistanceFalloffMultiplier(float Distance) const
 	return FMath::Lerp(1.f, WeaponStats.MinFalloffDamageMultiplier, Alpha);
 }
 
-void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart , bool bIsDirectHit)
+void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart, bool bIsDirectHit)
 {
 	AActor* HitActor = Hit.GetActor();
 	if (!HitActor)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[ApplyHitDamage] HitActor가 nullptr - 데미지 적용 안됨"));
 		return;
 	}
 
-
-	//최종 데미지 계산
-	float FinalDamage = BaseDamage;
-	//강화 데미지 계산
-	FinalDamage *= GetUpgradeDamageMultiplier();
-	//거리별 감쇠 데미지 계산
+	const float UpgradeMult = GetUpgradeDamageMultiplier();
 	const float Distance = FVector::Dist(ShotStart, Hit.ImpactPoint);
-	FinalDamage *= CalculateDistanceFalloffMultiplier(Distance);
-	
+	const float FalloffMult = CalculateDistanceFalloffMultiplier(Distance);
 	const bool bIsWeakSpot = Hit.Component.IsValid() && Hit.Component->ComponentHasTag(WeakSpotTag);
-	if (bIsWeakSpot)
-	{
-		FinalDamage *= WeakSpotDamageMultiplier;
-	}
-	// ===== 데이터코어 에서 받아야함 =====
-	// 직격 히트스캔이면 URGDirectHitDamageType, 관통이면 그냥 기본 UDamageType으로 전달.
-	// 데이터 코어 쪽은 TakeDamage에서 이 타입을 확인해 관통/도탄/폭발/전이 피해를 걸러낼 수 있음.
+	const float WeakSpotMult = bIsWeakSpot ? WeakSpotDamageMultiplier : 1.0f;
+
+	float FinalDamage = BaseDamage * UpgradeMult * FalloffMult * WeakSpotMult;
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("[Weapon Damage] Target: %s | Base: %.1f | UpgradeMult: %.2f | Falloff: %.2f | WeakSpot: %.2f | Final: %.1f"),
+		*HitActor->GetName(), BaseDamage, UpgradeMult, FalloffMult, WeakSpotMult, FinalDamage);
+
 	TSubclassOf<UDamageType> DamageTypeClass = bIsDirectHit ? URGDirectHitDamageType::StaticClass() : UDamageType::StaticClass();
 
-	// ===== 적 AI 에서 받아야함 =====
-	// 실제 전달은 언리얼 기본 데미지 시스템 사용.
-	//내부적으로 HitActor->TakeDamage()를 대신 호출
-	//그러므로 적을 담당하는 분은 적 코드에 언리얼에서 제공하는 TakeDamage() 함수 시그니쳐에 따라서 TakeDamage() 코드를 만들어 놓으면 됨
 	UGameplayStatics::ApplyPointDamage(
 		HitActor,
 		FinalDamage,
@@ -506,8 +508,7 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 		this,
 		DamageTypeClass
 	);
-	// ===== UI , 게임모드에서 받아야함 =====
-	//명중 처치 피드백 용 델리게이트 방송
+
 	OnWeaponHit.Broadcast(HitActor, FinalDamage, bIsWeakSpot, Hit.ImpactPoint);
 }
 
