@@ -11,6 +11,7 @@ class USceneComponent;
 class UStaticMeshComponent;
 class UDataTable;
 class ARGGameModeBase;
+class URGProgressionSubsystem;
 
 /**
  * Stage Clear 이후 활성화되는 레벨 이동 포탈.
@@ -314,6 +315,25 @@ private:
 
 
 	/**
+	 * [추가] 핵심 강화 적용 완료 시 PortalConfig 조건을 다시 평가.
+	 */
+	UFUNCTION()
+	void HandleCoreUpgradeApplied(
+		FName UpgradeId,
+		int32 ActiveCoreUpgradeCount
+	);
+
+
+	/**
+	 * [추가] StageComplete 외의 PortalConfig 조건 평가.
+	 *
+	 * RestHubReady       -> RestHub 출구 즉시 사용 가능
+	 * CoreUpgrade2Applied -> 핵심 강화 2개 보유 시 Boss 입구 활성
+	 */
+	void EvaluateNonStagePortalCondition();
+
+
+	/**
 	 * [추가]
 	 * StageComplete 조건의 Portal이 현재 Stage 목적지와 일치하는지 확인.
 	 *
@@ -351,4 +371,7 @@ private:
 
 	/** 바인딩 해제를 위한 GameMode 참조 */
 	TWeakObjectPtr<ARGGameModeBase> BoundGameMode;
+
+	/** [추가] CoreUpgrade 조건 감시용 Progression Subsystem */
+	TWeakObjectPtr<URGProgressionSubsystem> BoundProgression;
 };

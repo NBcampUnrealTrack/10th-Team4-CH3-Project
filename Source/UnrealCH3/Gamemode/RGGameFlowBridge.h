@@ -1,7 +1,8 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Gamemode/DataTableStruct/RGRunConfigRows.h"
 #include "RGGameFlowBridge.generated.h"
 
 class ARGGameModeBase;
@@ -24,6 +25,19 @@ protected:
 
     UFUNCTION()
     void HandleEnemyKilled(ABaseEnemy* DeadEnemy);
+
+    // [추가] SpawnManager 생존 수 -> GameMode Objective
+    UFUNCTION()
+    void HandleAliveEnemyCountChanged(int32 AliveEnemyCount);
+
+    // [추가] GameMode RunFlow AIState -> SpawnManager
+    UFUNCTION()
+    void HandleRunFlowPolicyChanged(
+        ERGRunInputPolicy InputPolicy,
+        ERGRunTimePolicy TimePolicy,
+        ERGRunAIState AIState,
+        FName TopUI
+    );
 
 protected:
     UPROPERTY(BlueprintReadOnly, Category = "Game Flow|Reference")

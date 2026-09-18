@@ -8,6 +8,8 @@
 #include "Engine/DataTable.h"
 #include "Gamemode/DataTableStruct/RGRunConfigRows.h"
 #include "Gamemode/RGGameModeBase.h"
+// [추가] RestHubReady / CoreUpgrade2Applied 조건 평가
+#include "Gamemode/RGProgressionSubsystem.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
@@ -166,9 +168,9 @@ void ARGStagePortal::BeginPlay()
 
 	if (
 		ARGGameModeBase* GameMode =
-		Cast<ARGGameModeBase>(
-			UGameplayStatics::GetGameMode(this)
-		)
+			Cast<ARGGameModeBase>(
+				UGameplayStatics::GetGameMode(this)
+				)
 		)
 	{
 		BoundGameMode =
@@ -209,6 +211,32 @@ void ARGStagePortal::BeginPlay()
 			),
 			*GetName()
 		);
+	}
+
+
+	// -----------------------------------------------------
+	// [추가] Progression 조건 연결
+	// -----------------------------------------------------
+
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (
+			URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>()
+			)
+		{
+			BoundProgression = Progression;
+
+			Progression->OnCoreUpgradeApplied.RemoveDynamic(
+				this,
+				&ARGStagePortal::HandleCoreUpgradeApplied
+			);
+
+			Progression->OnCoreUpgradeApplied.AddDynamic(
+				this,
+				&ARGStagePortal::HandleCoreUpgradeApplied
+			);
+		}
 	}
 
 
@@ -265,6 +293,10 @@ void ARGStagePortal::BeginPlay()
 			DeactivatePortal();
 		}
 	}
+
+	// [추가] RestHubReady / CoreUpgrade2Applied 조건은
+	// StageClear 이벤트와 별도로 평가한다.
+	EvaluateNonStagePortalCondition();
 }
 
 
@@ -303,6 +335,18 @@ void ARGStagePortal::EndPlay(
 				&ARGStagePortal::HandleStageCleared
 			);
 	}
+
+	if (BoundProgression.IsValid())
+	{
+		BoundProgression
+			->OnCoreUpgradeApplied
+			.RemoveDynamic(
+				this,
+				&ARGStagePortal::HandleCoreUpgradeApplied
+			);
+	}
+
+	BoundProgression.Reset();
 
 
 	if (IsValid(PortalTrigger))
@@ -485,6 +529,83 @@ void ARGStagePortal::HandleStageCleared()
 
 
 	ActivatePortal();
+}
+
+
+
+// =========================================================
+// [추가] CoreUpgrade Condition Callback
+// =========================================================
+
+void ARGStagePortal::HandleCoreUpgradeApplied(
+	FName UpgradeId,
+	int32 ActiveCoreUpgradeCount
+)
+{
+	EvaluateNonStagePortalCondition();
+}
+
+
+// =========================================================
+// [추가] Non-Stage Portal Conditions
+// =========================================================
+
+void ARGStagePortal::EvaluateNonStagePortalCondition()
+{
+	if (!bPortalConfigApplied)
+	{
+		return;
+	}
+
+
+	// -----------------------------------------------------
+	// RestHubReady
+	// -----------------------------------------------------
+	//
+	// RestHub 맵의 출구는 VisibleLocked로 시작하지만,
+	// 별도 전투 목표가 없는 Hub에 진입하면 사용 가능 상태로 전환한다.
+	//
+	// 만약 CoreUpgrade 선택 UI가 아직 떠 있다면 선택 완료 신호를 기다린다.
+	// -----------------------------------------------------
+
+	if (
+		VisibilityCondition ==
+		TEXT("RestHubReady")
+		)
+	{
+		if (
+			!BoundProgression.IsValid() ||
+			!BoundProgression
+				->IsPresentingCoreUpgradeChoice()
+			)
+		{
+			ActivatePortal();
+		}
+
+		return;
+	}
+
+
+	// -----------------------------------------------------
+	// CoreUpgrade2Applied
+	// -----------------------------------------------------
+
+	if (
+		VisibilityCondition ==
+		TEXT("CoreUpgrade2Applied")
+		)
+	{
+		if (
+			BoundProgression.IsValid() &&
+			BoundProgression
+				->GetActiveCoreUpgradeCount() >= 2
+			)
+		{
+			ActivatePortal();
+		}
+
+		return;
+	}
 }
 
 
@@ -748,9 +869,9 @@ void ARGStagePortal::HandlePortalOverlap(
 
 	if (
 		InteractionType !=
-		ERGPortalInteractionType::EnterOnly &&
+			ERGPortalInteractionType::EnterOnly &&
 		InteractionType !=
-		ERGPortalInteractionType::EnterOrUse
+			ERGPortalInteractionType::EnterOrUse
 		)
 	{
 		return;
@@ -800,9 +921,9 @@ void ARGStagePortal::HandlePortalOverlap(
 
 	if (
 		ARGGameModeBase* GameMode =
-		Cast<ARGGameModeBase>(
-			UGameplayStatics::GetGameMode(this)
-		)
+			Cast<ARGGameModeBase>(
+				UGameplayStatics::GetGameMode(this)
+				)
 		)
 	{
 		GameMode->ChangeRunState(
@@ -849,7 +970,7 @@ void ARGStagePortal::HandlePortalOverlap(
 		*UGameplayStatics::GetCurrentLevelName(
 			this,
 			true
-		),
+			),
 		*NextLevelName.ToString()
 	);
 }
@@ -880,7 +1001,7 @@ void ARGStagePortal::PerformTravel()
 		*UGameplayStatics::GetCurrentLevelName(
 			this,
 			true
-		),
+			),
 		*NextLevelName.ToString(),
 		*ConfiguredDestination.ToString()
 	);

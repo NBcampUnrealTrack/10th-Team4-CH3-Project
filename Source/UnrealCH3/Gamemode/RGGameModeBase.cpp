@@ -63,6 +63,46 @@ ARGGameModeBase::ARGGameModeBase()
 
 
 	// -----------------------------------------------------
+	// [추가] Run Flow Config
+	// -----------------------------------------------------
+
+	RunFlowConfigTable = nullptr;
+
+	// 기존 기본 동작과 동일한 초기값
+	CurrentInputPolicy = ERGRunInputPolicy::Gameplay;
+	CurrentTimePolicy = ERGRunTimePolicy::Paused;
+	CurrentAIState = ERGRunAIState::Paused;
+
+	CurrentTopUI = NAME_None;
+	CurrentAllowedTransition.Empty();
+
+
+	// -----------------------------------------------------
+	// [추가] Objective Config
+	// -----------------------------------------------------
+
+	ObjectiveConfigTable = nullptr;
+
+	// 현재 기능을 깨지 않도록, 실제 DataCore/AliveEnemyGate 연결 전에는
+	// Kill 목표만 StageClear 필수 조건으로 사용한다.
+	bEnforceCoreObjective = false;
+	bEnforceRemainingEnemyObjective = false;
+
+	CurrentCoresDestroyed = 0;
+	CurrentRemainingEnemies = 0;
+	bBossDefeated = false;
+
+
+	// -----------------------------------------------------
+	// [추가] Upgrade Grant Config
+	// -----------------------------------------------------
+
+	UpgradeGrantConfigTable = nullptr;
+	ActiveUpgradeGrantId = NAME_None;
+	PendingUpgradeSelections = 0;
+
+
+	// -----------------------------------------------------
 	// Run State
 	// -----------------------------------------------------
 
@@ -134,6 +174,17 @@ void ARGGameModeBase::BeginPlay()
 
 			Progression->InitializeCoreUpgrades(
 				CoreUpgradeTable
+			);
+
+			// [추가] UpgradeGrant 완료 시점을 GameMode가 받을 수 있도록 연결
+			Progression->OnCoreUpgradeApplied.RemoveDynamic(
+				this,
+				&ARGGameModeBase::HandleCoreUpgradeApplied
+			);
+
+			Progression->OnCoreUpgradeApplied.AddDynamic(
+				this,
+				&ARGGameModeBase::HandleCoreUpgradeApplied
 			);
 		}
 	}
@@ -259,6 +310,22 @@ void ARGGameModeBase::EndPlay(
 			.ClearTimer(
 				RunTimerHandle
 			);
+	}
+
+
+	// [추가] Progression Delegate 연결 해제
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (
+			URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>()
+			)
+		{
+			Progression->OnCoreUpgradeApplied.RemoveDynamic(
+				this,
+				&ARGGameModeBase::HandleCoreUpgradeApplied
+			);
+		}
 	}
 
 
@@ -476,8 +543,14 @@ bool ARGGameModeBase::ApplyStageConfigForCurrentMap()
 		SelectedRow->ExclusiveMaterial;
 
 
-	// 현재 Kill Count는 새로운 Stage 시작값 0
+	// 현재 Stage Runtime Objective 초기화
 	CurrentKills = 0;
+	CurrentCoresDestroyed = 0;
+	CurrentRemainingEnemies = 0;
+	bBossDefeated = false;
+
+	ActiveUpgradeGrantId = NAME_None;
+	PendingUpgradeSelections = 0;
 
 
 	// -----------------------------------------------------
@@ -491,6 +564,11 @@ bool ARGGameModeBase::ApplyStageConfigForCurrentMap()
 	OnKillCountChanged.Broadcast(
 		CurrentKills,
 		TargetKillsToClear
+	);
+
+	// [추가] DT_ObjectiveConfig Kill_Default 진행도도 함께 알린다.
+	BroadcastObjectiveProgress(
+		TEXT("Kill_Default")
 	);
 
 
@@ -642,6 +720,1017 @@ int32 ARGGameModeBase::AddScoreEvent(
 }
 
 
+
+// =========================================================
+// [추가] GetRunFlowRowNameForState
+// =========================================================
+
+FName ARGGameModeBase::GetRunFlowRowNameForState(
+	ERunState State
+) const
+{
+	switch (State)
+	{
+	case ERunState::Init:
+		return TEXT("WeaponSelect");
+
+	case ERunState::Combat:
+		return TEXT("Combat");
+
+	case ERunState::Pause:
+		return TEXT("InventoryPause");
+
+	case ERunState::Upgrade:
+		return TEXT("CoreUpgrade");
+
+	case ERunState::RestHub:
+		return TEXT("RestHub");
+
+	case ERunState::Loading:
+		return TEXT("Loading");
+
+	case ERunState::Result:
+		return TEXT("Result");
+
+	default:
+		return NAME_None;
+	}
+}
+
+
+// =========================================================
+// [추가] ApplyRunFlowConfigForState
+// =========================================================
+
+bool ARGGameModeBase::ApplyRunFlowConfigForState(
+	ERunState State
+)
+{
+	if (!IsValid(RunFlowConfigTable))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[RGGameMode] "
+				"RunFlowConfigTable is not assigned. "
+				"Using legacy state policy."
+			)
+		);
+
+		ApplyLegacyRunFlowFallback(
+			State
+		);
+
+		return false;
+	}
+
+
+	if (
+		RunFlowConfigTable->GetRowStruct() !=
+		FRGRunFlowConfigRow::StaticStruct()
+		)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"[RGGameMode] "
+				"RunFlowConfigTable RowStruct mismatch. "
+				"Expected FRGRunFlowConfigRow."
+			)
+		);
+
+		ApplyLegacyRunFlowFallback(
+			State
+		);
+
+		return false;
+	}
+
+
+	const FName RowName =
+		GetRunFlowRowNameForState(
+			State
+		);
+
+
+	if (RowName.IsNone())
+	{
+		ApplyLegacyRunFlowFallback(
+			State
+		);
+
+		return false;
+	}
+
+
+	const FRGRunFlowConfigRow* FlowRow =
+		RunFlowConfigTable
+		->FindRow<FRGRunFlowConfigRow>(
+			RowName,
+			TEXT("ApplyRunFlowConfigForState"),
+			false
+		);
+
+
+	if (!FlowRow)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"[RGGameMode] "
+				"RunFlowConfig row not found: %s"
+			),
+			*RowName.ToString()
+		);
+
+		ApplyLegacyRunFlowFallback(
+			State
+		);
+
+		return false;
+	}
+
+
+	// -----------------------------------------------------
+	// DataTable 정책 저장
+	// -----------------------------------------------------
+
+	CurrentInputPolicy =
+		FlowRow->InputPolicy;
+
+	CurrentTimePolicy =
+		FlowRow->TimePolicy;
+
+	CurrentAIState =
+		FlowRow->AIState;
+
+	CurrentTopUI =
+		FlowRow->TopUI;
+
+	CurrentAllowedTransition =
+		FlowRow->AllowedTransition;
+
+
+	// -----------------------------------------------------
+	// GameMode가 직접 담당하는 정책 적용
+	// -----------------------------------------------------
+
+	ApplyInputPolicy(
+		CurrentInputPolicy
+	);
+
+	ApplyTimePolicy(
+		CurrentTimePolicy
+	);
+
+
+	// -----------------------------------------------------
+	// AI / UI 등 외부 시스템에는 Delegate로 전달
+	// -----------------------------------------------------
+
+	OnRunFlowPolicyChanged.Broadcast(
+		CurrentInputPolicy,
+		CurrentTimePolicy,
+		CurrentAIState,
+		CurrentTopUI
+	);
+
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT(
+			"[RGGameMode] "
+			"RunFlow applied. "
+			"State=%d / Row=%s / "
+			"Input=%d / Time=%d / AI=%d / "
+			"TopUI=%s / Transition=%s"
+		),
+		static_cast<int32>(State),
+		*RowName.ToString(),
+		static_cast<int32>(CurrentInputPolicy),
+		static_cast<int32>(CurrentTimePolicy),
+		static_cast<int32>(CurrentAIState),
+		*CurrentTopUI.ToString(),
+		*CurrentAllowedTransition
+	);
+
+
+	return true;
+}
+
+
+// =========================================================
+// [추가] ApplyLegacyRunFlowFallback
+// =========================================================
+
+void ARGGameModeBase::ApplyLegacyRunFlowFallback(
+	ERunState State
+)
+{
+	// -----------------------------------------------------
+	// 기존 코드의 의미를 그대로 보존하는 fallback.
+	// DataTable 연결 실패가 게임 진행 중단으로 이어지지 않게 한다.
+	// -----------------------------------------------------
+
+	switch (State)
+	{
+	case ERunState::Combat:
+	{
+		CurrentInputPolicy =
+			ERGRunInputPolicy::Gameplay;
+
+		CurrentTimePolicy =
+			ERGRunTimePolicy::Countdown;
+
+		CurrentAIState =
+			ERGRunAIState::Active;
+
+		CurrentTopUI =
+			NAME_None;
+
+		break;
+	}
+
+
+	case ERunState::RestHub:
+	{
+		CurrentInputPolicy =
+			ERGRunInputPolicy::Gameplay;
+
+		CurrentTimePolicy =
+			ERGRunTimePolicy::NoObjective;
+
+		CurrentAIState =
+			ERGRunAIState::Disabled;
+
+		CurrentTopUI =
+			NAME_None;
+
+		break;
+	}
+
+
+	case ERunState::Pause:
+	{
+		CurrentInputPolicy =
+			ERGRunInputPolicy::UIOnly;
+
+		CurrentTimePolicy =
+			ERGRunTimePolicy::Paused;
+
+		CurrentAIState =
+			ERGRunAIState::Paused;
+
+		CurrentTopUI =
+			TEXT("Inventory");
+
+		break;
+	}
+
+
+	case ERunState::Upgrade:
+	{
+		CurrentInputPolicy =
+			ERGRunInputPolicy::UIOnly;
+
+		CurrentTimePolicy =
+			ERGRunTimePolicy::Paused;
+
+		CurrentAIState =
+			ERGRunAIState::Paused;
+
+		CurrentTopUI =
+			TEXT("UpgradeSelection");
+
+		break;
+	}
+
+
+	case ERunState::Loading:
+	{
+		CurrentInputPolicy =
+			ERGRunInputPolicy::Blocked;
+
+		CurrentTimePolicy =
+			ERGRunTimePolicy::Paused;
+
+		CurrentAIState =
+			ERGRunAIState::Paused;
+
+		CurrentTopUI =
+			TEXT("Transition");
+
+		break;
+	}
+
+
+	case ERunState::Result:
+	{
+		CurrentInputPolicy =
+			ERGRunInputPolicy::UIOnly;
+
+		CurrentTimePolicy =
+			ERGRunTimePolicy::Paused;
+
+		CurrentAIState =
+			ERGRunAIState::Paused;
+
+		CurrentTopUI =
+			TEXT("Result");
+
+		break;
+	}
+
+
+	case ERunState::Init:
+	default:
+	{
+		CurrentInputPolicy =
+			ERGRunInputPolicy::UIOnly;
+
+		CurrentTimePolicy =
+			ERGRunTimePolicy::Paused;
+
+		CurrentAIState =
+			ERGRunAIState::Paused;
+
+		CurrentTopUI =
+			TEXT("WeaponSelection");
+
+		break;
+	}
+	}
+
+
+	CurrentAllowedTransition.Empty();
+
+
+	ApplyInputPolicy(
+		CurrentInputPolicy
+	);
+
+	ApplyTimePolicy(
+		CurrentTimePolicy
+	);
+
+
+	OnRunFlowPolicyChanged.Broadcast(
+		CurrentInputPolicy,
+		CurrentTimePolicy,
+		CurrentAIState,
+		CurrentTopUI
+	);
+}
+
+
+// =========================================================
+// [추가] ApplyInputPolicy
+// =========================================================
+
+void ARGGameModeBase::ApplyInputPolicy(
+	ERGRunInputPolicy InputPolicy
+)
+{
+	if (!GetWorld())
+	{
+		return;
+	}
+
+
+	APlayerController* PlayerController =
+		GetWorld()->GetFirstPlayerController();
+
+
+	if (!PlayerController)
+	{
+		return;
+	}
+
+
+	switch (InputPolicy)
+	{
+	case ERGRunInputPolicy::Gameplay:
+	{
+		// 이전 Pause / Loading 상태에서 걸어 둔 차단 해제
+		PlayerController->SetIgnoreMoveInput(false);
+		PlayerController->SetIgnoreLookInput(false);
+
+		PlayerController->bShowMouseCursor =
+			false;
+
+
+		FInputModeGameOnly InputMode;
+
+		PlayerController->SetInputMode(
+			InputMode
+		);
+
+		break;
+	}
+
+
+	case ERGRunInputPolicy::UIOnly:
+	{
+		// UIOnly는 게임 입력 대신 Widget 입력을 우선한다.
+		PlayerController->SetIgnoreMoveInput(true);
+		PlayerController->SetIgnoreLookInput(true);
+
+		PlayerController->bShowMouseCursor =
+			true;
+
+
+		FInputModeUIOnly InputMode;
+
+
+		if (DefaultUIWidget)
+		{
+			InputMode.SetWidgetToFocus(
+				DefaultUIWidget->TakeWidget()
+			);
+		}
+
+
+		PlayerController->SetInputMode(
+			InputMode
+		);
+
+		break;
+	}
+
+
+	case ERGRunInputPolicy::Blocked:
+	{
+		// Loading처럼 플레이어 조작을 받지 않는 상태.
+		PlayerController->SetIgnoreMoveInput(true);
+		PlayerController->SetIgnoreLookInput(true);
+
+		PlayerController->bShowMouseCursor =
+			false;
+
+
+		FInputModeUIOnly InputMode;
+
+		PlayerController->SetInputMode(
+			InputMode
+		);
+
+		break;
+	}
+
+
+	default:
+		break;
+	}
+}
+
+
+// =========================================================
+// [추가] ApplyTimePolicy
+// =========================================================
+
+void ARGGameModeBase::ApplyTimePolicy(
+	ERGRunTimePolicy TimePolicy
+)
+{
+	if (!GetWorld())
+	{
+		return;
+	}
+
+
+	FTimerManager& TimerManager =
+		GetWorld()->GetTimerManager();
+
+
+	switch (TimePolicy)
+	{
+	case ERGRunTimePolicy::Countdown:
+	{
+		if (
+			!TimerManager.TimerExists(
+				RunTimerHandle
+			)
+			)
+		{
+			TimerManager.SetTimer(
+				RunTimerHandle,
+				this,
+				&ARGGameModeBase::UpdateRunTimer,
+				1.0f,
+				true
+			);
+		}
+		else if (
+			TimerManager.IsTimerPaused(
+				RunTimerHandle
+			)
+			)
+		{
+			TimerManager.UnPauseTimer(
+				RunTimerHandle
+			);
+		}
+
+		break;
+	}
+
+
+	case ERGRunTimePolicy::Paused:
+	{
+		if (
+			TimerManager.TimerExists(
+				RunTimerHandle
+			)
+			)
+		{
+			TimerManager.PauseTimer(
+				RunTimerHandle
+			);
+		}
+
+		break;
+	}
+
+
+	case ERGRunTimePolicy::NoObjective:
+	{
+		// RestHub처럼 목표 시간이 없는 상태는
+		// 이전 Combat Timer 자체를 정리한다.
+		TimerManager.ClearTimer(
+			RunTimerHandle
+		);
+
+		break;
+	}
+
+
+	default:
+		break;
+	}
+}
+
+
+
+// =========================================================
+// [추가] Objective Config Helpers
+// =========================================================
+
+const FRGObjectiveConfigRow* ARGGameModeBase::FindObjectiveConfigRow(
+	FName ObjectiveId
+) const
+{
+	if (
+		ObjectiveId.IsNone() ||
+		!IsValid(ObjectiveConfigTable)
+		)
+	{
+		return nullptr;
+	}
+
+	if (
+		ObjectiveConfigTable->GetRowStruct() !=
+		FRGObjectiveConfigRow::StaticStruct()
+		)
+	{
+		return nullptr;
+	}
+
+	return ObjectiveConfigTable->FindRow<FRGObjectiveConfigRow>(
+		ObjectiveId,
+		TEXT("FindObjectiveConfigRow"),
+		false
+	);
+}
+
+
+int32 ARGGameModeBase::ResolveObjectiveRequiredValue(
+	FName ObjectiveId,
+	const FRGObjectiveConfigRow& Row
+) const
+{
+	if (!Row.bUseStageConfigValue)
+	{
+		return FMath::Max(0, Row.RequiredValue);
+	}
+
+	switch (Row.ObjectiveType)
+	{
+	case ERGObjectiveType::KillCount:
+		return FMath::Max(0, TargetKillsToClear);
+
+	case ERGObjectiveType::DataCoreDestroyed:
+		return FMath::Max(0, RequiredCoresToClear);
+
+	default:
+		return FMath::Max(0, Row.RequiredValue);
+	}
+}
+
+
+void ARGGameModeBase::BroadcastObjectiveProgress(
+	FName ObjectiveId
+)
+{
+	const FRGObjectiveConfigRow* Row =
+		FindObjectiveConfigRow(ObjectiveId);
+
+	if (!Row)
+	{
+		return;
+	}
+
+	const int32 RequiredValue =
+		ResolveObjectiveRequiredValue(
+			ObjectiveId,
+			*Row
+		);
+
+	int32 CurrentValue = 0;
+	bool bCompleted = false;
+
+	switch (Row->ObjectiveType)
+	{
+	case ERGObjectiveType::KillCount:
+		CurrentValue = CurrentKills;
+		bCompleted =
+			RequiredValue <= 0 ||
+			CurrentKills >= RequiredValue;
+		break;
+
+	case ERGObjectiveType::DataCoreDestroyed:
+		CurrentValue = CurrentCoresDestroyed;
+		bCompleted =
+			RequiredValue <= 0 ||
+			CurrentCoresDestroyed >= RequiredValue;
+		break;
+
+	case ERGObjectiveType::RemainingEnemy:
+		CurrentValue = CurrentRemainingEnemies;
+		bCompleted =
+			CurrentRemainingEnemies <= RequiredValue;
+		break;
+
+	case ERGObjectiveType::BossKilled:
+		CurrentValue = bBossDefeated ? 1 : 0;
+		bCompleted = bBossDefeated;
+		break;
+
+	default:
+		break;
+	}
+
+	OnObjectiveProgressChanged.Broadcast(
+		ObjectiveId,
+		CurrentValue,
+		RequiredValue,
+		bCompleted
+	);
+}
+
+
+// =========================================================
+// [추가] DataCore Objective
+// =========================================================
+
+void ARGGameModeBase::OnDataCoreDestroyed()
+{
+	if (bIsRunEnded)
+	{
+		return;
+	}
+
+	++CurrentCoresDestroyed;
+
+	AddScoreEvent(
+		TEXT("DataCoreDestroyed")
+	);
+
+	BroadcastObjectiveProgress(
+		TEXT("Core_Default")
+	);
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT(
+			"[RGGameMode] Core Objective: %d / %d"
+		),
+		CurrentCoresDestroyed,
+		RequiredCoresToClear
+	);
+
+	if (CheckStageClearCondition())
+	{
+		CheckEndCondition(
+			false,
+			false
+		);
+	}
+}
+
+
+// =========================================================
+// [추가] Remaining Enemy Objective
+// =========================================================
+
+void ARGGameModeBase::SetRemainingEnemyCount(
+	int32 NewRemainingEnemyCount
+)
+{
+	CurrentRemainingEnemies =
+		FMath::Max(
+			0,
+			NewRemainingEnemyCount
+		);
+
+	BroadcastObjectiveProgress(
+		TEXT("AliveEnemyGate")
+	);
+
+	if (
+		!bIsRunEnded &&
+		CheckStageClearCondition()
+		)
+	{
+		CheckEndCondition(
+			false,
+			false
+		);
+	}
+}
+
+
+// =========================================================
+// [추가] Boss Objective
+// =========================================================
+
+void ARGGameModeBase::OnBossKilled()
+{
+	if (bIsRunEnded)
+	{
+		return;
+	}
+
+	bBossDefeated = true;
+
+	AddScoreEvent(
+		TEXT("BossKilled")
+	);
+
+	BroadcastObjectiveProgress(
+		TEXT("BossDefeat")
+	);
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[RGGameMode] Boss objective completed.")
+	);
+
+	if (CheckStageClearCondition())
+	{
+		CheckEndCondition(
+			false,
+			false
+		);
+	}
+}
+
+
+// =========================================================
+// [추가] Upgrade Grant Lookup
+// =========================================================
+
+const FRGUpgradeGrantConfigRow*
+ARGGameModeBase::FindUpgradeGrantForCurrentStage(
+	FName& OutGrantId
+) const
+{
+	OutGrantId = NAME_None;
+
+	if (
+		CurrentStageConfigRowName.IsNone() ||
+		!IsValid(UpgradeGrantConfigTable)
+		)
+	{
+		return nullptr;
+	}
+
+	if (
+		UpgradeGrantConfigTable->GetRowStruct() !=
+		FRGUpgradeGrantConfigRow::StaticStruct()
+		)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"[RGGameMode] "
+				"UpgradeGrantConfigTable RowStruct mismatch."
+			)
+		);
+
+		return nullptr;
+	}
+
+	const FString StageToken =
+		CurrentStageConfigRowName.ToString();
+
+	for (
+		const FName& RowName :
+		UpgradeGrantConfigTable->GetRowNames()
+		)
+	{
+		const FRGUpgradeGrantConfigRow* Row =
+			UpgradeGrantConfigTable
+			->FindRow<FRGUpgradeGrantConfigRow>(
+				RowName,
+				TEXT("FindUpgradeGrantForCurrentStage"),
+				false
+			);
+
+		if (!Row)
+		{
+			continue;
+		}
+
+		// 현재 DT는 TriggerCondition이 설명 문자열이므로,
+		// 안정적인 부분인 Stage RowName 포함 여부만 사용한다.
+		if (
+			Row->TriggerCondition.Contains(
+				StageToken,
+				ESearchCase::IgnoreCase
+			)
+			)
+		{
+			OutGrantId = RowName;
+			return Row;
+		}
+	}
+
+	return nullptr;
+}
+
+
+// =========================================================
+// [추가] Start Upgrade Grant
+// =========================================================
+
+bool ARGGameModeBase::TryStartConfiguredUpgradeGrant()
+{
+	FName GrantId = NAME_None;
+
+	const FRGUpgradeGrantConfigRow* GrantRow =
+		FindUpgradeGrantForCurrentStage(
+			GrantId
+		);
+
+	if (!GrantRow)
+	{
+		return false;
+	}
+
+	URGProgressionSubsystem* Progression =
+		GetGameInstance()
+		? GetGameInstance()
+			->GetSubsystem<URGProgressionSubsystem>()
+		: nullptr;
+
+	if (!Progression)
+	{
+		return false;
+	}
+
+	const int32 CandidateCount =
+		FMath::Max(
+			1,
+			GrantRow->CandidateCount
+		);
+
+	const int32 SelectionCount =
+		FMath::Max(
+			1,
+			GrantRow->SelectionCount
+		);
+
+	// 현재 Progression 핵심 강화 UI는 1회 선택 단위로 동작한다.
+	// 현재 DataTable의 Evolution01/02도 SelectionCount=1이므로 그대로 일치한다.
+	if (SelectionCount != 1)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[RGGameMode] "
+				"UpgradeGrant '%s' SelectionCount=%d. "
+				"Current CoreUpgrade UI supports one selection per grant."
+			),
+			*GrantId.ToString(),
+			SelectionCount
+		);
+	}
+
+	if (GrantRow->bPauseTime)
+	{
+		ChangeRunState(
+			ERunState::Upgrade
+		);
+	}
+
+	if (
+		!Progression->PresentCoreUpgradeChoiceWithCount(
+			CandidateCount
+		)
+		)
+	{
+		return false;
+	}
+
+	ActiveUpgradeGrantId = GrantId;
+	PendingUpgradeSelections = 1;
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT(
+			"[RGGameMode] "
+			"UpgradeGrant started. "
+			"Grant=%s / Candidates=%d / Result=%s"
+		),
+		*GrantId.ToString(),
+		CandidateCount,
+		*GrantRow->CompletionResult
+	);
+
+	return true;
+}
+
+
+// =========================================================
+// [추가] Upgrade Grant Completion
+// =========================================================
+
+void ARGGameModeBase::HandleCoreUpgradeApplied(
+	FName UpgradeId,
+	int32 ActiveCoreUpgradeCount
+)
+{
+	if (ActiveUpgradeGrantId.IsNone())
+	{
+		return;
+	}
+
+	PendingUpgradeSelections =
+		FMath::Max(
+			0,
+			PendingUpgradeSelections - 1
+		);
+
+	if (PendingUpgradeSelections > 0)
+	{
+		return;
+	}
+
+	const FName CompletedGrant =
+		ActiveUpgradeGrantId;
+
+	ActiveUpgradeGrantId =
+		NAME_None;
+
+	OnUpgradeGrantCompleted.Broadcast(
+		CompletedGrant
+	);
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT(
+			"[RGGameMode] "
+			"UpgradeGrant completed. "
+			"Grant=%s / Applied=%s / CoreCount=%d"
+		),
+		*CompletedGrant.ToString(),
+		*UpgradeId.ToString(),
+		ActiveCoreUpgradeCount
+	);
+
+	// 최종 Result가 아니라면 강화 선택 후 다시 자유 이동 상태로 복귀.
+	if (
+		StageCompletionDestination !=
+		TEXT("Result")
+		)
+	{
+		ChangeRunState(
+			ERunState::RestHub
+		);
+	}
+}
+
+
 // =========================================================
 // ChangeRunState
 // =========================================================
@@ -733,63 +1822,14 @@ void ARGGameModeBase::ChangeRunState(
 	);
 
 
-	FTimerManager& TimerManager =
-		GetWorld()->GetTimerManager();
-
-
 	// -----------------------------------------------------
-	// Combat 진입
+	// [수정] 상태별 입력 / 시간 / AI / UI 정책을
+	// DT_RunFlowConfig에서 읽어 적용한다.
 	// -----------------------------------------------------
 
-	if (
-		CurrentState ==
-		ERunState::Combat
-		)
-	{
-		if (
-			!TimerManager.TimerExists(
-				RunTimerHandle
-			)
-			)
-		{
-			TimerManager.SetTimer(
-				RunTimerHandle,
-				this,
-				&ARGGameModeBase::UpdateRunTimer,
-				1.0f,
-				true
-			);
-		}
-		else if (
-			TimerManager.IsTimerPaused(
-				RunTimerHandle
-			)
-			)
-		{
-			TimerManager.UnPauseTimer(
-				RunTimerHandle
-			);
-		}
-	}
-
-
-	// -----------------------------------------------------
-	// Combat 이외 상태
-	// -----------------------------------------------------
-
-	else
-	{
-		if (
-			TimerManager.TimerExists(
-				RunTimerHandle
-			)
-			)
-		{
-			TimerManager.PauseTimer(
-				RunTimerHandle
-			);
-		}
-	}
+	ApplyRunFlowConfigForState(
+		CurrentState
+	);
 }
 
 
@@ -805,9 +1845,12 @@ void ARGGameModeBase::UpdateRunTimer()
 	}
 
 
+	// [수정]
+	// 특정 State 이름에 하드코딩하지 않고
+	// DT_RunFlowConfig의 TimePolicy를 기준으로 Countdown 여부를 판단한다.
 	if (
-		CurrentState !=
-		ERunState::Combat
+		CurrentTimePolicy !=
+		ERGRunTimePolicy::Countdown
 		)
 	{
 		return;
@@ -936,13 +1979,87 @@ void ARGGameModeBase::CheckEndCondition(
 
 bool ARGGameModeBase::CheckStageClearCondition() const
 {
-	// [수정]
-	// RequiredKills == 0은 "KillCount가 이 스테이지의 완료 조건이 아님"으로 처리한다.
-	// 예: Stage04_Boss는 추후 BossKilled Objective로 완료 판정을 연결한다.
-	return (
+	// -----------------------------------------------------
+	// Boss Stage:
+	// RequiredKills/RequiredCores가 모두 0이고 Destination=Result이면
+	// DT_ObjectiveConfig의 BossDefeat을 완료 조건으로 사용한다.
+	// -----------------------------------------------------
+
+	const bool bBossStage =
+		TargetKillsToClear <= 0 &&
+		RequiredCoresToClear <= 0 &&
+		StageCompletionDestination == TEXT("Result");
+
+	if (bBossStage)
+	{
+		return bBossDefeated;
+	}
+
+
+	// -----------------------------------------------------
+	// 일반 Stage: Kill objective
+	// -----------------------------------------------------
+
+	if (
 		TargetKillsToClear > 0 &&
-		CurrentKills >= TargetKillsToClear
-		);
+		CurrentKills < TargetKillsToClear
+		)
+	{
+		return false;
+	}
+
+
+	// -----------------------------------------------------
+	// Core objective
+	//
+	// 현재 실제 DataCore 이벤트가 없는 맵을 깨지 않도록
+	// bEnforceCoreObjective=true일 때만 StageClear 필수 조건으로 사용.
+	// -----------------------------------------------------
+
+	if (
+		bEnforceCoreObjective &&
+		RequiredCoresToClear > 0 &&
+		CurrentCoresDestroyed < RequiredCoresToClear
+		)
+	{
+		return false;
+	}
+
+
+	// -----------------------------------------------------
+	// RemainingEnemy objective
+	//
+	// 기존 요구사항 "목표 킬 수 달성 -> 포탈 활성화"를 유지하기 위해
+	// 기본값은 비활성(false).
+	// -----------------------------------------------------
+
+	if (bEnforceRemainingEnemyObjective)
+	{
+		const FRGObjectiveConfigRow* AliveRow =
+			FindObjectiveConfigRow(
+				TEXT("AliveEnemyGate")
+			);
+
+		const int32 RequiredRemaining =
+			AliveRow
+			? ResolveObjectiveRequiredValue(
+				TEXT("AliveEnemyGate"),
+				*AliveRow
+			)
+			: 0;
+
+		if (
+			CurrentRemainingEnemies >
+			RequiredRemaining
+			)
+		{
+			return false;
+		}
+	}
+
+
+	// Kill 목표가 0인 일반 스테이지가 실수로 자동 완료되지 않도록 한다.
+	return TargetKillsToClear > 0;
 }
 
 
@@ -1173,38 +2290,61 @@ void ARGGameModeBase::ExecuteStageClear()
 
 
 	// -----------------------------------------------------
-	// RestHub 상태 전환
+	// 최종 Boss Result
 	// -----------------------------------------------------
 
-	ChangeRunState(
-		ERunState::RestHub
-	);
+	if (
+		StageCompletionDestination ==
+		TEXT("Result")
+		)
+	{
+		ChangeRunState(
+			ERunState::Result
+		);
+
+		OnStageCleared.Broadcast();
+
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[STAGE CLEAR] Final result stage completed."
+			)
+		);
+
+		return;
+	}
 
 
 	// -----------------------------------------------------
-	// 외부 시스템에 Stage Clear 알림
+	// DT_UpgradeGrantConfig 확인
+	// -----------------------------------------------------
+	//
+	// Stage02 -> Evolution01
+	// Stage04_PreBoss -> Evolution02
+	//
+	// Grant가 있으면 TryStartConfiguredUpgradeGrant 내부에서
+	// Upgrade 상태 + CoreUpgrade UI를 시작한다.
+	// -----------------------------------------------------
+
+	const bool bUpgradeGrantStarted =
+		TryStartConfiguredUpgradeGrant();
+
+
+	// Upgrade Grant가 없는 일반 Stage는 자유 이동 상태로 전환.
+	if (!bUpgradeGrantStarted)
+	{
+		ChangeRunState(
+			ERunState::RestHub
+		);
+	}
+
+
+	// -----------------------------------------------------
+	// Portal/외부 시스템 Stage Clear 알림
 	// -----------------------------------------------------
 
 	OnStageCleared.Broadcast();
-
-
-	// -----------------------------------------------------
-	// 기존 Progression 처리
-	// -----------------------------------------------------
-	// 기존 팀원 작업을 건드리지 않기 위해 그대로 유지
-	// PresentCoreUpgradeChoice = 핵심 강화 선택지 표시
-	// -----------------------------------------------------
-
-	if (UGameInstance* GI = GetGameInstance())
-	{
-		if (
-			URGProgressionSubsystem* Progression =
-			GI->GetSubsystem<URGProgressionSubsystem>()
-			)
-		{
-			Progression->PresentCoreUpgradeChoice();
-		}
-	}
 
 
 	UE_LOG(
@@ -1212,8 +2352,11 @@ void ARGGameModeBase::ExecuteStageClear()
 		Warning,
 		TEXT(
 			"[STAGE CLEAR] "
-			"Stage clear condition met."
-		)
+			"Stage=%s / Destination=%s / UpgradeGrant=%s"
+		),
+		*CurrentStageConfigRowName.ToString(),
+		*StageCompletionDestination.ToString(),
+		bUpgradeGrantStarted ? TEXT("YES") : TEXT("NO")
 	);
 }
 

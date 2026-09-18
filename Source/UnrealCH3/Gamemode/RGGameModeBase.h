@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+// [추가] DT_RunFlowConfig의 Enum/Row Struct를 GameMode에서도 직접 사용
+#include "Gamemode/DataTableStruct/RGRunConfigRows.h"
 #include "RGGameModeBase.generated.h"
 
 class UUserWidget;
@@ -92,6 +94,42 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	FOnScoreChanged,
 	int32, CurrentScore,
 	int32, AddedScore
+);
+
+
+/**
+ * [추가] DT_RunFlowConfig의 정책이 실제 GameMode에 적용되었을 때 발생
+ *
+ * AI / UI 시스템이 GameMode를 직접 참조하지 않고도
+ * 현재 정책을 받을 수 있도록 Delegate로 노출한다.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(
+	FOnRunFlowPolicyChanged,
+	ERGRunInputPolicy, InputPolicy,
+	ERGRunTimePolicy, TimePolicy,
+	ERGRunAIState, AIState,
+	FName, TopUI
+);
+
+
+/**
+ * [추가] Objective 진행도가 바뀔 때 발생
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(
+	FOnObjectiveProgressChanged,
+	FName, ObjectiveId,
+	int32, CurrentValue,
+	int32, RequiredValue,
+	bool, bCompleted
+);
+
+
+/**
+ * [추가] DT_UpgradeGrantConfig로 시작된 핵심 강화 선택이 끝났을 때 발생
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FOnUpgradeGrantCompleted,
+	FName, GrantId
 );
 
 
@@ -201,6 +239,38 @@ public:
 		Category = "Run|Event"
 	)
 	FOnScoreChanged OnScoreChanged;
+
+
+	/**
+	 * [추가] RunFlow 정책 변경 알림
+	 *
+	 * BP_CombatZone / UIManager 등에서 필요하면 이 Delegate만 Bind하면 된다.
+	 */
+	UPROPERTY(
+		BlueprintAssignable,
+		Category = "Run|Event"
+	)
+	FOnRunFlowPolicyChanged OnRunFlowPolicyChanged;
+
+
+	/**
+	 * [추가] Objective 진행도 변경 알림
+	 */
+	UPROPERTY(
+		BlueprintAssignable,
+		Category = "Run|Event"
+	)
+	FOnObjectiveProgressChanged OnObjectiveProgressChanged;
+
+
+	/**
+	 * [추가] UpgradeGrant 완료 알림
+	 */
+	UPROPERTY(
+		BlueprintAssignable,
+		Category = "Run|Event"
+	)
+	FOnUpgradeGrantCompleted OnUpgradeGrantCompleted;
 
 
 	/**
@@ -473,6 +543,374 @@ public:
 	{
 		return CurrentScore;
 	}
+
+
+
+
+	// =========================================================
+	// Run Flow Config DataTable
+	// =========================================================
+
+public:
+
+	/**
+	 * [추가] Run State별 입력 / 시간 / AI / UI 정책 DataTable.
+	 *
+	 * Row Struct:
+	 * FRGRunFlowConfigRow
+	 *
+	 * 기존 DT_RunFlowConfig를 그대로 지정하면 된다.
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Config|RunFlow"
+	)
+	TObjectPtr<UDataTable> RunFlowConfigTable;
+
+
+	/**
+	 * [추가] 현재 실제 적용 중인 입력 정책.
+	 */
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Run|Policy"
+	)
+	ERGRunInputPolicy CurrentInputPolicy;
+
+
+	/**
+	 * [추가] 현재 실제 적용 중인 시간 정책.
+	 */
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Run|Policy"
+	)
+	ERGRunTimePolicy CurrentTimePolicy;
+
+
+	/**
+	 * [추가] 현재 DataTable이 요구하는 AI 상태.
+	 *
+	 * GameMode가 AI를 직접 제어하지 않고
+	 * OnRunFlowPolicyChanged를 통해 외부 시스템에 전달한다.
+	 */
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Run|Policy"
+	)
+	ERGRunAIState CurrentAIState;
+
+
+	/**
+	 * [추가] 현재 화면 최상단 UI의 논리 ID.
+	 *
+	 * 예: Inventory, UpgradeSelection, Result, Transition
+	 * 실제 Widget 생성은 기존 UI 시스템이 담당한다.
+	 */
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Run|Policy"
+	)
+	FName CurrentTopUI;
+
+
+	/**
+	 * [추가] 기획 문서/디버그용 전환 설명.
+	 *
+	 * DT의 AllowedTransition은 문자열이므로
+	 * 런타임 상태 전환 검증에는 사용하지 않는다.
+	 */
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Run|Policy"
+	)
+	FString CurrentAllowedTransition;
+
+
+	/**
+	 * [추가] ERunState에 대응하는 DT_RunFlowConfig Row를 읽어
+	 * 입력/시간 정책을 즉시 적용한다.
+	 */
+	UFUNCTION(
+		BlueprintCallable,
+		Category = "Config|RunFlow"
+	)
+	bool ApplyRunFlowConfigForState(
+		ERunState State
+	);
+
+
+	/**
+	 * [추가] 현재 ERunState가 어떤 DataTable Row를 사용하는지 반환.
+	 *
+	 * Init    -> WeaponSelect
+	 * Combat  -> Combat
+	 * Pause   -> InventoryPause
+	 * Upgrade -> CoreUpgrade
+	 * RestHub -> RestHub
+	 * Loading -> Loading
+	 * Result  -> Result
+	 */
+	UFUNCTION(
+		BlueprintPure,
+		Category = "Config|RunFlow"
+	)
+	FName GetRunFlowRowNameForState(
+		ERunState State
+	) const;
+
+
+	UFUNCTION(
+		BlueprintPure,
+		Category = "Run|Policy"
+	)
+	ERGRunAIState GetCurrentAIState() const
+	{
+		return CurrentAIState;
+	}
+
+
+	UFUNCTION(
+		BlueprintPure,
+		Category = "Run|Policy"
+	)
+	FName GetCurrentTopUI() const
+	{
+		return CurrentTopUI;
+	}
+
+
+protected:
+
+	/**
+	 * [추가] DT_RunFlowConfig가 없거나 Row를 찾지 못했을 때
+	 * 기존 GameMode 동작을 유지하기 위한 fallback.
+	 */
+	void ApplyLegacyRunFlowFallback(
+		ERunState State
+	);
+
+
+	/**
+	 * [추가] 입력 정책을 PlayerController에 실제 적용.
+	 */
+	void ApplyInputPolicy(
+		ERGRunInputPolicy InputPolicy
+	);
+
+
+	/**
+	 * [추가] 시간 정책을 RunTimerHandle에 실제 적용.
+	 */
+	void ApplyTimePolicy(
+		ERGRunTimePolicy TimePolicy
+	);
+
+
+
+
+	// =========================================================
+	// Objective Config DataTable
+	// =========================================================
+
+public:
+
+	/**
+	 * [추가] 목표 종류/필요값/완료 기여 설정.
+	 * 기존 DT_ObjectiveConfig를 그대로 지정한다.
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Config|Objective"
+	)
+	TObjectPtr<UDataTable> ObjectiveConfigTable;
+
+
+	/**
+	 * [안전 설정]
+	 * 현재 프로젝트의 DataCore 실제 파괴 이벤트가 연결된 뒤 true로 켠다.
+	 *
+	 * false여도 DT_ObjectiveConfig와 진행값 API는 동작하지만
+	 * Stage Clear를 막지는 않는다.
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Config|Objective"
+	)
+	bool bEnforceCoreObjective;
+
+
+	/**
+	 * [안전 설정]
+	 * AliveEnemyGate를 실제 StageClear 필수 조건으로 사용할지 여부.
+	 *
+	 * 현재 요구사항은 "목표 킬 수 달성 시 포탈 활성화"이므로
+	 * 기본값은 false다.
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Config|Objective"
+	)
+	bool bEnforceRemainingEnemyObjective;
+
+
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Run|Objective"
+	)
+	int32 CurrentCoresDestroyed;
+
+
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Run|Objective"
+	)
+	int32 CurrentRemainingEnemies;
+
+
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Run|Objective"
+	)
+	bool bBossDefeated;
+
+
+	/**
+	 * [추가] DataCore BP/Actor가 파괴되었을 때 호출하는 진입점.
+	 * BP_TestDataCore 등 기존 Blueprint에서 호출 가능.
+	 */
+	UFUNCTION(
+		BlueprintCallable,
+		Category = "Run|Objective"
+	)
+	void OnDataCoreDestroyed();
+
+
+	/**
+	 * [추가] SpawnManager -> GameFlowBridge가 현재 생존 적 수를 전달한다.
+	 */
+	UFUNCTION(
+		BlueprintCallable,
+		Category = "Run|Objective"
+	)
+	void SetRemainingEnemyCount(
+		int32 NewRemainingEnemyCount
+	);
+
+
+	/**
+	 * [추가] Boss 사망 전용 진입점.
+	 * GameFlowBridge가 ABossEnemy를 감지하면 이 함수를 사용한다.
+	 */
+	UFUNCTION(
+		BlueprintCallable,
+		Category = "Run|Objective"
+	)
+	void OnBossKilled();
+
+
+	UFUNCTION(
+		BlueprintPure,
+		Category = "Run|Objective"
+	)
+	int32 GetCurrentCoresDestroyed() const
+	{
+		return CurrentCoresDestroyed;
+	}
+
+
+	UFUNCTION(
+		BlueprintPure,
+		Category = "Run|Objective"
+	)
+	int32 GetCurrentRemainingEnemies() const
+	{
+		return CurrentRemainingEnemies;
+	}
+
+
+protected:
+
+	const FRGObjectiveConfigRow* FindObjectiveConfigRow(
+		FName ObjectiveId
+	) const;
+
+	int32 ResolveObjectiveRequiredValue(
+		FName ObjectiveId,
+		const FRGObjectiveConfigRow& Row
+	) const;
+
+	void BroadcastObjectiveProgress(
+		FName ObjectiveId
+	);
+
+
+	// =========================================================
+	// Upgrade Grant Config DataTable
+	// =========================================================
+
+public:
+
+	/**
+	 * [추가] 스테이지별 핵심 강화 지급 타이밍/후보 수 설정.
+	 * 기존 DT_UpgradeGrantConfig를 그대로 지정한다.
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Config|UpgradeGrant"
+	)
+	TObjectPtr<UDataTable> UpgradeGrantConfigTable;
+
+
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Run|UpgradeGrant"
+	)
+	FName ActiveUpgradeGrantId;
+
+
+	/**
+	 * [추가] 현재 스테이지에 해당하는 Grant Row를 찾아 핵심 강화 UI를 시작.
+	 * TriggerCondition 문자열 안에 현재 Stage RowName이 포함되는 방식을 사용한다.
+	 *
+	 * 현재 데이터:
+	 * Evolution01 -> "Stage02 완료→RestHub 진입"
+	 * Evolution02 -> "Stage04_PreBoss 완료"
+	 */
+	UFUNCTION(
+		BlueprintCallable,
+		Category = "Run|UpgradeGrant"
+	)
+	bool TryStartConfiguredUpgradeGrant();
+
+
+protected:
+
+	UFUNCTION()
+	void HandleCoreUpgradeApplied(
+		FName UpgradeId,
+		int32 ActiveCoreUpgradeCount
+	);
+
+	const FRGUpgradeGrantConfigRow* FindUpgradeGrantForCurrentStage(
+		FName& OutGrantId
+	) const;
+
+	int32 PendingUpgradeSelections;
 
 
 

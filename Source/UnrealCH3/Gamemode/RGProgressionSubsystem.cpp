@@ -355,20 +355,42 @@ TArray<FRGUpgradeOption> URGProgressionSubsystem::GenerateCoreUpgradeOptions(int
 
 void URGProgressionSubsystem::PresentCoreUpgradeChoice()
 {
+	// [수정] 기존 호출은 그대로 3개 후보를 사용한다.
+	PresentCoreUpgradeChoiceWithCount(3);
+}
+
+// [추가] DT_UpgradeGrantConfig의 CandidateCount를 사용해 핵심 강화 후보를 표시한다.
+bool URGProgressionSubsystem::PresentCoreUpgradeChoiceWithCount(int32 CandidateCount)
+{
 	if (!CanAcquireMoreCoreUpgrades())
 	{
-		return;   // 이미 2개 다 채웠으면 맵 넘어가도 카드 안 뜸
+		return false;
 	}
 
-	TArray<FRGUpgradeOption> Options = GenerateCoreUpgradeOptions(3);
+	const int32 SafeCandidateCount = FMath::Max(1, CandidateCount);
+
+	TArray<FRGUpgradeOption> Options =
+		GenerateCoreUpgradeOptions(SafeCandidateCount);
+
 	if (Options.Num() == 0)
 	{
-		return;   // 이 무기로 고를 수 있는 핵심 강화가 더 없음
+		return false;
 	}
 
 	LastPresentedCoreOptions = Options;
 	bIsPresentingCoreUpgradeChoice = true;
-	OnCoreUpgradeReady.Broadcast(Options);   // 일반 강화와 다른 델리게이트 -> UI에서 다르게 렌더링
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[CoreUpgrade] 후보 표시: Requested=%d / Actual=%d"),
+		SafeCandidateCount,
+		Options.Num()
+	);
+
+	OnCoreUpgradeReady.Broadcast(Options);
+
+	return true;
 }
 
 void URGProgressionSubsystem::ApplyCoreUpgrade(FName UpgradeId)
@@ -385,7 +407,20 @@ void URGProgressionSubsystem::ApplyCoreUpgrade(FName UpgradeId)
 	ActiveCoreUpgrades.Add(UpgradeId);
 	bIsPresentingCoreUpgradeChoice = false;
 
-	UE_LOG(LogTemp, Warning, TEXT("[CoreUpgrade] %s 획득 (%d/%d)"), *UpgradeId.ToString(), ActiveCoreUpgrades.Num(), MaxCoreUpgradeCount);
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[CoreUpgrade] %s 획득 (%d/%d)"),
+		*UpgradeId.ToString(),
+		ActiveCoreUpgrades.Num(),
+		MaxCoreUpgradeCount
+	);
+
+	// [추가] GameMode / Portal이 강화 적용 완료 시점을 받을 수 있도록 Broadcast.
+	OnCoreUpgradeApplied.Broadcast(
+		UpgradeId,
+		ActiveCoreUpgrades.Num()
+	);
 }
 
 const FRGCoreUpgradeRow* URGProgressionSubsystem::FindCoreUpgradeRow(FName UpgradeId) const

@@ -14,6 +14,9 @@
 // [추가] 플레이어의 실제 장착 무기 Delegate에 연결하기 위해 사용
 #include "Player/RGCharacter.h"
 #include "RGBaseWeapon.h"
+// [추가] RunFlow TopUI 정책 수신
+#include "Gamemode/RGGameModeBase.h"
+#include "Kismet/GameplayStatics.h"
 
 void AUIManager::BeginPlay()
 {
@@ -27,6 +30,9 @@ void AUIManager::BeginPlay()
 	// Character의 BeginPlay가 먼저 끝났다면 CurrentWeapon을 즉시 바인딩하고,
 	// 아직 무기 생성 전이라면 OnWeaponEquipped Delegate가 이후 자동으로 처리한다.
 	TryBindPlayerWeaponSource();
+
+	// [추가] 현재 RunFlow TopUI 정책도 자동 연결
+	TryBindRunFlowSource();
 }
 
 void AUIManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -53,8 +59,8 @@ bool AUIManager::IsInputBlockingLayer(EUILayer Layer) const
 	switch (Layer)
 	{
 	case EUILayer::Selection:
-	case EUILayer::Menu:
-	case EUILayer::Transition:
+	case EUILayer::Menu:	
+	case EUILayer::Transition:		
 	case EUILayer::Result:
 		return true;
 
@@ -170,6 +176,71 @@ void AUIManager::HandlePlayerWeaponEquipped(ARGBaseWeapon* NewWeapon)
 		FText::FromString(WeaponDisplayName)
 	);
 }
+
+
+// [추가] GameMode RunFlow 정책 연결
+void AUIManager::TryBindRunFlowSource()
+{
+	ARGGameModeBase* GameMode =
+		Cast<ARGGameModeBase>(
+			UGameplayStatics::GetGameMode(this)
+		);
+
+	if (!IsValid(GameMode))
+	{
+		return;
+	}
+
+	if (BoundRunFlowGameMode.Get() != GameMode)
+	{
+		UnbindRunFlowSource();
+
+		BoundRunFlowGameMode = GameMode;
+
+		GameMode->OnRunFlowPolicyChanged.AddUniqueDynamic(
+			this,
+			&AUIManager::HandleRunFlowPolicyChanged
+		);
+	}
+
+	// BeginPlay 순서와 관계없이 현재 TopUI를 즉시 동기화
+	OnRunFlowTopUIChanged(
+		GameMode->GetCurrentTopUI()
+	);
+}
+
+
+void AUIManager::UnbindRunFlowSource()
+{
+	if (
+		ARGGameModeBase* GameMode =
+			BoundRunFlowGameMode.Get()
+		)
+	{
+		GameMode->OnRunFlowPolicyChanged.RemoveDynamic(
+			this,
+			&AUIManager::HandleRunFlowPolicyChanged
+		);
+	}
+
+	BoundRunFlowGameMode.Reset();
+}
+
+
+void AUIManager::HandleRunFlowPolicyChanged(
+	ERGRunInputPolicy InputPolicy,
+	ERGRunTimePolicy TimePolicy,
+	ERGRunAIState AIState,
+	FName TopUI
+)
+{
+	// 입력 모드와 시간은 GameMode가 이미 실제 적용한다.
+	// UIManager는 자신이 담당하는 TopUI 논리 ID만 BP에 전달한다.
+	OnRunFlowTopUIChanged(
+		TopUI
+	);
+}
+
 
 void AUIManager::TestOpenPauseMenu()
 {

@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
 #include "UI/UITypes.h"
+// [추가] RunFlow 정책 Delegate 타입
+#include "Gamemode/DataTableStruct/RGRunConfigRows.h"
 #include "UIManager.generated.h"
 
 class UHUDWidget;
@@ -14,15 +16,16 @@ class UWeaponInfoWidget;
 class ARGBaseWeapon;
 class UCrosshairWidget;
 class ARGCharacter;
+class ARGGameModeBase;
 
 /**
- *
+ * 
  */
 UCLASS()
 class UNREALCH3_API AUIManager : public AHUD
 {
 	GENERATED_BODY()
-
+	
 protected:
 	virtual void BeginPlay() override;
 
@@ -87,8 +90,33 @@ protected:
 	// [추가] 현재 구독 중인 플레이어 캐릭터를 약한 참조로 보관한다.
 	TWeakObjectPtr<ARGCharacter> BoundPlayerCharacter;
 
+
+	// [추가] GameMode RunFlow 정책 연결
+	void TryBindRunFlowSource();
+	void UnbindRunFlowSource();
+
+	UFUNCTION()
+	void HandleRunFlowPolicyChanged(
+		ERGRunInputPolicy InputPolicy,
+		ERGRunTimePolicy TimePolicy,
+		ERGRunAIState AIState,
+		FName TopUI
+	);
+
+	TWeakObjectPtr<ARGGameModeBase> BoundRunFlowGameMode;
+
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI|Damage")
 	void OnDamageNumberDisplayRequested(float AppliedDamage, AActor* TargetActor, FVector WorldLocation);
+
+
+	/**
+	 * [추가] DT_RunFlowConfig.TopUI가 바뀌었을 때 BP에 전달.
+	 *
+	 * 실제 Widget Class는 BP_CombatUIManager가 알고 있으므로
+	 * C++에서 이름->Widget을 추측하지 않고 FName만 전달한다.
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI|RunFlow")
+	void OnRunFlowTopUIChanged(FName TopUI);
 
 	//공격 경고 표시
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI|CombatFeedback")
@@ -108,10 +136,10 @@ public:
 
 	UFUNCTION(Exec)
 	void TestLowHealthEffect(float CurrentHealth, float MaxHealth);
-
+	
 	UFUNCTION(Exec)
 	void TestOpenSelection();
-
+	
 	UFUNCTION(Exec)
 	void TestCloseSelection();
 
