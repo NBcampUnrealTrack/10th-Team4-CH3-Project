@@ -9,6 +9,13 @@
 #include "BaseEnemy.generated.h"
 
 class UBehaviorTree;
+class ABaseEnemy;
+
+// [추가] 적의 정상 사망을 외부 시스템에 알리는 이벤트
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+    FOnEnemyDeath,
+    ABaseEnemy*, DeadEnemy
+);
 
 UCLASS()
 class UNREALCH3_API ABaseEnemy : public ACharacter
@@ -18,6 +25,10 @@ class UNREALCH3_API ABaseEnemy : public ACharacter
 public:
     // Sets default values for this character's properties
     ABaseEnemy();
+
+    // [추가] 정상 사망 시 1회 Broadcast. SpawnManager가 이 이벤트를 구독한다.
+    UPROPERTY(BlueprintAssignable, Category = "Enemy|Event")
+    FOnEnemyDeath OnEnemyDeath;
     UFUNCTION()
     virtual void BeginPlay() override;
     UFUNCTION()
@@ -33,7 +44,7 @@ public:
     UFUNCTION()
     bool IsTargetInAttackRange() const;
     //bool IsTargetInDetectRange() const;
-    
+
     UFUNCTION()
     EEnemyStateEnum GetEnemyState() const;
     UFUNCTION()
@@ -52,6 +63,10 @@ public:
     virtual void HideAttackRangeLine();
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void FaceTarget(float DeltaTime, float RotationSpeed = 10.f);
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void StartAttackCooldown();
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void ResetAttackCooldown();
 
     UBehaviorTree* GetEnemyBehaviorTree() const;
     float GetViewingAngle();
@@ -62,8 +77,31 @@ public:
     float GetWarningTime();
     int GetScore();
     float GetExp();
+
+    //낙사 중 공격 방지를 위해 CanAttack 수정(조건 추가)
+    UFUNCTION(BlueprintPure, Category = "Combat")
+    bool CanAttack() const;
+
     void SetState(EEnemyStateEnum State);
     void InitializeData();
+
+    // 낙사 구역으로 떨어진 적 복귀
+    virtual void FellOutOfWorld(const UDamageType& DamageType) override;
+
+    // 낙사 시 복귀요청
+    UFUNCTION(BlueprintCallable, Category = "Enemy|Recovery")
+    bool RequestSafetyRecovery();
+
+    // 복귀 직후 공격 금지 상태 판단
+    UFUNCTION(BlueprintPure, Category = "Enemy|Recovery")
+    bool IsRecoveryAttackLocked() const;
+
+    //복귀 시 이동상태 초기화
+    void BeginSafetyRecovery();
+
+    // 복귀 보호 시간 이후 공격 제한 해제
+    void FinishSafetyRecovery();
+
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "Enemy|Data")
@@ -130,9 +168,26 @@ protected:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     bool bIsDead = false;           // 사망 여부
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    bool bCanAttack = true; //초기화 코드 추가했습니다
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
     EEnemyStateEnum CurrentState;   // 현재 상태
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
     EEnemyAttackType AttackType;    // 공격타입
+
+    // 낙사 복귀 중복 처리 방지
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|Recovery")
+    bool bSafetyRecoveryInProgress = false;
+
+    //복귀 직후 적이 플레이어를 바로 공격못하도록 제한
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|Recovery")
+    bool bRecoveryAttackLocked = false;
+
+    // 복귀 후 공격제한 시간
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Recovery", meta = (ClampMin = "0.0", Units = "s"))
+    float RecoveryAttackLockSeconds = 1.0f;
+
+    // 공격 제한 해제 타이머
+    FTimerHandle RecoveryAttackLockTimer;
 };

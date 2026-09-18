@@ -11,6 +11,12 @@
 #include "Components/OverlaySlot.h"
 #include "UI/View/Combat/WeaponInfoWidget.h"
 #include "UI/View/Combat/CrosshairWidget.h"
+// [추가] 플레이어의 실제 장착 무기 Delegate에 연결하기 위해 사용
+#include "Player/RGCharacter.h"
+#include "RGBaseWeapon.h"
+// [추가] RunFlow TopUI 정책 수신
+#include "Gamemode/RGGameModeBase.h"
+#include "Kismet/GameplayStatics.h"
 
 void AUIManager::BeginPlay()
 {
@@ -19,10 +25,21 @@ void AUIManager::BeginPlay()
 
 	Super::BeginPlay();
 
+	// [추가] Super::BeginPlay 이후에 연결한다.
+	// 이 시점에는 BP_CombatUIManager의 BeginPlay가 끝난 뒤이므로 Crosshair/WeaponInfo View 등록도 완료되어 있다.
+	// Character의 BeginPlay가 먼저 끝났다면 CurrentWeapon을 즉시 바인딩하고,
+	// 아직 무기 생성 전이라면 OnWeaponEquipped Delegate가 이후 자동으로 처리한다.
+	TryBindPlayerWeaponSource();
+
+	// [추가] 현재 RunFlow TopUI 정책도 자동 연결
+	TryBindRunFlowSource();
 }
 
 void AUIManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	// [추가] Character Delegate부터 안전하게 해제한다.
+	UnbindPlayerWeaponSource();
+
 	UE_LOG(LogTemp,
 		Log,
 		TEXT("[UIManager] EndPlay - Remove HUD Widget")
@@ -91,6 +108,139 @@ void AUIManager::HandleDamageNumberRequested(float AppliedDamage, AActor* Target
 {
 	OnDamageNumberDisplayRequested(AppliedDamage, TargetActor, WorldLocation);
 }
+
+// [추가] 플레이어 캐릭터와 무기 장착 이벤트 연결
+void AUIManager::TryBindPlayerWeaponSource()
+{
+	if (!IsValid(PlayerOwner))
+	{
+		return;
+	}
+
+	ARGCharacter* PlayerCharacter = Cast<ARGCharacter>(PlayerOwner->GetPawn());
+	if (!IsValid(PlayerCharacter))
+	{
+		return;
+	}
+
+	// 이미 같은 캐릭터에 연결되어 있다면 Delegate를 중복 등록하지 않는다.
+	if (BoundPlayerCharacter.Get() != PlayerCharacter)
+	{
+		UnbindPlayerWeaponSource();
+
+		BoundPlayerCharacter = PlayerCharacter;
+		PlayerCharacter->OnWeaponEquipped.AddUniqueDynamic(
+			this,
+			&AUIManager::HandlePlayerWeaponEquipped
+		);
+	}
+
+	// Character가 UIManager보다 먼저 BeginPlay를 끝낸 경우를 처리한다.
+	// 이미 생성된 CurrentWeapon이 있으면 지금 즉시 HUDController에 바인딩한다.
+	if (ARGBaseWeapon* CurrentWeapon = PlayerCharacter->GetCurrentWeapon())
+	{
+		HandlePlayerWeaponEquipped(CurrentWeapon);
+	}
+}
+
+// [추가] 플레이어 캐릭터 Delegate 연결 해제
+void AUIManager::UnbindPlayerWeaponSource()
+{
+	if (ARGCharacter* PlayerCharacter = BoundPlayerCharacter.Get())
+	{
+		PlayerCharacter->OnWeaponEquipped.RemoveDynamic(
+			this,
+			&AUIManager::HandlePlayerWeaponEquipped
+		);
+	}
+
+	BoundPlayerCharacter.Reset();
+}
+
+// [추가] 새 무기가 실제 장착된 순간 HUDController에 연결
+void AUIManager::HandlePlayerWeaponEquipped(ARGBaseWeapon* NewWeapon)
+{
+	if (!IsValid(HUDControllerInstance) || !IsValid(NewWeapon))
+	{
+		return;
+	}
+
+	// 별도의 BP Text 입력을 강제하지 않도록 클래스 이름을 기본 표시명으로 사용한다.
+	// 표시명은 UI 용도일 뿐, 히트/킬/데미지 피드백 동작에는 영향을 주지 않는다.
+	FString WeaponDisplayName = NewWeapon->GetClass()->GetName();
+	WeaponDisplayName.RemoveFromStart(TEXT("BP_"));
+	WeaponDisplayName.RemoveFromEnd(TEXT("_C"));
+
+	HUDControllerInstance->BindWeapon(
+		NewWeapon,
+		FText::FromString(WeaponDisplayName)
+	);
+}
+
+
+// [추가] GameMode RunFlow 정책 연결
+void AUIManager::TryBindRunFlowSource()
+{
+	ARGGameModeBase* GameMode =
+		Cast<ARGGameModeBase>(
+			UGameplayStatics::GetGameMode(this)
+		);
+
+	if (!IsValid(GameMode))
+	{
+		return;
+	}
+
+	if (BoundRunFlowGameMode.Get() != GameMode)
+	{
+		UnbindRunFlowSource();
+
+		BoundRunFlowGameMode = GameMode;
+
+		GameMode->OnRunFlowPolicyChanged.AddUniqueDynamic(
+			this,
+			&AUIManager::HandleRunFlowPolicyChanged
+		);
+	}
+
+	// BeginPlay 순서와 관계없이 현재 TopUI를 즉시 동기화
+	OnRunFlowTopUIChanged(
+		GameMode->GetCurrentTopUI()
+	);
+}
+
+
+void AUIManager::UnbindRunFlowSource()
+{
+	if (
+		ARGGameModeBase* GameMode =
+			BoundRunFlowGameMode.Get()
+		)
+	{
+		GameMode->OnRunFlowPolicyChanged.RemoveDynamic(
+			this,
+			&AUIManager::HandleRunFlowPolicyChanged
+		);
+	}
+
+	BoundRunFlowGameMode.Reset();
+}
+
+
+void AUIManager::HandleRunFlowPolicyChanged(
+	ERGRunInputPolicy InputPolicy,
+	ERGRunTimePolicy TimePolicy,
+	ERGRunAIState AIState,
+	FName TopUI
+)
+{
+	// 입력 모드와 시간은 GameMode가 이미 실제 적용한다.
+	// UIManager는 자신이 담당하는 TopUI 논리 ID만 BP에 전달한다.
+	OnRunFlowTopUIChanged(
+		TopUI
+	);
+}
+
 
 void AUIManager::TestOpenPauseMenu()
 {

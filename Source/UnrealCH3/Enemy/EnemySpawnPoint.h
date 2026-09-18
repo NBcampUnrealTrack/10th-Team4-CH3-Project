@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Enemy/Interface/EnemyRecoveryProvider.h"
 #include "EnemySpawnPoint.generated.h"
 
 class ABaseEnemy;
@@ -27,7 +28,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Enemy|Spawn Point")
 	bool CanBeUsedForRecovery() const;
 
+	// 스폰하는 용도
 	
+
 	UFUNCTION(BlueprintPure, Category = "Enemy|Spawn Point")
 	FTransform GetEnemySpawnTransform(TSubclassOf<ABaseEnemy> EnemyClass) const;
 

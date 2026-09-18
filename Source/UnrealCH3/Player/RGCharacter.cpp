@@ -126,9 +126,9 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
 		ARGPlayerController* PlayerController = Cast<ARGPlayerController>(GetController());
-		
+
 		if (!PlayerController) return;
-		
+
 		if (PlayerController->MoveAction)
 		{
 			EnhancedInput->BindAction(PlayerController->MoveAction, ETriggerEvent::Triggered, this, &ARGCharacter::Move);
@@ -179,15 +179,18 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 
 float ARGCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DmageEvent, AController* EventIntigator, AActor* DamageCauser)
 {
+
 	if (bIsGodMode || bIsDead)
 	{
 		return 0.0f;
 	}
+	UE_LOG(LogTemp, Warning, TEXT("Player TakeDamage called! Amount: %f, Causer: %s"),
+		DamageAmount, DamageCauser ? *DamageCauser->GetName() : TEXT("None"));
 	// 1초 재생타이머 정리
 	GetWorldTimerManager().ClearTimer(TickRegenerationTimerHandle);
 	// 5초 타이머 시작
 	GetWorldTimerManager().SetTimer(StartRegenerationTimerHandle, this, &ARGCharacter::StartRegenerateHealth, StartRegenerationDelay, false);
-	
+
 	CurrentHealth = FMath::Clamp(CurrentHealth - DamageAmount, 0.0f, GetMaxHealthWithUpgrade());
 
 	if (CurrentHealth <= 0.0f)
@@ -313,7 +316,7 @@ void ARGCharacter::SetAimState(bool bCanAim)
 			AimTimeline->Reverse();
 		}
 	}
-	
+
 }
 
 void ARGCharacter::SetSprintState(bool bCanSprint)
@@ -476,6 +479,10 @@ void ARGCharacter::EquipWeapon(TSubclassOf<ARGBaseWeapon> SpawnWeaponClass)
 		CurrentWeapon->OnShotFiredStop.AddDynamic(this, &ARGCharacter::StopFireAnimation);
 		CurrentWeapon->OnReloadStarted.AddDynamic(this, &ARGCharacter::PlayReloadAnimation);
 		CurrentWeapon->OnReloadCanceled.AddDynamic(this, &ARGCharacter::StopReloadAnimation);
+
+		// [추가] 무기가 완전히 생성되고 OwningCharacter/Socket/애니메이션 바인딩까지 끝난 뒤 알린다.
+		// UIManager는 이 이벤트를 받아 HUDController에 현재 무기를 바인딩한다.
+		OnWeaponEquipped.Broadcast(CurrentWeapon);
 	}
 }
 
@@ -653,7 +660,7 @@ void ARGCharacter::StartAim(const FInputActionValue& value)
 	{
 		return;
 	}
-	
+
 	SetAimState(true);
 }
 

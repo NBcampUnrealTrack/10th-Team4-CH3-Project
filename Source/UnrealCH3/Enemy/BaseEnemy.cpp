@@ -12,6 +12,11 @@
 #include "Engine/DamageEvents.h"
 #include "Gamemode/RGProgressionSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
+// 낙사 복귀용
+#include "Enemy/Interface/EnemyRecoveryProvider.h"
+#include "AIController.h"
+#include "TimerManager.h"
+
 
 // Sets default values
 ABaseEnemy::ABaseEnemy()
@@ -20,7 +25,7 @@ ABaseEnemy::ABaseEnemy()
 	PrimaryActorTick.bCanEverTick = false;
 	AIControllerClass = AAIEnemyController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
-	
+
 	static ConstructorHelpers::FObjectFinder<UDataTable> StateTable(TEXT("/Script/Engine.DataTable'/Game/Enemy/EnemyData.EnemyData'"));
 	if (StateTable.Succeeded())
 	{
@@ -37,6 +42,12 @@ ABaseEnemy::ABaseEnemy()
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 120.0f, 0.0f);
 	bUseControllerRotationYaw = false;
+
+	//낙사 이동 방지설정
+	GetCharacterMovement()->bCanWalkOffLedges = false;
+	GetCharacterMovement()->bCanWalkOffLedgesWhenCrouching = false;
+
+	bUseControllerRotationYaw = false;
 }
 
 // Called when the game starts or when spawned
@@ -45,6 +56,10 @@ void ABaseEnemy::BeginPlay()
 	Super::BeginPlay();
 
 	InitializeData();
+	if (AAIEnemyController* EnemyCont = Cast<AAIEnemyController>(GetController()))
+	{
+		EnemyCont->UpdateSight();
+	}
 	//설정된 최대 체력으로 시작
 	CurrentHP = FMath::Max(0.f, MaxHP);
 
@@ -88,7 +103,7 @@ void ABaseEnemy::InitializeData()
 		Score = StateDataRow->Score;
 		Exp = StateDataRow->EXP;
 	}
-	
+
 	if (FStructEnemyAttackType* AttackDataRow = EnemyAttackTypeDataTable->FindRow<FStructEnemyAttackType>(EnemyName, TEXT("InitializeData")))
 	{
 		ViewingDistance = AttackDataRow->ViewingDistance;
@@ -101,6 +116,16 @@ void ABaseEnemy::InitializeData()
 		WarningTime = AttackDataRow->WarningTime;
 		AttackType = AttackDataRow->AttackType;
 	}
+}
+
+void ABaseEnemy::FellOutOfWorld(const UDamageType& DamageType)
+{
+	if (RequestSafetyRecovery())
+	{
+		return;
+	}
+
+	Super::FellOutOfWorld(DamageType);
 }
 
 void ABaseEnemy::Attack()
@@ -130,7 +155,7 @@ float ABaseEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
 	);
 
 	//죽은 적에게 중복 피해 방지
-	if (bIsDead || CurrentHP<=0.f || DamageAmount <= 0.f)
+	if (bIsDead || CurrentHP <= 0.f || DamageAmount <= 0.f)
 	{
 		return 0.0f;
 	}
@@ -210,6 +235,39 @@ void ABaseEnemy::Die()
 		UE_LOG(LogTemp, Error, TEXT("[%s] URGProgressionSubsystem을 찾을 수 없음!"), *GetName());   // 추가
 	}
 
+	// [추가] GameMode를 직접 참조하지 않고 정상 사망 사실만 외부에 알린다.
+	// bIsDead 가드 덕분에 Die()당 한 번만 Broadcast된다.
+	// [DEBUG] 정상 사망 Delegate가 실제로 Broadcast되는지 확인
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("=== BASE ENEMY OnEnemyDeath BROADCAST : %s ==="),
+		*GetName()
+	);
+
+	OnEnemyDeath.Broadcast(this);
+
+	// [추가] 사망한 적은 즉시 화면/충돌에서 제거하고,
+	// 같은 프레임의 데미지 피드백(히트마커/킬마커/데미지 숫자)이 끝난 뒤
+	// 안전하게 실제 Actor가 파괴되도록 짧은 LifeSpan을 건다.
+	// 여기서 Destroy()를 즉시 호출하지 않는 이유는 TakeDamage()가 Die() 이후에도
+	// ReceiveDamageFeedback(..., this, ...)를 호출하기 때문이다.
+	SetActorEnableCollision(false);
+	SetActorHiddenInGame(true);
+
+	if (AAIController* EnemyController = Cast<AAIController>(GetController()))
+	{
+		EnemyController->StopMovement();
+	}
+
+	if (GetCharacterMovement())
+	{
+		GetCharacterMovement()->StopMovementImmediately();
+		GetCharacterMovement()->DisableMovement();
+	}
+
+	SetLifeSpan(0.1f);
+
 	UE_LOG(LogTemp, Log, TEXT("Character is Dead!"));
 }
 
@@ -232,7 +290,6 @@ void ABaseEnemy::ShowAttackRangeLine()
 {
 	FVector Center = GetActorLocation() + GetActorForwardVector() * (AttackMaxRange / 2.0f);
 	FRotator Rot = GetActorRotation();
-
 	AttackRangeMesh->SetWorldLocation(Center);
 	AttackRangeMesh->SetWorldRotation(Rot);
 	AttackRangeMesh->SetVisibility(true);
@@ -257,6 +314,23 @@ void ABaseEnemy::MoveAwayFromTarget(float DeltaSeconds)
 	Direction = Direction.GetSafeNormal();
 
 	AddMovementInput(Direction, 1.0f);
+}
+
+void ABaseEnemy::StartAttackCooldown()
+{
+	bCanAttack = false;
+	GetWorldTimerManager().SetTimer(
+		AttackCoolTimer,
+		this,
+		&ABaseEnemy::ResetAttackCooldown,
+		AttackCoolTime,
+		false
+	);
+}
+
+void ABaseEnemy::ResetAttackCooldown()
+{
+	bCanAttack = true;
 }
 
 bool ABaseEnemy::IsTargetInAttackRange() const
@@ -327,4 +401,121 @@ float ABaseEnemy::GetExp()
 void ABaseEnemy::SetState(EEnemyStateEnum State)
 {
 	CurrentState = State;
+}
+
+bool ABaseEnemy::CanAttack() const
+{
+	// 공격가능 && 죽지않음 && 복귀처리중 아님 && 복귀 후 공격 잠금 상태 아님
+	return bCanAttack && !bIsDead && !bSafetyRecoveryInProgress && !bRecoveryAttackLocked;
+}
+
+bool ABaseEnemy::RequestSafetyRecovery()
+{
+	if (bIsDead || bSafetyRecoveryInProgress)
+	{
+		return false;
+	}
+
+	AActor* RecoveryProvider = GetOwner();
+
+	if (!IsValid(RecoveryProvider))
+	{
+		return false;
+	}
+
+	if (!RecoveryProvider->GetClass()->ImplementsInterface(UEnemyRecoveryProvider::StaticClass()))
+	{
+		return false;
+	}
+
+	FTransform RecoveryTransform;
+
+	const bool bFoundRecoveryTransform = IEnemyRecoveryProvider::Execute_FindRecoveryTransform(RecoveryProvider, this, RecoveryTransform);
+
+	if (!bFoundRecoveryTransform)
+	{
+		return false;
+	}
+
+	BeginSafetyRecovery();
+
+	const bool bTeleported = TeleportTo(RecoveryTransform.GetLocation(), RecoveryTransform.Rotator(), false, false);
+
+	if (!bTeleported)
+	{
+		bSafetyRecoveryInProgress = false;
+		bRecoveryAttackLocked = false;
+
+		return false;
+	}
+
+	if (GetCharacterMovement())
+	{
+		GetCharacterMovement()->StopMovementImmediately();
+
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	}
+
+	GetWorldTimerManager().ClearTimer(RecoveryAttackLockTimer);
+
+	if (RecoveryAttackLockSeconds <= 0.0f)
+	{
+		FinishSafetyRecovery();
+	}
+	else
+	{
+		GetWorldTimerManager().SetTimer(
+			RecoveryAttackLockTimer,
+			this,
+			&ABaseEnemy::FinishSafetyRecovery,
+			RecoveryAttackLockSeconds,
+			false
+		);
+	}
+
+	return true;
+}
+
+bool ABaseEnemy::IsRecoveryAttackLocked() const
+{
+	return bRecoveryAttackLocked;
+}
+
+void ABaseEnemy::BeginSafetyRecovery()
+{
+	bSafetyRecoveryInProgress = true;
+	bRecoveryAttackLocked = true;
+	bCanAttack = false;
+
+	TargetActor = nullptr;
+
+	CurrentState = EEnemyStateEnum::Idle;
+
+	if (AAIController* EnemyController = Cast<AAIController>(GetController()))
+	{
+		EnemyController->StopMovement();
+	}
+
+	if (GetCharacterMovement())
+	{
+		GetCharacterMovement()->StopMovementImmediately();
+
+		GetCharacterMovement()->SetMovementMode(MOVE_None);
+	}
+
+	GetWorldTimerManager().ClearTimer(AttackCoolTimer);
+	GetWorldTimerManager().ClearTimer(WarningTimer);
+
+}
+
+void ABaseEnemy::FinishSafetyRecovery()
+{
+	bSafetyRecoveryInProgress = false;
+	bRecoveryAttackLocked = false;
+	bCanAttack = true;
+
+	if (GetCharacterMovement() && GetCharacterMovement()->MovementMode == MOVE_None)
+	{
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	}
 }
