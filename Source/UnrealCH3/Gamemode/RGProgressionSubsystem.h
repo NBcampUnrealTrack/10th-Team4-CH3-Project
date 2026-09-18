@@ -17,14 +17,6 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnExperienceChanged, float, Curr
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCoreUpgradeReady, const TArray<FRGUpgradeOption>&, Options);
 
-// [추가] 핵심 강화 1개가 실제 적용된 직후 외부 시스템에 알린다.
-// GameMode / Portal이 강화 완료 시점을 직접 Progression 내부 구현에 결합하지 않게 한다.
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
-	FOnCoreUpgradeApplied,
-	FName, UpgradeId,
-	int32, ActiveCoreUpgradeCount
-);
-
 //레벨과 강화 스택을 들고 있을 저장소
 
 UCLASS()
@@ -141,41 +133,14 @@ protected:
 
 public:
 	// ======= 핵심 강화 함수 ==========================================================
-
-	UFUNCTION(BlueprintCallable, Category = "Progression|CoreUpgrade")
 	void InitializeCoreUpgrades(UDataTable* InCoreUpgradeTable);
-
-	UFUNCTION(BlueprintPure, Category = "Progression|CoreUpgrade")
 	bool HasCoreUpgrade(FName UpgradeId) const;
-
-	UFUNCTION(BlueprintPure, Category = "Progression|CoreUpgrade")
 	bool CanAcquireMoreCoreUpgrades() const;
-
 	TArray<FRGUpgradeOption> GenerateCoreUpgradeOptions(int32 Count) const;
-
-	// [기존 호환] 기본 3개 후보
-	UFUNCTION(BlueprintCallable, Category = "Progression|CoreUpgrade")
+	// 맵 전환 시 GameMode가 호출
 	void PresentCoreUpgradeChoice();
-
-	// [추가] DT_UpgradeGrantConfig의 CandidateCount를 그대로 사용할 수 있는 진입점
-	UFUNCTION(BlueprintCallable, Category = "Progression|CoreUpgrade")
-	bool PresentCoreUpgradeChoiceWithCount(int32 CandidateCount);
-
 	// 카드 선택 시 호출
-	UFUNCTION(BlueprintCallable, Category = "Progression|CoreUpgrade")
 	void ApplyCoreUpgrade(FName UpgradeId);
-
-	UFUNCTION(BlueprintPure, Category = "Progression|CoreUpgrade")
-	int32 GetActiveCoreUpgradeCount() const
-	{
-		return ActiveCoreUpgrades.Num();
-	}
-
-	UFUNCTION(BlueprintPure, Category = "Progression|CoreUpgrade")
-	bool IsPresentingCoreUpgradeChoice() const
-	{
-		return bIsPresentingCoreUpgradeChoice;
-	}
 
 	const FRGCoreUpgradeRow* FindCoreUpgradeRow(FName UpgradeId) const;
 
@@ -187,12 +152,8 @@ public:
 	
 
 public:
-	UPROPERTY(BlueprintAssignable, Category = "Progression|Events")
+	UPROPERTY(BlueprintAssignable)
 	FOnCoreUpgradeReady OnCoreUpgradeReady;
-
-	// [추가] 핵심 강화 적용 완료 신호
-	UPROPERTY(BlueprintAssignable, Category = "Progression|Events")
-	FOnCoreUpgradeApplied OnCoreUpgradeApplied;
 
 protected:
 	UPROPERTY()
