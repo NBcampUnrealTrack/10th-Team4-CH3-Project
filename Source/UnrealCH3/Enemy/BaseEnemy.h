@@ -60,11 +60,15 @@ public:
     UFUNCTION()
     virtual void ShowAttackRangeLine();
     UFUNCTION()
+    virtual void UpdateAttackWarningTransform();
+    UFUNCTION()
     virtual void HideAttackRangeLine();
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void FaceTarget(float DeltaTime, float RotationSpeed = 10.f);
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void StartAttackCooldown();
+    UFUNCTION(BlueprintCallable, Category = "AttackWarning")
+    void UpdateAttackWarning(float Alpha);
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void ResetAttackCooldown();
 
@@ -111,8 +115,12 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "BehaivorTree")
     TObjectPtr<UBehaviorTree> EnemyBehaviorTree;
 
-    UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "AttackRangeMesh")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AttackRangeMesh")
     UStaticMeshComponent* AttackRangeMesh;
+    UPROPERTY(EditDefaultsOnly, Category = "AttackWarning")
+    UMaterialInterface* WarningMaterialBase;
+    UPROPERTY()
+    UMaterialInstanceDynamic* WarningDynMat;
     UPROPERTY()
     FName EnemyName;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
