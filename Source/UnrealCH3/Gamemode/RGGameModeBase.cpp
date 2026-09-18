@@ -12,6 +12,10 @@
 #include "Engine/DataTable.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
+// [추가] GameMode-only 숫자키 무기 전환
+#include "Player/RGCharacter.h"
+#include "RGBaseWeapon.h"
+#include "InputCoreTypes.h"
 #include "TimerManager.h"
 
 
@@ -25,8 +29,11 @@ ARGGameModeBase::ARGGameModeBase()
 	// Tick
 	// -----------------------------------------------------
 
-	PrimaryActorTick.bCanEverTick = false;
-	PrimaryActorTick.bStartWithTickEnabled = false;
+	// [수정]
+	// 숫자 1/2/3 직접 감지를 위해 GameMode Tick을 사용한다.
+	// 단순 키 입력 3개만 검사하므로 현재 싱글플레이 프로토타입에서는 부담이 매우 작다.
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
 
 
 	// -----------------------------------------------------
@@ -34,6 +41,17 @@ ARGGameModeBase::ARGGameModeBase()
 	// -----------------------------------------------------
 
 	bStartRunSystem = true;
+
+
+	// -----------------------------------------------------
+	// [추가] GameMode Weapon Switch
+	// -----------------------------------------------------
+
+	bEnableNumberKeyWeaponSwitch = true;
+
+	RifleWeaponClass = nullptr;
+	ShotgunWeaponClass = nullptr;
+	RailgunWeaponClass = nullptr;
 
 
 	// -----------------------------------------------------
@@ -141,6 +159,296 @@ ARGGameModeBase::ARGGameModeBase()
 	DefaultInputMode = ERGInputMode::GameOnly;
 
 	bShowMouseCursor = false;
+}
+
+
+
+// =========================================================
+// [추가] Tick - 숫자 1 / 2 / 3 무기 전환
+// =========================================================
+
+void ARGGameModeBase::Tick(
+	float DeltaSeconds
+)
+{
+	Super::Tick(
+		DeltaSeconds
+	);
+
+
+	// -----------------------------------------------------
+	// 기능 비활성화 상태면 아무것도 하지 않는다.
+	// -----------------------------------------------------
+
+	if (!bEnableNumberKeyWeaponSwitch)
+	{
+		return;
+	}
+
+
+	// -----------------------------------------------------
+	// RunFlow가 Gameplay 입력을 허용할 때만 무기 교체 허용.
+	//
+	// Upgrade / Pause / Loading 등 UIOnly/Blocked 상태에서
+	// 숫자키가 다른 UI 입력과 충돌하는 것을 방지한다.
+	// -----------------------------------------------------
+
+	if (
+		CurrentInputPolicy !=
+		ERGRunInputPolicy::Gameplay
+		)
+	{
+		return;
+	}
+
+
+	APlayerController* PlayerController =
+		GetWorld()
+		? GetWorld()->GetFirstPlayerController()
+		: nullptr;
+
+
+	if (!PlayerController)
+	{
+		return;
+	}
+
+
+	// -----------------------------------------------------
+	// Keyboard 1
+	// -----------------------------------------------------
+
+	if (
+		PlayerController->WasInputKeyJustPressed(
+			EKeys::One
+		)
+		)
+	{
+		SwitchPlayerWeaponSlot(
+			1
+		);
+
+		return;
+	}
+
+
+	// -----------------------------------------------------
+	// Keyboard 2
+	// -----------------------------------------------------
+
+	if (
+		PlayerController->WasInputKeyJustPressed(
+			EKeys::Two
+		)
+		)
+	{
+		SwitchPlayerWeaponSlot(
+			2
+		);
+
+		return;
+	}
+
+
+	// -----------------------------------------------------
+	// Keyboard 3
+	// -----------------------------------------------------
+
+	if (
+		PlayerController->WasInputKeyJustPressed(
+			EKeys::Three
+		)
+		)
+	{
+		SwitchPlayerWeaponSlot(
+			3
+		);
+
+		return;
+	}
+}
+
+
+// =========================================================
+// [추가] SwitchPlayerWeaponSlot
+// =========================================================
+
+bool ARGGameModeBase::SwitchPlayerWeaponSlot(
+	int32 SlotIndex
+)
+{
+	TSubclassOf<ARGBaseWeapon> SelectedWeaponClass =
+		nullptr;
+
+
+	switch (SlotIndex)
+	{
+	case 1:
+	{
+		SelectedWeaponClass =
+			RifleWeaponClass;
+
+		break;
+	}
+
+
+	case 2:
+	{
+		SelectedWeaponClass =
+			ShotgunWeaponClass;
+
+		break;
+	}
+
+
+	case 3:
+	{
+		SelectedWeaponClass =
+			RailgunWeaponClass;
+
+		break;
+	}
+
+
+	default:
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[RGGameMode] "
+				"Invalid weapon slot: %d"
+			),
+			SlotIndex
+		);
+
+		return false;
+	}
+	}
+
+
+	if (!SelectedWeaponClass)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[RGGameMode] "
+				"Weapon class is not assigned for slot %d."
+			),
+			SlotIndex
+		);
+
+		return false;
+	}
+
+
+	const bool bResult =
+		EquipPlayerWeaponClass(
+			SelectedWeaponClass
+		);
+
+
+	if (bResult)
+	{
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT(
+				"[RGGameMode] "
+				"Weapon Slot %d equipped."
+			),
+			SlotIndex
+		);
+	}
+
+
+	return bResult;
+}
+
+
+// =========================================================
+// [추가] EquipPlayerWeaponClass
+// =========================================================
+
+bool ARGGameModeBase::EquipPlayerWeaponClass(
+	TSubclassOf<ARGBaseWeapon> NewWeaponClass
+)
+{
+	if (!NewWeaponClass)
+	{
+		return false;
+	}
+
+
+	ARGCharacter* PlayerCharacter =
+		Cast<ARGCharacter>(
+			UGameplayStatics::GetPlayerCharacter(
+				this,
+				0
+			)
+		);
+
+
+	if (!IsValid(PlayerCharacter))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[RGGameMode] "
+				"RGCharacter not found. "
+				"Weapon switch failed."
+			)
+		);
+
+		return false;
+	}
+
+
+	// -----------------------------------------------------
+	// 같은 클래스의 무기를 이미 들고 있으면
+	// 불필요하게 Destroy -> Spawn하지 않는다.
+	// -----------------------------------------------------
+
+	if (
+		IsValid(
+			PlayerCharacter->GetCurrentWeapon()
+		) &&
+		PlayerCharacter
+		->GetCurrentWeapon()
+		->GetClass() ==
+		NewWeaponClass.Get()
+		)
+	{
+		return true;
+	}
+
+
+	// -----------------------------------------------------
+	// 핵심:
+	// 새로운 교체 로직을 만들지 않고
+	// 기존 Character::EquipWeapon()을 그대로 사용한다.
+	//
+	// 기존 EquipWeapon() 내부에서:
+	// - 기존 무기 정리
+	// - 새 무기 Spawn
+	// - WeaponSocket 부착
+	// - Animation Delegate 연결
+	// - OnWeaponEquipped Broadcast
+	//
+	// 가 수행되므로 기존 UI/HUD 연동도 유지된다.
+	// -----------------------------------------------------
+
+	PlayerCharacter->EquipWeapon(
+		NewWeaponClass
+	);
+
+
+	return
+		IsValid(
+			PlayerCharacter->GetCurrentWeapon()
+		);
 }
 
 
@@ -1597,7 +1905,7 @@ bool ARGGameModeBase::TryStartConfiguredUpgradeGrant()
 	URGProgressionSubsystem* Progression =
 		GetGameInstance()
 		? GetGameInstance()
-			->GetSubsystem<URGProgressionSubsystem>()
+		->GetSubsystem<URGProgressionSubsystem>()
 		: nullptr;
 
 	if (!Progression)

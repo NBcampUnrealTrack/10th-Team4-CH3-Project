@@ -10,6 +10,8 @@
 
 class UUserWidget;
 class UDataTable;
+class ARGBaseWeapon;
+class ARGCharacter;
 
 
 // =========================================================
@@ -186,9 +188,104 @@ protected:
 
 	virtual void BeginPlay() override;
 
+	// [추가] 숫자 1/2/3 키를 GameMode에서 직접 감지하기 위해 Tick 사용
+	virtual void Tick(
+		float DeltaSeconds
+	) override;
+
 	virtual void EndPlay(
 		const EEndPlayReason::Type EndPlayReason
 	) override;
+
+
+
+	// =========================================================
+	// [추가] GameMode Weapon Slot Switch
+	// =========================================================
+
+public:
+
+	/**
+	 * 현재 프로토타입에서 숫자키 무기 전환을 사용할지 여부.
+	 *
+	 * true:
+	 * 1 = Rifle
+	 * 2 = Shotgun
+	 * 3 = Railgun
+	 *
+	 * PlayerController / Character 입력 코드를 수정하지 않고
+	 * GameMode에서 직접 숫자키를 감지한다.
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "GameMode|WeaponSwitch"
+	)
+	bool bEnableNumberKeyWeaponSwitch;
+
+
+	/**
+	 * 숫자 1 슬롯.
+	 * BP_RGGameModeBase Class Defaults에서 BP_RGAssaultRifle 지정.
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "GameMode|WeaponSwitch"
+	)
+	TSubclassOf<ARGBaseWeapon> RifleWeaponClass;
+
+
+	/**
+	 * 숫자 2 슬롯.
+	 * BP_RGGameModeBase Class Defaults에서 BP_RGShotgun 지정.
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "GameMode|WeaponSwitch"
+	)
+	TSubclassOf<ARGBaseWeapon> ShotgunWeaponClass;
+
+
+	/**
+	 * 숫자 3 슬롯.
+	 * BP_RGGameModeBase Class Defaults에서 BP_RGRailgun 지정.
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "GameMode|WeaponSwitch"
+	)
+	TSubclassOf<ARGBaseWeapon> RailgunWeaponClass;
+
+
+	/**
+	 * [추가] 슬롯 번호로 현재 플레이어의 무기를 교체한다.
+	 *
+	 * 기존 ARGCharacter::EquipWeapon()을 그대로 사용하기 때문에
+	 * 기존 WeaponSocket / 애니메이션 / OnWeaponEquipped /
+	 * UIManager / HUDController 재바인딩 흐름을 유지한다.
+	 */
+	UFUNCTION(
+		BlueprintCallable,
+		Category = "GameMode|WeaponSwitch"
+	)
+	bool SwitchPlayerWeaponSlot(
+		int32 SlotIndex
+	);
+
+
+protected:
+
+	/**
+	 * [추가] 현재 Player Character를 가져와
+	 * 기존 EquipWeapon()을 호출한다.
+	 */
+	bool EquipPlayerWeaponClass(
+		TSubclassOf<ARGBaseWeapon> NewWeaponClass
+	);
+
 
 
 	// =========================================================
