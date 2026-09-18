@@ -27,7 +27,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Enemy|Spawn Point")
 	bool CanBeUsedForRecovery() const;
 
-	//땅에 안후“ 스폰하는 용도
+	
 	UFUNCTION(BlueprintPure, Category = "Enemy|Spawn Point")
 	FTransform GetEnemySpawnTransform(TSubclassOf<ABaseEnemy> EnemyClass) const;
 

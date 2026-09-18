@@ -171,5 +171,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Progression|Debug")
 	void DebugApplyCoreUpgradeByName(const FString& UpgradeName);
 
+
+
 	//===================================================================================
 };

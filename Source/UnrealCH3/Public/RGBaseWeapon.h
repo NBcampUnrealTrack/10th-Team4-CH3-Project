@@ -250,4 +250,7 @@ public:
 		// 개별 효과 구현
 		void TriggerDoubleShot(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
 
+		void TriggerChainPulse(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
+
+		void TriggerExplosiveRound(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
 };
