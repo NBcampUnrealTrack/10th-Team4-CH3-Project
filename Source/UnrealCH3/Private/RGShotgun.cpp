@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "RGShotgun.h"
+#include "Gamemode/RGProgressionSubsystem.h"
 
 void ARGShotgun::StartFire()
 {
@@ -21,12 +22,81 @@ void ARGShotgun::Fire()
 		return;
 	}
 
+	// PiercingPellet 보유 여부와 관통 데미지 배율을 펠릿 반복문 시작 전에 한 번만 조회
+	bool bHasPiercingPellet = false;
+	float PierceDamagePercent = 1.0f;
+
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			bHasPiercingPellet = Progression->HasCoreUpgrade(FName(TEXT("PiercingPellet")));
+
+			if (bHasPiercingPellet)
+			{
+				if (const FRGCoreUpgradeRow* Row = Progression->FindCoreUpgradeRow(FName(TEXT("PiercingPellet"))))
+				{
+					PierceDamagePercent = Row->DamagePercent;   // 관통 후 65%
+				}
+			}
+		}
+	}
+
 	// 펠릿 하나마다 별도로 퍼짐(ApplySpread)을 적용해서 각기 다른 방향으로 히트스캔 발사.
 	// 펠릿 하나당 피해량은 WeaponStats.BaseDamage(데이터테이블 값, 예: 8)를 그대로 사용 ->
 	// 여러 발이 맞으면 ApplyHitDamage가 그만큼 여러 번 호출되어 결과적으로 총피해가 합산됨.
 	for (int32 i = 0; i < PelletCount; ++i)
 	{
 		const FVector PelletDirection = ApplySpread(FireDirection);
-		FireHitscan(StartLocation, PelletDirection, -1.f, nullptr);
+
+		if (!bHasPiercingPellet)
+		{
+			// 강화 없으면 기존 그대로: 펠릿 하나가 한 명만 맞춤
+			FireHitscan(StartLocation, PelletDirection, -1.f, nullptr);
+			continue;
+		}
+
+		// 강화 있으면: 이 펠릿 하나가 최대 2명(원본 + 관통 1회)까지 맞을 수 있음
+		TSet<AActor*> AlreadyHitActors;
+
+		// 1번째 명중 - 원본 데미지
+		const bool bFirstHit = FireHitscan(StartLocation, PelletDirection, -1.f, &AlreadyHitActors);
+
+		if (bFirstHit)
+		{
+			// 관통 1회만 - 65% 데미지. 반복문이 아니라 딱 한 번만 호출하므로 "추가 관통 없음" 자동 충족
+			const float PierceDamage = WeaponStats.BaseDamage * PierceDamagePercent;
+			FireHitscan(StartLocation, PelletDirection, PierceDamage, &AlreadyHitActors);
+		}
 	}
+}
+
+// FocusedSpread 보유 시 탄퍼짐 각도를 줄여줌 (분산 -45%)
+FVector ARGShotgun::ApplySpread(const FVector& AimDirection) const
+{
+	float SpreadMultiplier = 1.0f;
+
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			if (Progression->HasCoreUpgrade(FName(TEXT("FocusedSpread"))))
+			{
+				if (const FRGCoreUpgradeRow* Row = Progression->FindCoreUpgradeRow(FName(TEXT("FocusedSpread"))))
+				{
+					SpreadMultiplier = Row->DamagePercent;   // 0.55 = 분산 -45%. 필드는 재사용, 여기선 '탄퍼짐 배율'로 사용
+				}
+			}
+		}
+	}
+
+	const float SpreadDegrees = (bIsAiming ? WeaponStats.AimSpread : WeaponStats.HipFireSpread) * SpreadMultiplier;
+
+	if (SpreadDegrees <= 0.f)
+	{
+		return AimDirection;
+	}
+
+	const float SpreadRadians = FMath::DegreesToRadians(SpreadDegrees);
+	return FMath::VRandCone(AimDirection, SpreadRadians);
 }

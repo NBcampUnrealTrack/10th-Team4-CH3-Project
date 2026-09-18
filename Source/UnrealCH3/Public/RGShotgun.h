@@ -20,6 +20,8 @@ protected:
 	int32 PelletCount = 8;
 
 	virtual void Fire() override;
+	//강화
+	virtual FVector ApplySpread(const FVector& AimDirection) const override;  
 
 public:
 	// 재장전 중 발사 버튼을 누르면, 진행 중이던 장전을 즉시 취소하고 바로 발사로 넘어감
