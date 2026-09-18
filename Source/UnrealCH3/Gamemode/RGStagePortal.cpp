@@ -1,13 +1,16 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Gamemode/RGStagePortal.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/DataTable.h"
+#include "Gamemode/DataTableStruct/RGRunConfigRows.h"
 #include "Gamemode/RGGameModeBase.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
+#include "TimerManager.h"
 
 
 // =========================================================
@@ -21,34 +24,109 @@ ARGStagePortal::ARGStagePortal()
 	// -----------------------------------------------------
 	// 기본 상태
 	// -----------------------------------------------------
+
 	bStartActive = false;
+
 	bPortalActive = false;
 	bTravelStarted = false;
+	bPortalConfigApplied = false;
+
 	NextLevelName = NAME_None;
+
+	// -----------------------------------------------------
+	// [추가] PortalConfig 기본값
+	// -----------------------------------------------------
+
+	PortalConfigTable = nullptr;
+
+	// 전투 스테이지 포탈을 기본값으로 둔다.
+	PortalConfigRowName = TEXT("CombatExit");
+
+	ConfiguredDestination = NAME_None;
+	VisibilityCondition = NAME_None;
+
+	TransitionDelaySeconds = 0.0f;
+
+	CachedInitialState =
+		static_cast<uint8>(
+			ERGPortalInitialState::Hidden
+			);
+
+	CachedInteractionType =
+		static_cast<uint8>(
+			ERGPortalInteractionType::EnterOrUse
+			);
+
 
 	// -----------------------------------------------------
 	// Root
 	// -----------------------------------------------------
-	PortalRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PortalRoot"));
-	SetRootComponent(PortalRoot);
+
+	PortalRoot =
+		CreateDefaultSubobject<USceneComponent>(
+			TEXT("PortalRoot")
+		);
+
+	SetRootComponent(
+		PortalRoot
+	);
+
 
 	// -----------------------------------------------------
 	// Visual Mesh
 	// -----------------------------------------------------
-	PortalMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PortalMesh"));
-	PortalMesh->SetupAttachment(PortalRoot);
-	PortalMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	PortalMesh =
+		CreateDefaultSubobject<UStaticMeshComponent>(
+			TEXT("PortalMesh")
+		);
+
+	PortalMesh->SetupAttachment(
+		PortalRoot
+	);
+
+	PortalMesh->SetCollisionEnabled(
+		ECollisionEnabled::NoCollision
+	);
+
 
 	// -----------------------------------------------------
 	// Trigger
 	// -----------------------------------------------------
-	PortalTrigger = CreateDefaultSubobject<UBoxComponent>(TEXT("PortalTrigger"));
-	PortalTrigger->SetupAttachment(PortalRoot);
-	PortalTrigger->SetBoxExtent(FVector(100.0f, 100.0f, 150.0f));
-	PortalTrigger->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	PortalTrigger->SetCollisionObjectType(ECC_WorldDynamic);
-	PortalTrigger->SetCollisionResponseToAllChannels(ECR_Ignore);
-	PortalTrigger->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+
+	PortalTrigger =
+		CreateDefaultSubobject<UBoxComponent>(
+			TEXT("PortalTrigger")
+		);
+
+	PortalTrigger->SetupAttachment(
+		PortalRoot
+	);
+
+	PortalTrigger->SetBoxExtent(
+		FVector(
+			100.0f,
+			100.0f,
+			150.0f
+		)
+	);
+
+	PortalTrigger->SetCollisionEnabled(
+		ECollisionEnabled::QueryOnly
+	);
+
+	PortalTrigger->SetCollisionObjectType(
+		ECC_WorldDynamic
+	);
+
+	PortalTrigger->SetCollisionResponseToAllChannels(
+		ECR_Ignore
+	);
+
+	PortalTrigger->SetCollisionResponseToChannel(
+		ECC_Pawn,
+		ECR_Overlap
+	);
 }
 
 
@@ -60,26 +138,62 @@ void ARGStagePortal::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// [추가] Trigger 이벤트 연결
-	PortalTrigger->OnComponentBeginOverlap.AddUniqueDynamic(
-		this,
-		&ARGStagePortal::HandlePortalOverlap
-	);
 
-	// [추가] 기존 GameMode의 Stage Clear Delegate에 연결
-	if (ARGGameModeBase* GameMode = Cast<ARGGameModeBase>(UGameplayStatics::GetGameMode(this)))
+	// -----------------------------------------------------
+	// Trigger 이벤트 연결
+	// -----------------------------------------------------
+
+	if (IsValid(PortalTrigger))
 	{
-		BoundGameMode = GameMode;
+		PortalTrigger->OnComponentBeginOverlap.AddUniqueDynamic(
+			this,
+			&ARGStagePortal::HandlePortalOverlap
+		);
+	}
+
+
+	// -----------------------------------------------------
+	// [추가] DT_PortalConfig 적용
+	// -----------------------------------------------------
+
+	bPortalConfigApplied =
+		ApplyPortalConfig();
+
+
+	// -----------------------------------------------------
+	// 기존 GameMode Stage Clear Delegate 연결
+	// -----------------------------------------------------
+
+	if (
+		ARGGameModeBase* GameMode =
+		Cast<ARGGameModeBase>(
+			UGameplayStatics::GetGameMode(this)
+		)
+		)
+	{
+		BoundGameMode =
+			GameMode;
+
 
 		GameMode->OnStageCleared.AddUniqueDynamic(
 			this,
 			&ARGStagePortal::HandleStageCleared
 		);
 
-		// 혹시 Portal이 늦게 생성된 경우에도 이미 Clear 조건을 만족했다면 활성화
-		if (GameMode->CheckStageClearCondition())
+
+		// -------------------------------------------------
+		// Portal이 늦게 생성되었는데
+		// StageClear가 이미 완료된 경우 보정
+		// -------------------------------------------------
+
+		if (
+			VisibilityCondition == TEXT("StageComplete") &&
+			GameMode->CheckStageClearCondition() &&
+			DoesStageDestinationMatch()
+			)
 		{
 			ActivatePortal();
+
 			return;
 		}
 	}
@@ -88,19 +202,68 @@ void ARGStagePortal::BeginPlay()
 		UE_LOG(
 			LogTemp,
 			Warning,
-			TEXT("[RGStagePortal] RGGameModeBase not found. Portal=%s"),
+			TEXT(
+				"[RGStagePortal] "
+				"RGGameModeBase not found. "
+				"Portal=%s"
+			),
 			*GetName()
 		);
 	}
 
-	// [추가] 일반 전투 맵에서는 기본적으로 꺼진 상태로 시작
-	if (bStartActive)
+
+	// -----------------------------------------------------
+	// [추가] 초기 상태 적용
+	// -----------------------------------------------------
+
+	if (bPortalConfigApplied)
 	{
-		ActivatePortal();
+		const ERGPortalInitialState InitialState =
+			static_cast<ERGPortalInitialState>(
+				CachedInitialState
+				);
+
+
+		switch (InitialState)
+		{
+		case ERGPortalInitialState::Hidden:
+		{
+			DeactivatePortal();
+
+			break;
+		}
+
+
+		case ERGPortalInitialState::VisibleLocked:
+		{
+			SetPortalVisibleLocked();
+
+			break;
+		}
+
+
+		default:
+		{
+			DeactivatePortal();
+
+			break;
+		}
+		}
 	}
 	else
 	{
-		DeactivatePortal();
+		// ---------------------------------------------
+		// DataTable 미지정 시 기존 동작 유지
+		// ---------------------------------------------
+
+		if (bStartActive)
+		{
+			ActivatePortal();
+		}
+		else
+		{
+			DeactivatePortal();
+		}
 	}
 }
 
@@ -109,26 +272,179 @@ void ARGStagePortal::BeginPlay()
 // EndPlay
 // =========================================================
 
-void ARGStagePortal::EndPlay(const EEndPlayReason::Type EndPlayReason)
+void ARGStagePortal::EndPlay(
+	const EEndPlayReason::Type EndPlayReason
+)
 {
-	// [추가] Delegate 정리
+	// -----------------------------------------------------
+	// [추가] 이동 지연 타이머 정리
+	// -----------------------------------------------------
+
+	if (GetWorld())
+	{
+		GetWorld()
+			->GetTimerManager()
+			.ClearTimer(
+				TransitionTimerHandle
+			);
+	}
+
+
+	// -----------------------------------------------------
+	// Delegate 정리
+	// -----------------------------------------------------
+
 	if (BoundGameMode.IsValid())
 	{
-		BoundGameMode->OnStageCleared.RemoveDynamic(
-			this,
-			&ARGStagePortal::HandleStageCleared
-		);
+		BoundGameMode
+			->OnStageCleared
+			.RemoveDynamic(
+				this,
+				&ARGStagePortal::HandleStageCleared
+			);
 	}
+
 
 	if (IsValid(PortalTrigger))
 	{
-		PortalTrigger->OnComponentBeginOverlap.RemoveDynamic(
-			this,
-			&ARGStagePortal::HandlePortalOverlap
-		);
+		PortalTrigger
+			->OnComponentBeginOverlap
+			.RemoveDynamic(
+				this,
+				&ARGStagePortal::HandlePortalOverlap
+			);
 	}
 
-	Super::EndPlay(EndPlayReason);
+
+	Super::EndPlay(
+		EndPlayReason
+	);
+}
+
+
+// =========================================================
+// [추가] ApplyPortalConfig
+// =========================================================
+
+bool ARGStagePortal::ApplyPortalConfig()
+{
+	if (!IsValid(PortalConfigTable))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[RGStagePortal] "
+				"PortalConfigTable is not assigned. "
+				"Legacy portal settings will be used."
+			)
+		);
+
+		return false;
+	}
+
+
+	if (
+		PortalConfigTable->GetRowStruct() !=
+		FRGPortalConfigRow::StaticStruct()
+		)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"[RGStagePortal] "
+				"PortalConfigTable RowStruct mismatch. "
+				"Expected FRGPortalConfigRow."
+			)
+		);
+
+		return false;
+	}
+
+
+	if (PortalConfigRowName.IsNone())
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"[RGStagePortal] "
+				"PortalConfigRowName is None."
+			)
+		);
+
+		return false;
+	}
+
+
+	const FRGPortalConfigRow* PortalRow =
+		PortalConfigTable
+		->FindRow<FRGPortalConfigRow>(
+			PortalConfigRowName,
+			TEXT("ApplyPortalConfig"),
+			false
+		);
+
+
+	if (!PortalRow)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"[RGStagePortal] "
+				"PortalConfig row not found: %s"
+			),
+			*PortalConfigRowName.ToString()
+		);
+
+		return false;
+	}
+
+
+	CachedInitialState =
+		static_cast<uint8>(
+			PortalRow->InitialState
+			);
+
+	CachedInteractionType =
+		static_cast<uint8>(
+			PortalRow->InteractionType
+			);
+
+	VisibilityCondition =
+		PortalRow->VisibilityCondition;
+
+	TransitionDelaySeconds =
+		FMath::Max(
+			0.0f,
+			PortalRow->TransitionDelaySeconds
+		);
+
+	ConfiguredDestination =
+		PortalRow->Destination;
+
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT(
+			"[RGStagePortal] "
+			"PortalConfig applied. "
+			"Row=%s / Condition=%s / "
+			"Delay=%.2f / Destination=%s / "
+			"NextLevel=%s"
+		),
+		*PortalConfigRowName.ToString(),
+		*VisibilityCondition.ToString(),
+		TransitionDelaySeconds,
+		*ConfiguredDestination.ToString(),
+		*NextLevelName.ToString()
+	);
+
+
+	return true;
 }
 
 
@@ -138,8 +454,109 @@ void ARGStagePortal::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void ARGStagePortal::HandleStageCleared()
 {
-	// [추가] TargetKillsToClear 충족 -> GameMode Stage Clear -> Portal 활성화
+	// -----------------------------------------------------
+	// [수정]
+	// StageComplete 조건의 포탈만 StageClear에서 활성화.
+	//
+	// RestHubReady / CoreUpgrade2Applied 같은 포탈은
+	// 해당 시스템 연결 단계에서 별도로 ActivatePortal() 한다.
+	// -----------------------------------------------------
+
+	if (
+		bPortalConfigApplied &&
+		VisibilityCondition != TEXT("StageComplete")
+		)
+	{
+		return;
+	}
+
+
+	// -----------------------------------------------------
+	// [추가]
+	// StageConfig의 CompletionDestination과
+	// PortalConfig의 Destination이 다르면 이 포탈은
+	// 현재 Stage의 출구가 아니므로 활성화하지 않는다.
+	// -----------------------------------------------------
+
+	if (!DoesStageDestinationMatch())
+	{
+		return;
+	}
+
+
 	ActivatePortal();
+}
+
+
+// =========================================================
+// [추가] DoesStageDestinationMatch
+// =========================================================
+
+bool ARGStagePortal::DoesStageDestinationMatch() const
+{
+	// -----------------------------------------------------
+	// DataTable 미사용 시 기존 동작 보장
+	// -----------------------------------------------------
+
+	if (!bPortalConfigApplied)
+	{
+		return true;
+	}
+
+
+	// -----------------------------------------------------
+	// 목적지가 없는 Config라면 비교하지 않는다.
+	// -----------------------------------------------------
+
+	if (ConfiguredDestination.IsNone())
+	{
+		return true;
+	}
+
+
+	if (!BoundGameMode.IsValid())
+	{
+		return true;
+	}
+
+
+	const FName StageDestination =
+		BoundGameMode
+		->GetStageCompletionDestination();
+
+
+	// StageConfig 쪽 값이 아직 없으면
+	// PortalConfig만으로 동작하도록 허용한다.
+	if (StageDestination.IsNone())
+	{
+		return true;
+	}
+
+
+	const bool bMatches =
+		StageDestination ==
+		ConfiguredDestination;
+
+
+	if (!bMatches)
+	{
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT(
+				"[RGStagePortal] "
+				"Portal ignored for this stage. "
+				"StageDestination=%s / "
+				"PortalDestination=%s / Portal=%s"
+			),
+			*StageDestination.ToString(),
+			*ConfiguredDestination.ToString(),
+			*GetName()
+		);
+	}
+
+
+	return bMatches;
 }
 
 
@@ -154,29 +571,51 @@ void ARGStagePortal::ActivatePortal()
 		return;
 	}
 
+
 	bPortalActive = true;
 	bTravelStarted = false;
 
-	// [추가] 화면에 포탈 표시
+
+	// -----------------------------------------------------
+	// 화면에 포탈 표시
+	// -----------------------------------------------------
+
 	if (IsValid(PortalMesh))
 	{
-		PortalMesh->SetVisibility(true, true);
+		PortalMesh->SetVisibility(
+			true,
+			true
+		);
 	}
 
-	// [추가] 플레이어 진입 허용
+
+	// -----------------------------------------------------
+	// 플레이어 진입 허용
+	// -----------------------------------------------------
+
 	if (IsValid(PortalTrigger))
 	{
-		PortalTrigger->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		PortalTrigger->SetCollisionEnabled(
+			ECollisionEnabled::QueryOnly
+		);
 	}
 
-	// Blueprint에서 원하는 활성화 연출을 추가할 수 있음
+
 	OnPortalActivated();
+
 
 	UE_LOG(
 		LogTemp,
 		Warning,
-		TEXT("[RGStagePortal] Portal ACTIVATED. Portal=%s / NextLevel=%s"),
+		TEXT(
+			"[RGStagePortal] "
+			"Portal ACTIVATED. "
+			"Portal=%s / Config=%s / "
+			"Destination=%s / NextLevel=%s"
+		),
 		*GetName(),
+		*PortalConfigRowName.ToString(),
+		*ConfiguredDestination.ToString(),
 		*NextLevelName.ToString()
 	);
 }
@@ -191,19 +630,60 @@ void ARGStagePortal::DeactivatePortal()
 	bPortalActive = false;
 	bTravelStarted = false;
 
-	// [추가] Stage Clear 전에는 포탈을 숨긴다.
+
 	if (IsValid(PortalMesh))
 	{
-		PortalMesh->SetVisibility(false, true);
+		PortalMesh->SetVisibility(
+			false,
+			true
+		);
 	}
 
-	// [추가] Stage Clear 전에는 진입 불가
+
 	if (IsValid(PortalTrigger))
 	{
-		PortalTrigger->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		PortalTrigger->SetCollisionEnabled(
+			ECollisionEnabled::NoCollision
+		);
 	}
 
+
 	OnPortalDeactivated();
+}
+
+
+// =========================================================
+// [추가] SetPortalVisibleLocked
+// =========================================================
+
+void ARGStagePortal::SetPortalVisibleLocked()
+{
+	bPortalActive = false;
+	bTravelStarted = false;
+
+
+	// -----------------------------------------------------
+	// 보이지만 사용 불가
+	// -----------------------------------------------------
+
+	if (IsValid(PortalMesh))
+	{
+		PortalMesh->SetVisibility(
+			true,
+			true
+		);
+	}
+
+
+	if (IsValid(PortalTrigger))
+	{
+		PortalTrigger->SetCollisionEnabled(
+			ECollisionEnabled::NoCollision
+		);
+	}
+
+
+	OnPortalLockedVisible();
 }
 
 
@@ -220,48 +700,191 @@ void ARGStagePortal::HandlePortalOverlap(
 	const FHitResult& SweepResult
 )
 {
-	// 포탈이 꺼져 있거나 이미 이동을 시작했으면 무시
-	if (!bPortalActive || bTravelStarted)
+	// -----------------------------------------------------
+	// 꺼져 있거나 이미 이동 시작했으면 무시
+	// -----------------------------------------------------
+
+	if (
+		!bPortalActive ||
+		bTravelStarted
+		)
 	{
 		return;
 	}
 
-	// [추가] 플레이어 Pawn만 포탈 사용 가능
-	APawn* Pawn = Cast<APawn>(OtherActor);
-	if (!IsValid(Pawn) || !Pawn->IsPlayerControlled())
+
+	// -----------------------------------------------------
+	// 플레이어 Pawn만 사용 가능
+	// -----------------------------------------------------
+
+	APawn* Pawn =
+		Cast<APawn>(
+			OtherActor
+		);
+
+
+	if (
+		!IsValid(Pawn) ||
+		!Pawn->IsPlayerControlled()
+		)
 	{
 		return;
 	}
 
-	// 다음 맵이 설정되지 않은 경우 이동하지 않는다.
+
+	// -----------------------------------------------------
+	// [추가]
+	// 현재 DT_PortalConfig의 EnterOnly / EnterOrUse는
+	// 둘 다 "진입"을 허용하므로 Overlap 경로는 공통 사용.
+	//
+	// 추후 E키 전용 상호작용이 필요하면
+	// EnterOrUse에만 Use 입력 경로를 추가하면 된다.
+	// -----------------------------------------------------
+
+	const ERGPortalInteractionType InteractionType =
+		static_cast<ERGPortalInteractionType>(
+			CachedInteractionType
+			);
+
+	if (
+		InteractionType !=
+		ERGPortalInteractionType::EnterOnly &&
+		InteractionType !=
+		ERGPortalInteractionType::EnterOrUse
+		)
+	{
+		return;
+	}
+
+
+	// -----------------------------------------------------
+	// 실제 Level 이름 확인
+	// -----------------------------------------------------
+
 	if (NextLevelName.IsNone())
 	{
 		UE_LOG(
 			LogTemp,
 			Error,
-			TEXT("[RGStagePortal] NextLevelName is empty. Portal=%s"),
+			TEXT(
+				"[RGStagePortal] "
+				"NextLevelName is empty. "
+				"Config Destination=%s / Portal=%s"
+			),
+			*ConfiguredDestination.ToString(),
 			*GetName()
 		);
+
 		return;
 	}
 
-	// [추가] 같은 프레임에 여러 Overlap이 들어와도 OpenLevel은 한 번만 실행
-	bTravelStarted = true;
-	PortalTrigger->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	// [추가] 현재 RunState를 Loading으로 전환한 뒤 레벨 이동
-	if (ARGGameModeBase* GameMode = Cast<ARGGameModeBase>(UGameplayStatics::GetGameMode(this)))
+	// -----------------------------------------------------
+	// 중복 진입 차단
+	// -----------------------------------------------------
+
+	bTravelStarted = true;
+
+
+	if (IsValid(PortalTrigger))
 	{
-		GameMode->ChangeRunState(ERunState::Loading);
+		PortalTrigger->SetCollisionEnabled(
+			ECollisionEnabled::NoCollision
+		);
 	}
+
+
+	// -----------------------------------------------------
+	// RunState -> Loading
+	// -----------------------------------------------------
+
+	if (
+		ARGGameModeBase* GameMode =
+		Cast<ARGGameModeBase>(
+			UGameplayStatics::GetGameMode(this)
+		)
+		)
+	{
+		GameMode->ChangeRunState(
+			ERunState::Loading
+		);
+	}
+
+
+	// -----------------------------------------------------
+	// [추가] DataTable의 TransitionDelaySeconds 적용
+	// -----------------------------------------------------
+
+	if (
+		TransitionDelaySeconds <= 0.0f ||
+		!GetWorld()
+		)
+	{
+		PerformTravel();
+
+		return;
+	}
+
+
+	GetWorld()
+		->GetTimerManager()
+		.SetTimer(
+			TransitionTimerHandle,
+			this,
+			&ARGStagePortal::PerformTravel,
+			TransitionDelaySeconds,
+			false
+		);
+
 
 	UE_LOG(
 		LogTemp,
 		Warning,
-		TEXT("[RGStagePortal] Travel: %s -> %s"),
-		*UGameplayStatics::GetCurrentLevelName(this, true),
+		TEXT(
+			"[RGStagePortal] "
+			"Travel scheduled. "
+			"Delay=%.2f / %s -> %s"
+		),
+		TransitionDelaySeconds,
+		*UGameplayStatics::GetCurrentLevelName(
+			this,
+			true
+		),
 		*NextLevelName.ToString()
 	);
+}
+
+
+// =========================================================
+// [추가] PerformTravel
+// =========================================================
+
+void ARGStagePortal::PerformTravel()
+{
+	if (NextLevelName.IsNone())
+	{
+		bTravelStarted = false;
+
+		return;
+	}
+
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT(
+			"[RGStagePortal] "
+			"Travel: %s -> %s "
+			"(LogicalDestination=%s)"
+		),
+		*UGameplayStatics::GetCurrentLevelName(
+			this,
+			true
+		),
+		*NextLevelName.ToString(),
+		*ConfiguredDestination.ToString()
+	);
+
 
 	UGameplayStatics::OpenLevel(
 		this,

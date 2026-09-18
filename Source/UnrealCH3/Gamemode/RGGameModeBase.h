@@ -86,6 +86,16 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 
 
 /**
+ * [추가] 점수가 변경되었을 때 발생
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+	FOnScoreChanged,
+	int32, CurrentScore,
+	int32, AddedScore
+);
+
+
+/**
  * Stage Clear가 발생했을 때
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(
@@ -182,6 +192,18 @@ public:
 
 
 	/**
+	 * [추가] 점수 변경 알림
+	 *
+	 * BP에서 점수 HUD를 연결할 때 사용한다.
+	 */
+	UPROPERTY(
+		BlueprintAssignable,
+		Category = "Run|Event"
+	)
+	FOnScoreChanged OnScoreChanged;
+
+
+	/**
 	 * Stage Clear 알림
 	 */
 	UPROPERTY(
@@ -222,6 +244,236 @@ public:
 		Category = "GameMode|Run"
 	)
 	bool bStartRunSystem;
+
+
+
+	// =========================================================
+	// Stage Config DataTable
+	// =========================================================
+
+public:
+
+	/**
+	 * [추가] 스테이지별 제한시간 / 목표 처치 수 등을 읽는 DataTable.
+	 *
+	 * Row Struct:
+	 * FRGStageConfigRow
+	 *
+	 * BP_RGGameModeBase Class Defaults에서
+	 * DT_StageConfig를 지정한다.
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Config|Stage"
+	)
+	TObjectPtr<UDataTable> StageConfigTable;
+
+
+	/**
+	 * [추가] 현재 레벨 이름으로 StageConfig Row를 찾지 못했을 때
+	 * 사용할 fallback RowName.
+	 *
+	 * 현재 Map01 Blockout 테스트에서도 바로 사용할 수 있도록
+	 * 기본값은 Stage01로 둔다.
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Config|Stage"
+	)
+	FName DefaultStageConfigRowName;
+
+
+	/**
+	 * [추가] 실제 적용된 DT_StageConfig의 RowName.
+	 * 예: Stage01, Stage02
+	 */
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Config|Stage"
+	)
+	FName CurrentStageConfigRowName;
+
+
+	/**
+	 * [추가] 현재 적용된 스테이지의 StageId.
+	 * StageId는 실제 Unreal Level Asset 이름과 맞추는 것을 권장.
+	 */
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Config|Stage"
+	)
+	FName CurrentStageId;
+
+
+	/**
+	 * [추가] 현재 StageConfig에 정의된 요구 코어 수.
+	 * 현재 단계에서는 저장만 하고,
+	 * Stage Clear 판정에는 아직 KillCount만 사용한다.
+	 */
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Config|Stage"
+	)
+	int32 RequiredCoresToClear;
+
+
+	/**
+	 * [추가] StageConfig에 정의된 완료 후 논리 목적지.
+	 * 예: RestHub, BossArena, Result
+	 *
+	 * 다음 단계에서 PortalConfig와 연결할 때 사용한다.
+	 */
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Config|Stage"
+	)
+	FName StageCompletionDestination;
+
+
+	/**
+	 * [추가] 해당 Stage에서 지급할 전용 재료 ID.
+	 * 예: Muzzle1, Grip1
+	 */
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Config|Stage"
+	)
+	FName StageExclusiveMaterial;
+
+
+	/**
+	 * [추가] 현재 맵에 해당하는 StageConfig Row를 찾아
+	 * GameMode의 제한시간/목표 처치 수 등에 적용한다.
+	 *
+	 * 현재 LevelName == StageId를 우선 검색하고,
+	 * 실패하면 DefaultStageConfigRowName을 사용한다.
+	 */
+	UFUNCTION(
+		BlueprintCallable,
+		Category = "Config|Stage"
+	)
+	bool ApplyStageConfigForCurrentMap();
+
+
+	UFUNCTION(
+		BlueprintPure,
+		Category = "Config|Stage"
+	)
+	FName GetCurrentStageConfigRowName() const
+	{
+		return CurrentStageConfigRowName;
+	}
+
+
+	UFUNCTION(
+		BlueprintPure,
+		Category = "Config|Stage"
+	)
+	FName GetStageCompletionDestination() const
+	{
+		return StageCompletionDestination;
+	}
+
+
+	UFUNCTION(
+		BlueprintPure,
+		Category = "Config|Stage"
+	)
+	int32 GetRequiredCoresToClear() const
+	{
+		return RequiredCoresToClear;
+	}
+
+
+
+
+	// =========================================================
+	// Score Config DataTable
+	// =========================================================
+
+public:
+
+	/**
+	 * [추가] 사건별 점수를 읽는 DataTable.
+	 *
+	 * Row Struct:
+	 * FRGScoreConfigRow
+	 *
+	 * BP_RGGameModeBase Class Defaults에서
+	 * DT_ScoreConfig를 지정한다.
+	 */
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Config|Score"
+	)
+	TObjectPtr<UDataTable> ScoreConfigTable;
+
+
+	/**
+	 * [추가] 현재 스테이지 GameMode에서 누적된 점수.
+	 *
+	 * 현재 단계에서는 "현재 맵 점수"다.
+	 * 맵 이동 뒤에도 총점을 유지하려면 이후 GameInstance/Subsystem으로
+	 * 누적값을 옮기면 된다.
+	 */
+	UPROPERTY(
+		VisibleAnywhere,
+		BlueprintReadOnly,
+		Category = "Run|Score"
+	)
+	int32 CurrentScore;
+
+
+	/**
+	 * [추가] DT_ScoreConfig의 RowName으로 점수를 적용한다.
+	 *
+	 * 예:
+	 * AddScoreEvent("NormalEnemyKilled")
+	 * AddScoreEvent("EliteEnemyKilled")
+	 * AddScoreEvent("BossKilled")
+	 *
+	 * 반환값:
+	 * 실제로 이번 호출에서 더해진 점수
+	 */
+	UFUNCTION(
+		BlueprintCallable,
+		Category = "Run|Score"
+	)
+	int32 AddScoreEvent(
+		FName ScoreEventId
+	);
+
+
+	/**
+	 * [추가] ScoreConfig Row의 기본 점수만 조회한다.
+	 * Row를 찾지 못하면 0을 반환한다.
+	 */
+	UFUNCTION(
+		BlueprintPure,
+		Category = "Run|Score"
+	)
+	int32 GetScoreValue(
+		FName ScoreEventId
+	) const;
+
+
+	UFUNCTION(
+		BlueprintPure,
+		Category = "Run|Score"
+	)
+	int32 GetCurrentScore() const
+	{
+		return CurrentScore;
+	}
+
 
 
 	// =========================================================
@@ -287,7 +539,8 @@ public:
 	/**
 	 * 현재 남은 시간
 	 *
-	 * BP_RGGameModeBase Class Defaults에서 설정 가능
+	 * DT_StageConfig가 지정되어 있으면 TimeLimitSeconds가 적용된다.
+	 * DataTable을 찾지 못한 경우 Constructor 기본값을 fallback으로 사용한다.
 	 */
 	UPROPERTY(
 		EditDefaultsOnly,
@@ -332,7 +585,7 @@ public:
 		EditDefaultsOnly,
 		BlueprintReadOnly,
 		Category = "Run|Kill",
-		meta = (ClampMin = "1")
+		meta = (ClampMin = "0")
 	)
 	int32 TargetKillsToClear;
 

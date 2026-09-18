@@ -3,9 +3,14 @@
 #include "RGGameModeBase.h"
 
 #include "Gamemode/RGProgressionSubsystem.h"
+// [추가] 6개 Run Config DataTable Row Struct
+#include "Gamemode/DataTableStruct/RGRunConfigRows.h"
 
 #include "Blueprint/UserWidget.h"
 #include "Engine/World.h"
+// [추가] DataTable 및 현재 Level 이름 조회
+#include "Engine/DataTable.h"
+#include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
 
@@ -29,6 +34,32 @@ ARGGameModeBase::ARGGameModeBase()
 	// -----------------------------------------------------
 
 	bStartRunSystem = true;
+
+
+	// -----------------------------------------------------
+	// [추가] Stage Config
+	// -----------------------------------------------------
+
+	StageConfigTable = nullptr;
+
+	// 현재 테스트 맵처럼 StageId와 LevelName이 아직 완전히 정리되지 않은 경우
+	// Stage01을 fallback으로 사용한다.
+	DefaultStageConfigRowName = TEXT("Stage01");
+
+	CurrentStageConfigRowName = NAME_None;
+	CurrentStageId = NAME_None;
+
+	RequiredCoresToClear = 0;
+	StageCompletionDestination = NAME_None;
+	StageExclusiveMaterial = NAME_None;
+
+
+	// -----------------------------------------------------
+	// [추가] Score Config
+	// -----------------------------------------------------
+
+	ScoreConfigTable = nullptr;
+	CurrentScore = 0;
 
 
 	// -----------------------------------------------------
@@ -103,6 +134,38 @@ void ARGGameModeBase::BeginPlay()
 
 			Progression->InitializeCoreUpgrades(
 				CoreUpgradeTable
+			);
+		}
+	}
+
+
+
+	// -----------------------------------------------------
+	// [추가] Stage Config 적용
+	// -----------------------------------------------------
+	//
+	// Run System을 사용하는 전투 GameMode라면
+	// Combat 시작 전에 현재 맵의 DT_StageConfig를 먼저 읽는다.
+	//
+	// 실패해도 기존 Constructor 기본값(60초 / 10킬)으로
+	// 계속 플레이할 수 있도록 BeginPlay 자체는 중단하지 않는다.
+	// -----------------------------------------------------
+
+	if (bStartRunSystem)
+	{
+		if (!ApplyStageConfigForCurrentMap())
+		{
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT(
+					"[RGGameMode] "
+					"StageConfig was not applied. "
+					"Using fallback values. "
+					"Time=%.1f / TargetKills=%d"
+				),
+				RemainingTime,
+				TargetKillsToClear
 			);
 		}
 	}
@@ -205,6 +268,377 @@ void ARGGameModeBase::EndPlay(
 	Super::EndPlay(
 		EndPlayReason
 	);
+}
+
+
+
+// =========================================================
+// [추가] ApplyStageConfigForCurrentMap
+// =========================================================
+
+bool ARGGameModeBase::ApplyStageConfigForCurrentMap()
+{
+	// -----------------------------------------------------
+	// DataTable 유효성 확인
+	// -----------------------------------------------------
+
+	if (!IsValid(StageConfigTable))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[RGGameMode] "
+				"StageConfigTable is not assigned."
+			)
+		);
+
+		return false;
+	}
+
+
+	// -----------------------------------------------------
+	// Row Struct가 올바른지 확인
+	// -----------------------------------------------------
+
+	if (
+		StageConfigTable->GetRowStruct() !=
+		FRGStageConfigRow::StaticStruct()
+		)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"[RGGameMode] "
+				"StageConfigTable RowStruct mismatch. "
+				"Expected FRGStageConfigRow."
+			)
+		);
+
+		return false;
+	}
+
+
+	// -----------------------------------------------------
+	// 현재 Unreal Level Asset 이름 확인
+	// -----------------------------------------------------
+
+	const FString CurrentLevelName =
+		UGameplayStatics::GetCurrentLevelName(
+			this,
+			true
+		);
+
+	const FName CurrentLevelId(
+		*CurrentLevelName
+	);
+
+
+	const FRGStageConfigRow* SelectedRow =
+		nullptr;
+
+	FName SelectedRowName =
+		NAME_None;
+
+
+	// -----------------------------------------------------
+	// 1순위:
+	// 현재 LevelName과 StageId가 같은 Row 검색
+	// -----------------------------------------------------
+
+	const TMap<FName, uint8*>& RowMap =
+		StageConfigTable->GetRowMap();
+
+
+	for (const TPair<FName, uint8*>& Pair : RowMap)
+	{
+		const FRGStageConfigRow* Candidate =
+			reinterpret_cast<const FRGStageConfigRow*>(
+				Pair.Value
+				);
+
+
+		if (!Candidate)
+		{
+			continue;
+		}
+
+
+		if (Candidate->StageId == CurrentLevelId)
+		{
+			SelectedRow = Candidate;
+			SelectedRowName = Pair.Key;
+
+			break;
+		}
+	}
+
+
+	// -----------------------------------------------------
+	// 2순위:
+	// StageId가 아직 실제 LevelName과 다르면
+	// DefaultStageConfigRowName 사용
+	// -----------------------------------------------------
+
+	if (
+		!SelectedRow &&
+		!DefaultStageConfigRowName.IsNone()
+		)
+	{
+		SelectedRow =
+			StageConfigTable->FindRow<FRGStageConfigRow>(
+				DefaultStageConfigRowName,
+				TEXT("ApplyStageConfigForCurrentMap"),
+				false
+			);
+
+
+		if (SelectedRow)
+		{
+			SelectedRowName =
+				DefaultStageConfigRowName;
+
+
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT(
+					"[RGGameMode] "
+					"No StageId matched current Level '%s'. "
+					"Using fallback row '%s'."
+				),
+				*CurrentLevelName,
+				*DefaultStageConfigRowName.ToString()
+			);
+		}
+	}
+
+
+	if (!SelectedRow)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"[RGGameMode] "
+				"No StageConfig row found for Level '%s'."
+			),
+			*CurrentLevelName
+		);
+
+		return false;
+	}
+
+
+	// -----------------------------------------------------
+	// StageConfig -> GameMode 실제 값 적용
+	// -----------------------------------------------------
+
+	CurrentStageConfigRowName =
+		SelectedRowName;
+
+	CurrentStageId =
+		SelectedRow->StageId;
+
+
+	// 제한 시간
+	RemainingTime =
+		FMath::Max(
+			0.0f,
+			SelectedRow->TimeLimitSeconds
+		);
+
+
+	// 요구 Kill
+	TargetKillsToClear =
+		FMath::Max(
+			0,
+			SelectedRow->RequiredKills
+		);
+
+
+	// 이후 ObjectiveConfig 연동용 값도 함께 보관
+	RequiredCoresToClear =
+		FMath::Max(
+			0,
+			SelectedRow->RequiredCores
+		);
+
+
+	// 이후 PortalConfig 연동용
+	StageCompletionDestination =
+		SelectedRow->CompletionDestination;
+
+
+	// 이후 보상/Inventory 연동용
+	StageExclusiveMaterial =
+		SelectedRow->ExclusiveMaterial;
+
+
+	// 현재 Kill Count는 새로운 Stage 시작값 0
+	CurrentKills = 0;
+
+
+	// -----------------------------------------------------
+	// 이미 Delegate를 듣고 있는 UI가 있다면 즉시 갱신
+	// -----------------------------------------------------
+
+	OnRemainingTimeChanged.Broadcast(
+		RemainingTime
+	);
+
+	OnKillCountChanged.Broadcast(
+		CurrentKills,
+		TargetKillsToClear
+	);
+
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT(
+			"[RGGameMode] "
+			"StageConfig applied. "
+			"Row=%s / StageId=%s / "
+			"Time=%.1f / Kills=%d / Cores=%d / "
+			"Destination=%s / Material=%s"
+		),
+		*CurrentStageConfigRowName.ToString(),
+		*CurrentStageId.ToString(),
+		RemainingTime,
+		TargetKillsToClear,
+		RequiredCoresToClear,
+		*StageCompletionDestination.ToString(),
+		*StageExclusiveMaterial.ToString()
+	);
+
+
+	return true;
+}
+
+
+
+// =========================================================
+// [추가] GetScoreValue
+// =========================================================
+
+int32 ARGGameModeBase::GetScoreValue(
+	FName ScoreEventId
+) const
+{
+	if (
+		ScoreEventId.IsNone() ||
+		!IsValid(ScoreConfigTable)
+		)
+	{
+		return 0;
+	}
+
+
+	if (
+		ScoreConfigTable->GetRowStruct() !=
+		FRGScoreConfigRow::StaticStruct()
+		)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"[RGGameMode] "
+				"ScoreConfigTable RowStruct mismatch. "
+				"Expected FRGScoreConfigRow."
+			)
+		);
+
+		return 0;
+	}
+
+
+	const FRGScoreConfigRow* ScoreRow =
+		ScoreConfigTable->FindRow<FRGScoreConfigRow>(
+			ScoreEventId,
+			TEXT("GetScoreValue"),
+			false
+		);
+
+
+	if (!ScoreRow)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[RGGameMode] "
+				"ScoreConfig row not found: %s"
+			),
+			*ScoreEventId.ToString()
+		);
+
+		return 0;
+	}
+
+
+	return ScoreRow->BaseScore;
+}
+
+
+// =========================================================
+// [추가] AddScoreEvent
+// =========================================================
+
+int32 ARGGameModeBase::AddScoreEvent(
+	FName ScoreEventId
+)
+{
+	const int32 AddedScore =
+		GetScoreValue(
+			ScoreEventId
+		);
+
+
+	// 0점 이벤트도 정상 데이터일 수 있다.
+	// 예: TrainingTargetHit, ForcedEnemyRemoval
+	if (AddedScore == 0)
+	{
+		UE_LOG(
+			LogTemp,
+			Verbose,
+			TEXT(
+				"[RGGameMode] "
+				"Score event '%s' added 0 points."
+			),
+			*ScoreEventId.ToString()
+		);
+
+		return 0;
+	}
+
+
+	CurrentScore += AddedScore;
+
+
+	// BP/HUD에 점수 변경 알림
+	OnScoreChanged.Broadcast(
+		CurrentScore,
+		AddedScore
+	);
+
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT(
+			"[RGGameMode] "
+			"Score Event=%s / +%d / Total=%d"
+		),
+		*ScoreEventId.ToString(),
+		AddedScore,
+		CurrentScore
+	);
+
+
+	return AddedScore;
 }
 
 
@@ -502,9 +936,12 @@ void ARGGameModeBase::CheckEndCondition(
 
 bool ARGGameModeBase::CheckStageClearCondition() const
 {
+	// [수정]
+	// RequiredKills == 0은 "KillCount가 이 스테이지의 완료 조건이 아님"으로 처리한다.
+	// 예: Stage04_Boss는 추후 BossKilled Objective로 완료 판정을 연결한다.
 	return (
-		CurrentKills >=
-		TargetKillsToClear
+		TargetKillsToClear > 0 &&
+		CurrentKills >= TargetKillsToClear
 		);
 }
 
@@ -584,6 +1021,20 @@ void ARGGameModeBase::OnEnemyDied()
 	// -----------------------------------------------------
 
 	CurrentKills++;
+
+
+	// -----------------------------------------------------
+	// [추가] DT_ScoreConfig 기반 일반 적 처치 점수 적용
+	// -----------------------------------------------------
+	//
+	// 기존처럼 +100을 코드에 직접 쓰지 않고
+	// DT_ScoreConfig의 NormalEnemyKilled Row를 사용한다.
+	// 점수 조정은 DataTable 값만 바꾸면 된다.
+	// -----------------------------------------------------
+
+	AddScoreEvent(
+		TEXT("NormalEnemyKilled")
+	);
 
 
 	// -----------------------------------------------------
