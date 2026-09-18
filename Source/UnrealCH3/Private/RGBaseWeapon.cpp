@@ -628,14 +628,6 @@ int32 ARGBaseWeapon::GetCapacityForStack(int32 Stacks) const
 
 void ARGBaseWeapon::TryTriggerCoreUpgradeEffects(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart)
 {
-
-	// 벽/바닥 등 적이 아닌 대상을 맞췄을 때는 여기서 후속 효과(도탄/전이 등) 자체를 시작하지 않음
-	// 하지만 "적 -> 벽으로 전이"는 이미 TriggerChainPulse 내부에서 벽까지 대상으로 잡을 수 있으니 그건 그대로 허용됨
-	if (!Cast<ABaseEnemy>(Hit.GetActor()))
-	{
-		return;
-	}
-
 	UGameInstance* GI = GetGameInstance();
 	URGProgressionSubsystem* Progression = GI ? GI->GetSubsystem<URGProgressionSubsystem>() : nullptr;
 	if (!Progression)
@@ -643,19 +635,20 @@ void ARGBaseWeapon::TryTriggerCoreUpgradeEffects(const FHitResult& Hit, float De
 		return;
 	}
 
-	// 보유한 핵심 강화를 하나씩 확인하면서 해당하는 효과만 발동
-	// (현재 무기와 무관한 핵심 강화는 애초에 GenerateCoreUpgradeOptions에서
-	//  무기 필터로 걸러졌으므로, 여기서는 "가지고 있냐"만 체크하면 됨)
-	if (Progression->HasCoreUpgrade(FName(TEXT("DoubleShot"))))
+	// DoubleShot, ChainPulse는 적을 맞췄을 때만 발동 (여기서 개별적으로 체크)
+	const bool bHitEnemy = Cast<ABaseEnemy>(Hit.GetActor()) != nullptr;
+
+	if (bHitEnemy && Progression->HasCoreUpgrade(FName(TEXT("DoubleShot"))))
 	{
 		TriggerDoubleShot(Hit, DealtDamage, ShotStart);
 	}
 
-	if (Progression->HasCoreUpgrade(FName(TEXT("ChainPulse"))))
+	if (bHitEnemy && Progression->HasCoreUpgrade(FName(TEXT("ChainPulse"))))
 	{
 		TriggerChainPulse(Hit, DealtDamage, ShotStart);
 	}
 
+	// ExplosiveRound는 적이든 벽이든 라인트레이스가 뭔가에 부딪히기만 하면 발동
 	if (Progression->HasCoreUpgrade(FName(TEXT("ExplosiveRound"))))
 	{
 		TriggerExplosiveRound(Hit, DealtDamage, ShotStart);
