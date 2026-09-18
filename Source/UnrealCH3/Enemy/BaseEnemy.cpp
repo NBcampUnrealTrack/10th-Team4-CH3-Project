@@ -25,7 +25,7 @@ ABaseEnemy::ABaseEnemy()
 	PrimaryActorTick.bCanEverTick = false;
 	AIControllerClass = AAIEnemyController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
-
+	
 	static ConstructorHelpers::FObjectFinder<UDataTable> StateTable(TEXT("/Script/Engine.DataTable'/Game/Enemy/EnemyData.EnemyData'"));
 	if (StateTable.Succeeded())
 	{
@@ -103,7 +103,7 @@ void ABaseEnemy::InitializeData()
 		Score = StateDataRow->Score;
 		Exp = StateDataRow->EXP;
 	}
-
+	
 	if (FStructEnemyAttackType* AttackDataRow = EnemyAttackTypeDataTable->FindRow<FStructEnemyAttackType>(EnemyName, TEXT("InitializeData")))
 	{
 		ViewingDistance = AttackDataRow->ViewingDistance;
@@ -155,7 +155,7 @@ float ABaseEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
 	);
 
 	//죽은 적에게 중복 피해 방지
-	if (bIsDead || CurrentHP <= 0.f || DamageAmount <= 0.f)
+	if (bIsDead || CurrentHP<=0.f || DamageAmount <= 0.f)
 	{
 		return 0.0f;
 	}
@@ -234,39 +234,6 @@ void ABaseEnemy::Die()
 	{
 		UE_LOG(LogTemp, Error, TEXT("[%s] URGProgressionSubsystem을 찾을 수 없음!"), *GetName());   // 추가
 	}
-
-	// [추가] GameMode를 직접 참조하지 않고 정상 사망 사실만 외부에 알린다.
-	// bIsDead 가드 덕분에 Die()당 한 번만 Broadcast된다.
-	// [DEBUG] 정상 사망 Delegate가 실제로 Broadcast되는지 확인
-	UE_LOG(
-		LogTemp,
-		Warning,
-		TEXT("=== BASE ENEMY OnEnemyDeath BROADCAST : %s ==="),
-		*GetName()
-	);
-
-	OnEnemyDeath.Broadcast(this);
-
-	// [추가] 사망한 적은 즉시 화면/충돌에서 제거하고,
-	// 같은 프레임의 데미지 피드백(히트마커/킬마커/데미지 숫자)이 끝난 뒤
-	// 안전하게 실제 Actor가 파괴되도록 짧은 LifeSpan을 건다.
-	// 여기서 Destroy()를 즉시 호출하지 않는 이유는 TakeDamage()가 Die() 이후에도
-	// ReceiveDamageFeedback(..., this, ...)를 호출하기 때문이다.
-	SetActorEnableCollision(false);
-	SetActorHiddenInGame(true);
-
-	if (AAIController* EnemyController = Cast<AAIController>(GetController()))
-	{
-		EnemyController->StopMovement();
-	}
-
-	if (GetCharacterMovement())
-	{
-		GetCharacterMovement()->StopMovementImmediately();
-		GetCharacterMovement()->DisableMovement();
-	}
-
-	SetLifeSpan(0.1f);
 
 	UE_LOG(LogTemp, Log, TEXT("Character is Dead!"));
 }

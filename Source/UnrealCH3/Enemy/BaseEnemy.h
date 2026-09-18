@@ -9,13 +9,6 @@
 #include "BaseEnemy.generated.h"
 
 class UBehaviorTree;
-class ABaseEnemy;
-
-// [추가] 적의 정상 사망을 외부 시스템에 알리는 이벤트
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
-    FOnEnemyDeath,
-    ABaseEnemy*, DeadEnemy
-);
 
 UCLASS()
 class UNREALCH3_API ABaseEnemy : public ACharacter
@@ -25,10 +18,6 @@ class UNREALCH3_API ABaseEnemy : public ACharacter
 public:
     // Sets default values for this character's properties
     ABaseEnemy();
-
-    // [추가] 정상 사망 시 1회 Broadcast. SpawnManager가 이 이벤트를 구독한다.
-    UPROPERTY(BlueprintAssignable, Category = "Enemy|Event")
-    FOnEnemyDeath OnEnemyDeath;
     UFUNCTION()
     virtual void BeginPlay() override;
     UFUNCTION()
@@ -44,7 +33,7 @@ public:
     UFUNCTION()
     bool IsTargetInAttackRange() const;
     //bool IsTargetInDetectRange() const;
-
+    
     UFUNCTION()
     EEnemyStateEnum GetEnemyState() const;
     UFUNCTION()

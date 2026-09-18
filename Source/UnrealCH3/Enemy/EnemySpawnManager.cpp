@@ -10,10 +10,6 @@
 #include "TimerManager.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/Character.h"
-// [추가] RunFlow AI 상태 적용
-#include "AIController.h"
-#include "BrainComponent.h" // [수정] UBrainComponent의 실제 AIModule 헤더 경로
-#include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
 AEnemySpawnManager::AEnemySpawnManager()
@@ -29,14 +25,6 @@ AEnemySpawnManager::AEnemySpawnManager()
 void AEnemySpawnManager::BeginPlay()
 {
 	Super::BeginPlay();
-
-	UE_LOG(
-		LogTemp,
-		Warning,
-		TEXT("=== SPAWN MANAGER BeginPlay | Name=%s | This=%p ==="),
-		*GetName(),
-		this
-	);
 
 	// 자동 검색이 활성화되어 있으면 레벨의 모든 스폰 포인트를 수집한다.
 	if (bAutoFindSpawnPoints)
@@ -166,110 +154,6 @@ void AEnemySpawnManager::SetSpawningEnabled(bool bEnabled)
 	}
 }
 
-
-// [추가] RunFlow의 AIState를 SpawnManager와 현재 활성 적에게 적용한다.
-void AEnemySpawnManager::ApplyRunAIState(
-	ERGRunAIState NewAIState
-)
-{
-	CurrentRunAIState = NewAIState;
-
-	const bool bShouldSpawn =
-		NewAIState == ERGRunAIState::Active;
-
-	bSpawningEnabled = bShouldSpawn;
-
-	if (bShouldSpawn)
-	{
-		StartSpawning();
-	}
-	else
-	{
-		StopSpawning();
-	}
-
-
-	for (ABaseEnemy* Enemy : ActiveEnemies)
-	{
-		if (!IsValid(Enemy))
-		{
-			continue;
-		}
-
-		AAIController* AIController =
-			Cast<AAIController>(
-				Enemy->GetController()
-			);
-
-		if (!AIController)
-		{
-			continue;
-		}
-
-		UBrainComponent* Brain =
-			AIController->GetBrainComponent();
-
-		switch (NewAIState)
-		{
-		case ERGRunAIState::Active:
-		{
-			if (Brain)
-			{
-				// StopLogic / PauseLogic 어느 쪽에서 왔어도 다시 동작 가능하게 한다.
-				Brain->RestartLogic();
-			}
-
-			break;
-		}
-
-
-		case ERGRunAIState::Paused:
-		{
-			AIController->StopMovement();
-
-			if (Brain)
-			{
-				Brain->PauseLogic(
-					TEXT("RunFlow Paused")
-				);
-			}
-
-			break;
-		}
-
-
-		case ERGRunAIState::Disabled:
-		{
-			AIController->StopMovement();
-
-			if (Brain)
-			{
-				Brain->StopLogic(
-					TEXT("RunFlow Disabled")
-				);
-			}
-
-			break;
-		}
-
-
-		default:
-			break;
-		}
-	}
-
-
-	UE_LOG(
-		LogTemp,
-		Log,
-		TEXT(
-			"[EnemySpawnManager] Run AI State applied: %d / Alive=%d"
-		),
-		static_cast<int32>(NewAIState),
-		ActiveEnemies.Num()
-	);
-}
-
 // 일반 사망 또는 오류 사망한 적을 현재 활성 적 목록에서 제거한다.
 void AEnemySpawnManager::NotifyEnemyNoLongerActive(ABaseEnemy* Enemy)
 {
@@ -360,9 +244,6 @@ void AEnemySpawnManager::RemoveActiveEnemy(ABaseEnemy* Enemy)
 	// 목록에 존재했던 적이 실제로 제거된 경우에만 후속 작업을 수행한다.
 	if (RemovedCount > 0)
 	{
-		// [추가] 정상 사망 이벤트 연결도 해제하여 중복 처리를 방지한다.
-		Enemy->OnEnemyDeath.RemoveDynamic(this, &AEnemySpawnManager::HandleEnemyDeath);
-
 		// 명시적으로 비활성 처리된 적이 나중에 Destroy될 때 중복 처리되지 않도록 이벤트 연결을 해제한다.
 		Enemy->OnDestroyed.RemoveDynamic(this, &AEnemySpawnManager::HandleSpawnedEnemyDestroyed);
 
@@ -377,44 +258,7 @@ void AEnemySpawnManager::RemoveActiveEnemy(ABaseEnemy* Enemy)
 			*GetNameSafe(Enemy),
 			ActiveEnemies.Num()
 		);
-
-		// [추가] Objective/Bridge에 현재 생존 수 전달
-		OnAliveEnemyCountChanged.Broadcast(
-			ActiveEnemies.Num()
-		);
 	}
-}
-
-// [추가] BaseEnemy가 정상 사망했을 때 호출된다.
-void AEnemySpawnManager::HandleEnemyDeath(ABaseEnemy* DeadEnemy)
-{
-	if (!IsValid(DeadEnemy))
-	{
-		return;
-	}
-
-	UE_LOG(
-		LogTemp,
-		Warning,
-		TEXT("=== SPAWN MANAGER HandleEnemyDeath | Manager=%s | This=%p | Enemy=%s | OnEnemyKilled.IsBound=%s ==="),
-		*GetName(),
-		this,
-		*DeadEnemy->GetName(),
-		OnEnemyKilled.IsBound() ? TEXT("TRUE") : TEXT("FALSE")
-	);
-
-	RemoveActiveEnemy(DeadEnemy);
-
-	UE_LOG(
-		LogTemp,
-		Warning,
-		TEXT("=== SPAWN MANAGER OnEnemyKilled BROADCAST | Manager=%s | This=%p | IsBound=%s ==="),
-		*GetName(),
-		this,
-		OnEnemyKilled.IsBound() ? TEXT("TRUE") : TEXT("FALSE")
-	);
-
-	OnEnemyKilled.Broadcast(DeadEnemy);
 }
 
 bool AEnemySpawnManager::FindRecoveryTransform_Implementation(AActor* Requester, FTransform& OutRecoveryTransform)
@@ -780,22 +624,8 @@ bool AEnemySpawnManager::SpawnEnemy(TSubclassOf<ABaseEnemy> EnemyClass, bool bEl
 			continue;
 		}
 
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("=== SPAWN MANAGER SpawnEnemy | Manager=%s | This=%p | Enemy=%s ==="),
-			*GetName(),
-			this,
-			*GetNameSafe(SpawnedEnemy)
-		);
-
 		// 생성에 성공한 적을 현재 활성 적 목록에 등록한다.
 		ActiveEnemies.Add(SpawnedEnemy);
-
-		// [추가] Objective/Bridge에 현재 생존 수 전달
-		OnAliveEnemyCountChanged.Broadcast(
-			ActiveEnemies.Num()
-		);
 
 		// 전체 누적 생성 수를 증가시킨다.
 		++TotalSpawnedCount;
@@ -805,9 +635,6 @@ bool AEnemySpawnManager::SpawnEnemy(TSubclassOf<ABaseEnemy> EnemyClass, bool bEl
 		{
 			++TotalEliteSpawnedCount;
 		}
-
-		// [추가] 정상 사망 시 SpawnManager가 처치 사실을 받을 수 있도록 연결한다.
-		SpawnedEnemy->OnEnemyDeath.AddDynamic(this, &AEnemySpawnManager::HandleEnemyDeath);
 
 		// 적이 Destroy될 때 활성 적 목록에서 자동 제거되도록 이벤트를 연결한다.
 		SpawnedEnemy->OnDestroyed.AddDynamic(this, &AEnemySpawnManager::HandleSpawnedEnemyDestroyed);
