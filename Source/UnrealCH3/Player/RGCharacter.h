@@ -10,6 +10,13 @@ class UTimelineComponent;
 class ARGBaseWeapon;
 struct FInputActionValue;
 
+// [추가] 무기가 실제로 생성/교체된 순간을 외부 시스템(UI 등)에 알린다.
+// Character가 UIManager를 직접 참조하지 않도록 Delegate로 느슨하게 연결한다.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FOnWeaponEquipped,
+	ARGBaseWeapon*, NewWeapon
+);
+
 // 캐릭터 이동상태 ENUM
 UENUM(BlueprintType)
 enum class EMovementState : uint8
@@ -32,11 +39,15 @@ class UNREALCH3_API ARGCharacter : public ACharacter
 public:
 	ARGCharacter();
 
+	// [추가] 무기 장착 완료 이벤트. 초기 무기와 이후 무기 교체 모두 동일한 경로로 알린다.
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnWeaponEquipped OnWeaponEquipped;
+
 protected:
 	// override 함수
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-public:	
+public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	UFUNCTION(BlueprintCallable)
@@ -221,7 +232,7 @@ private:
 	FVector DashVelocity = FVector::ZeroVector;
 	FVector2D MoveInput = FVector2D::ZeroVector;
 	FHitResult DashHitResult;
-	
+
 	// 슬라이드
 	FTimerHandle SlideTimerHandle;
 	UPROPERTY(EditAnywhere, Category = "Movement|Slide")
@@ -270,12 +281,12 @@ private:
 	float DefaultGroundFriction = 0.0f;
 	float DefaultBreakingDecelerationWalking = 0.0f;
 
-	public:
-		//강화용 함수
-		float GetMoveSpeedMultiplier() const;
-		float GetDefaultMoveSpeed() const;
-		float GetSprintSpeed() const;
-		float GetMaxHealthWithUpgrade() const;
-		float GetCurrentMaxHealth() const;
-		float GetRegenerationPerSecond() const;
+public:
+	//강화용 함수
+	float GetMoveSpeedMultiplier() const;
+	float GetDefaultMoveSpeed() const;
+	float GetSprintSpeed() const;
+	float GetMaxHealthWithUpgrade() const;
+	float GetCurrentMaxHealth() const;
+	float GetRegenerationPerSecond() const;
 };
