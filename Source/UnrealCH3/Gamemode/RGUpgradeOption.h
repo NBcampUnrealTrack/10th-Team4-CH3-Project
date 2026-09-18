@@ -76,7 +76,7 @@ enum class ECoreUpgradeEffectType : uint8
 	//샷건 강화
 	PiercingPellet,
 	FocusedSpread,
-	ShardBurst,
+	KnockBack,
 	//레일건 강화
 	MultiPierce,
 	ChargeBlast,

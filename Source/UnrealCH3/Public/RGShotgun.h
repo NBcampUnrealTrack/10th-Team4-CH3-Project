@@ -20,8 +20,11 @@ protected:
 	int32 PelletCount = 8;
 
 	virtual void Fire() override;
-	//강화
+	//핵심 강화 2
 	virtual FVector ApplySpread(const FVector& AimDirection) const override;  
+	//적 넉백 함수 ( 핵심 강화 3)
+	void TryApplyKnockback(AActor* HitActor, const FVector& FireDirection) const;
+
 
 public:
 	// 재장전 중 발사 버튼을 누르면, 진행 중이던 장전을 즉시 취소하고 바로 발사로 넘어감

@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "RGShotgun.h"
+#include "Enemy/BaseEnemy.h"
 #include "Gamemode/RGProgressionSubsystem.h"
 
 void ARGShotgun::StartFire()
@@ -52,18 +53,24 @@ void ARGShotgun::Fire()
 		if (!bHasPiercingPellet)
 		{
 			// 강화 없으면 기존 그대로: 펠릿 하나가 한 명만 맞춤
-			FireHitscan(StartLocation, PelletDirection, -1.f, nullptr);
+			FHitResult Hit;
+			const bool bHit = FireHitscan(StartLocation, PelletDirection, -1.f, nullptr, &Hit);
+			if (bHit)
+			{
+				TryApplyKnockback(Hit.GetActor(), PelletDirection);   // 추가
+			}
 			continue;
 		}
 
 		// 강화 있으면: 이 펠릿 하나가 최대 2명(원본 + 관통 1회)까지 맞을 수 있음
 		TSet<AActor*> AlreadyHitActors;
-
+		FHitResult FirstHit;
 		// 1번째 명중 - 원본 데미지
-		const bool bFirstHit = FireHitscan(StartLocation, PelletDirection, -1.f, &AlreadyHitActors);
+		const bool bFirstHit = FireHitscan(StartLocation, PelletDirection, -1.f, &AlreadyHitActors , &FirstHit);
 
 		if (bFirstHit)
 		{
+			TryApplyKnockback(FirstHit.GetActor(), PelletDirection);   // 추가
 			// 관통 1회만 - 65% 데미지. 반복문이 아니라 딱 한 번만 호출하므로 "추가 관통 없음" 자동 충족
 			const float PierceDamage = WeaponStats.BaseDamage * PierceDamagePercent;
 			FireHitscan(StartLocation, PelletDirection, PierceDamage, &AlreadyHitActors);
@@ -99,4 +106,42 @@ FVector ARGShotgun::ApplySpread(const FVector& AimDirection) const
 
 	const float SpreadRadians = FMath::DegreesToRadians(SpreadDegrees);
 	return FMath::VRandCone(AimDirection, SpreadRadians);
+}
+
+// Knockback 강화: 펠릿에 맞은 적을 발사 방향으로 밀쳐냄
+// RGShotgun.cpp - TryApplyKnockback()
+void ARGShotgun::TryApplyKnockback(AActor* HitActor, const FVector& FireDirection) const
+{
+	ABaseEnemy* Enemy = Cast<ABaseEnemy>(HitActor);
+	if (!Enemy)
+	{
+		return;
+	}
+
+	UGameInstance* GI = GetGameInstance();
+	URGProgressionSubsystem* Progression = GI ? GI->GetSubsystem<URGProgressionSubsystem>() : nullptr;
+	if (!Progression || !Progression->HasCoreUpgrade(FName(TEXT("Knockback"))))
+	{
+		return;
+	}
+
+	const FRGCoreUpgradeRow* Row = Progression->FindCoreUpgradeRow(FName(TEXT("Knockback")));
+	if (!Row)
+	{
+		return;
+	}
+	// 밀려나는 거리(cm)
+	const float BaseKnockbackDistance = 150.f;   
+	const float KnockbackDistance = BaseKnockbackDistance * Row->DamagePercent;
+
+	FVector Direction = FireDirection;
+	Direction.Z = 0.f;
+	Direction.Normalize();
+
+	const FVector NewLocation = Enemy->GetActorLocation() + Direction * KnockbackDistance;
+
+	// sweep=true로 벽 등에 막히면 자연스럽게 멈춤
+	Enemy->SetActorLocation(NewLocation, true);
+
+	UE_LOG(LogTemp, Warning, TEXT("[Knockback] %s 밀쳐냄 (거리 %.0f)"), *Enemy->GetName(), KnockbackDistance);
 }
