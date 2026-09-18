@@ -1,5 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "RGBaseWeapon.h"
+#include "Enemy/BaseEnemy.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/DamageType.h"
@@ -627,6 +628,14 @@ int32 ARGBaseWeapon::GetCapacityForStack(int32 Stacks) const
 
 void ARGBaseWeapon::TryTriggerCoreUpgradeEffects(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart)
 {
+
+	// 벽/바닥 등 적이 아닌 대상을 맞췄을 때는 여기서 후속 효과(도탄/전이 등) 자체를 시작하지 않음
+	// 하지만 "적 -> 벽으로 전이"는 이미 TriggerChainPulse 내부에서 벽까지 대상으로 잡을 수 있으니 그건 그대로 허용됨
+	if (!Cast<ABaseEnemy>(Hit.GetActor()))
+	{
+		return;
+	}
+
 	UGameInstance* GI = GetGameInstance();
 	URGProgressionSubsystem* Progression = GI ? GI->GetSubsystem<URGProgressionSubsystem>() : nullptr;
 	if (!Progression)
@@ -640,6 +649,16 @@ void ARGBaseWeapon::TryTriggerCoreUpgradeEffects(const FHitResult& Hit, float De
 	if (Progression->HasCoreUpgrade(FName(TEXT("DoubleShot"))))
 	{
 		TriggerDoubleShot(Hit, DealtDamage, ShotStart);
+	}
+
+	if (Progression->HasCoreUpgrade(FName(TEXT("ChainPulse"))))
+	{
+		TriggerChainPulse(Hit, DealtDamage, ShotStart);
+	}
+
+	if (Progression->HasCoreUpgrade(FName(TEXT("ExplosiveRound"))))
+	{
+		TriggerExplosiveRound(Hit, DealtDamage, ShotStart);
 	}
 }
 
@@ -677,4 +696,128 @@ void ARGBaseWeapon::TriggerDoubleShot(const FHitResult& Hit, float DealtDamage, 
 	UE_LOG(LogTemp, Warning, TEXT("[DoubleShot] %s 더블샷 추가 데미지: %.1f"), *Hit.GetActor()->GetName(), SecondShotDamage);
 
 	OnWeaponHit.Broadcast(Hit.GetActor(), SecondShotDamage, false, Hit.ImpactPoint);
+}
+//전이 범위는 여기서 수정
+void ARGBaseWeapon::TriggerChainPulse(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart)
+{
+	UGameInstance* GI = GetGameInstance();
+	URGProgressionSubsystem* Progression = GI ? GI->GetSubsystem<URGProgressionSubsystem>() : nullptr;
+	if (!Progression)
+	{
+		return;
+	}
+
+	const FRGCoreUpgradeRow* Row = Progression->FindCoreUpgradeRow(FName(TEXT("ChainPulse")));
+	if (!Row || !Hit.GetActor())
+	{
+		return;
+	}
+
+	AActor* OriginalTarget = Hit.GetActor();
+	const float ChainDamage = DealtDamage * Row->DamagePercent;
+
+	// 첫 타격 지점 주변에서 전이 대상을 탐색
+	TArray<FOverlapResult> Overlaps;
+	FCollisionQueryParams QueryParams;
+	//내 캐릭터한텐 전이 안되게
+	QueryParams.AddIgnoredActor(OriginalTarget);
+	if (OwningCharacter)
+	{
+		QueryParams.AddIgnoredActor(OwningCharacter);
+	}
+	//전이 범위 = 800
+	const float ChainSearchRadius = 800.f;   
+
+	GetWorld()->OverlapMultiByChannel(Overlaps, Hit.ImpactPoint, FQuat::Identity, ECC_Pawn,
+		FCollisionShape::MakeSphere(ChainSearchRadius), QueryParams);
+
+	// 가까운 순으로 정렬
+	Overlaps.Sort([&Hit](const FOverlapResult& A, const FOverlapResult& B)
+		{
+			const float DistA = A.GetActor() ? FVector::DistSquared(Hit.ImpactPoint, A.GetActor()->GetActorLocation()) : TNumericLimits<float>::Max();
+			const float DistB = B.GetActor() ? FVector::DistSquared(Hit.ImpactPoint, B.GetActor()->GetActorLocation()) : TNumericLimits<float>::Max();
+			return DistA < DistB;
+		});
+
+	int32 HitCount = 0;
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		if (HitCount >= Row->MaxTargets)   // 최대 2대 제한 (데이터테이블 MaxTargets 값)
+		{
+			break;
+		}
+
+		AActor* Candidate = Overlap.GetActor();
+		if (!Candidate || Candidate == OriginalTarget || Candidate == OwningCharacter)
+		{
+			continue;
+		}
+
+		UGameplayStatics::ApplyPointDamage(
+			Candidate,
+			ChainDamage,
+			(Candidate->GetActorLocation() - Hit.ImpactPoint).GetSafeNormal(),
+			Hit,
+			OwningCharacter ? OwningCharacter->GetController() : nullptr,
+			this,
+			UDamageType::StaticClass()   // 후속 데미지이므로 비직격 타입 - 코어는 이 데미지를 받지 않음
+		);
+
+		OnWeaponHit.Broadcast(Candidate, ChainDamage, false, Candidate->GetActorLocation());
+		HitCount++;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[ChainPulse] %d명에게 전이 (최대 %d, 배율 %.2f)"), HitCount, Row->MaxTargets, Row->DamagePercent);
+}
+
+void ARGBaseWeapon::TriggerExplosiveRound(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart)
+{
+	if (!Hit.GetActor())
+	{
+		return;
+	}
+
+	const float DamagePercent = 0.35f;   // 원본 대비 35%
+	const float ExplosionRadius = 300.f;
+
+	// 명중 지점 주변에 있는 액터들을 찾음
+	TArray<FOverlapResult> Overlaps;
+	FCollisionQueryParams QueryParams;
+	if (OwningCharacter)
+	{
+		QueryParams.AddIgnoredActor(OwningCharacter);
+	}
+
+	GetWorld()->OverlapMultiByChannel(Overlaps, Hit.ImpactPoint, FQuat::Identity, ECC_Pawn,
+		FCollisionShape::MakeSphere(ExplosionRadius), QueryParams);
+
+	int32 HitCount = 0;
+
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		AActor* Target = Overlap.GetActor();
+
+		// 적이 아니면 건너뜀 (벽 등 제외)
+		if (!Cast<ABaseEnemy>(Target))
+		{
+			continue;
+		}
+
+		const float ExplosionDamage = DealtDamage * DamagePercent;
+
+		UGameplayStatics::ApplyPointDamage(
+			Target,
+			ExplosionDamage,
+			(Target->GetActorLocation() - Hit.ImpactPoint).GetSafeNormal(),
+			Hit,
+			OwningCharacter ? OwningCharacter->GetController() : nullptr,
+			this,
+			UDamageType::StaticClass()   // 수류탄 판정 아님 - 일반 데미지 타입 사용
+		);
+
+		OnWeaponHit.Broadcast(Target, ExplosionDamage, false, Target->GetActorLocation());
+		HitCount++;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[ExplosiveRound] 폭발! %d명 적중"), HitCount);
 }
