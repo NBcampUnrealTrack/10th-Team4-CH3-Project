@@ -17,6 +17,7 @@ class ARGBaseWeapon;
 class UCrosshairWidget;
 class ARGCharacter;
 class ARGGameModeBase;
+class URailgunChargeWidget;
 
 /**
  * 
@@ -193,4 +194,9 @@ public:
 	//호출할 함수 공격자, 공격 발생 위치
 	UFUNCTION(BlueprintCallable, Category = "UI|CombatFeedback")
 	void NotifyDirectionalDamage(AActor* Attacker, FVector AttackOrigin);
+
+	UFUNCTION(BlueprintCallable, Category = "UI|Binding")
+	void RegisterRailgunChargeView(URailgunChargeWidget* InRailgunChargeView);
+
+
 };

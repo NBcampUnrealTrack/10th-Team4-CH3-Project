@@ -13,6 +13,8 @@ class ARGBaseWeapon;
 class UWeaponInfoWidget;
 class UCrosshairWidget;
 class UWorld;
+class ARGRailgun;
+class URailgunChargeWidget;
 
 /**
  * 
@@ -43,6 +45,8 @@ public:
 
 	//크로스헤어 등록
 	void SetCrosshairView(UCrosshairWidget* InCrosshairView);
+
+	void SetRailgunChargeView(URailgunChargeWidget* InRailgunChargeView);
 
 	FOnHUDDamageNumberRequested OnDamageNumberRequested;
 
@@ -100,4 +104,21 @@ protected:
 	UFUNCTION()
 	void HandleWeaponDamageNumberRequested(float AppliedDamage, AActor* TargetActor, FVector WorldLocation);
 
+	// 레일건 충전 View
+	TWeakObjectPtr<URailgunChargeWidget> RailgunChargeView;
+
+	// 레일건 충전 UI 타이머
+	FTimerHandle RailgunChargeTimerHandle;
+
+	// 충전 UI 타이머가 사용하는 World
+	TWeakObjectPtr<UWorld> RailgunChargeTimerWorld;
+
+	// 장착 무기 기준으로 레일건 타이머 UI 재설정
+	void RefreshRailgunChargeUI();
+
+	// 레일건 충전 상태 전달
+	void UpdateRailgunChargeProgress();
+
+	// 충전 UI 갱신 타이머 해제
+	void StopRailgunChargeTimer();
 };
