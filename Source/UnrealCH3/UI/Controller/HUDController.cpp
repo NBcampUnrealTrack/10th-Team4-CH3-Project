@@ -211,6 +211,15 @@ void UHUDController::SetCrosshairView(UCrosshairWidget* InCrosshairView)
 
 void UHUDController::SetRailgunChargeView(URailgunChargeWidget* InRailgunChargeView)
 {
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[RailgunUI] SetRailgunChargeView called: %s"),
+		IsValid(InRailgunChargeView)
+		? *InRailgunChargeView->GetName()
+		: TEXT("NULL")
+	);
+
 	if (URailgunChargeWidget* PreviousView = RailgunChargeView.Get())
 	{
 		PreviousView->ResetChargeState();
@@ -363,6 +372,14 @@ void UHUDController::HandleWeaponDamageNumberRequested(float AppliedDamage, AAct
 
 void UHUDController::RefreshRailgunChargeUI()
 {
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[RailgunUI] Refresh called / View=%s / Weapon=%s"),
+		RailgunChargeView.IsValid() ? TEXT("Valid") : TEXT("Invalid"),
+		BoundWeapon.IsValid() ? *BoundWeapon->GetName() : TEXT("NULL")
+	);
+
 	StopRailgunChargeTimer();
 
 	URailgunChargeWidget* View = RailgunChargeView.Get();
