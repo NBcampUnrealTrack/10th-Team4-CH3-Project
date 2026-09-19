@@ -126,3 +126,4 @@ float ARGRailgun::GetChargeSpeedMultiplier() const
 	}
 	return Multiplier;
 }
+

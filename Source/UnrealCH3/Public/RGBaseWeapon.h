@@ -246,8 +246,8 @@ public:
 		// 핵심 강화 효과 분기 진입점
 		// bTriggerCoreEffects: 후속 효과(도탄/전이 등)가 자기 자신을 또 트리거하지 않도록 막는 플래그
 		void TryTriggerCoreUpgradeEffects(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
-
-		// 개별 효과 구현
+		//개별 효과 구현
 		void TriggerDoubleShot(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
-
+		void TriggerChainPulse(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
+		void TriggerExplosiveRound(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
 };

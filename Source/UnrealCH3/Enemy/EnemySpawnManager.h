@@ -6,12 +6,26 @@
 #include "GameFramework/Actor.h"
 #include "Enemy/DataTableStruct/RGEnemySpawnData.h"
 #include "Enemy/Interface/EnemyRecoveryProvider.h"
+// [추가] RunFlow의 AIState를 직접 적용하기 위한 Enum
+#include "Gamemode/DataTableStruct/RGRunConfigRows.h"
 #include "EnemySpawnManager.generated.h"
 
 // 포인터와 클래스 참조에 사용할 전방 선언
 class ABaseEnemy;
 class AEnemySpawnPoint;
 class UDataTable;
+
+// [추가] SpawnManager가 관리하는 적의 정상 처치를 외부에 알리는 이벤트
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FOnEnemyKilled,
+	ABaseEnemy*, DeadEnemy
+);
+
+// [추가] 현재 활성 적 수가 바뀔 때 GameFlowBridge에 알린다.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FOnAliveEnemyCountChanged,
+	int32, AliveEnemyCount
+);
 
 // 스테이지별 스폰 예산과 현재 활성 적을 관리하는 레벨 배치용 Actor
 UCLASS()
@@ -23,6 +37,14 @@ public:
 	// Sets default values for this actor's properties
 	// 스폰 매니저의 Tick 사용 여부와 기본 상태를 설정한다.
 	AEnemySpawnManager();
+
+	// [추가] BP_GameFlowBridge가 Bind하여 GameMode::OnEnemyDied()로 전달한다.
+	UPROPERTY(BlueprintAssignable, Category = "Enemy|Spawn|Event")
+	FOnEnemyKilled OnEnemyKilled;
+
+	// [추가] AliveEnemyGate / HUD 등에 현재 생존 수 전달
+	UPROPERTY(BlueprintAssignable, Category = "Enemy|Spawn|Event")
+	FOnAliveEnemyCountChanged OnAliveEnemyCountChanged;
 
 protected:
 	// Called when the game starts or when spawned
@@ -46,6 +68,17 @@ public:
 	// 스폰 시스템 활성화 상태를 변경하고 값에 따라 시작 또는 중지한다.
 	UFUNCTION(BlueprintCallable, Category = "Enemy|Spawn")
 	void SetSpawningEnabled(bool bEnabled);
+
+
+	/**
+	 * [추가] DT_RunFlowConfig의 AIState를 SpawnManager + 기존 활성 AI에 적용한다.
+	 *
+	 * Active   -> 스폰 시작/재개 + AI Logic 재시작
+	 * Paused   -> 스폰 정지 + AI Logic Pause
+	 * Disabled -> 스폰 정지 + AI Logic Stop
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Enemy|RunFlow")
+	void ApplyRunAIState(ERGRunAIState NewAIState);
 
 	//일반 사망과 무보상 오류 사망 모두 호출
 	//무보상 사망 시 예산 환불이나 리워드는 주지 않는다.
@@ -100,6 +133,10 @@ protected:
 	UFUNCTION()
 	void HandleRefillTimer();
 
+	// [추가] BaseEnemy의 정상 사망 이벤트를 받아 활성 목록 정리 + 처치 이벤트 전달
+	UFUNCTION()
+	void HandleEnemyDeath(ABaseEnemy* DeadEnemy);
+
 	// 매니저가 생성한 적 Actor가 Destroy되었을 때 활성 적 목록에서 제거한다.
 	UFUNCTION()
 	void HandleSpawnedEnemyDestroyed(AActor* DestroyedActor);
@@ -149,4 +186,7 @@ protected:
 
 	// 현재 스테이지에서 생성에 성공한 엘리트의 누적 수이다.
 	int32 TotalEliteSpawnedCount = 0;
+
+	// [추가] 현재 적용 중인 RunFlow AI 정책
+	ERGRunAIState CurrentRunAIState = ERGRunAIState::Active;
 };
