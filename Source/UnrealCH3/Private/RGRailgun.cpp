@@ -47,6 +47,16 @@ float ARGRailgun::GetChargeRatio01() const {
 	return ClampedElapsed / MaxChargeTime;
 }
 
+float ARGRailgun::GetChargeFireRatio() const
+{
+	if (!FMath::IsFinite(MinChargeTime) || !FMath::IsFinite(MaxChargeTime) || MaxChargeTime <= KINDA_SMALL_NUMBER)
+	{
+		return 0.0f;
+	}
+
+	return FMath::Clamp(MinChargeTime / MaxChargeTime, 0.0f, 1.0f);
+}
+
 void ARGRailgun::ReleaseChargeAndFire() {
 	if (!bIsCharging) {
 		return;
