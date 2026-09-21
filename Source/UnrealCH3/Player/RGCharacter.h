@@ -289,4 +289,6 @@ public:
 	float GetMaxHealthWithUpgrade() const;
 	float GetCurrentMaxHealth() const;
 	float GetRegenerationPerSecond() const;
+	//팔 위아래 회전
+
 };

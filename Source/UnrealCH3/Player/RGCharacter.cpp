@@ -31,6 +31,8 @@ ARGCharacter::ARGCharacter()
 	Camera->SetupAttachment(SpringArm);
 	Camera->bUsePawnControlRotation = false;
 
+	GetMesh()->SetupAttachment(Camera);
+
 	WallRunMovement = CreateDefaultSubobject<URGWallRunMovement>(TEXT("WallRunMovement"));
 	GrappleComponent = CreateDefaultSubobject<URGGrappleComponent>(TEXT("GrappleComponent"));
 
