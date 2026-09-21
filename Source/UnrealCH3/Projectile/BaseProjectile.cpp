@@ -4,6 +4,7 @@
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystemComponent.h"
+#include "Enemy/DataTableStruct/BossSkillRow.h"
 
 ABaseProjectile::ABaseProjectile()
 {
@@ -45,9 +46,11 @@ void ABaseProjectile::Tick(float DeltaTime)
 
 }
 
-void ABaseProjectile::InitializeProjectile(AActor* TargetActor)
+void ABaseProjectile::InitializeProjectile(const FBossSkillRow& SkillRow, AActor* TargetActor)
 {
-
+	Damage = FMath::Max(1.0f, SkillRow.Damage);
+	Particle = SkillRow.HitParticle;
+	Sound = SkillRow.HitSound;
 }
 
 void ABaseProjectile::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
@@ -75,7 +78,3 @@ void ABaseProjectile::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActo
 	Destroy();
 }
 
-void ABaseProjectile::SetDamage(float DamageAmount)
-{
-	Damage = FMath::Max(1.0f, DamageAmount);
-}

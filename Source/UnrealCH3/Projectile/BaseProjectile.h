@@ -4,6 +4,8 @@
 #include "GameFramework/Actor.h"
 #include "BaseProjectile.generated.h"
 
+struct FBossSkillRow;
+
 UCLASS()
 class UNREALCH3_API ABaseProjectile : public AActor
 {
@@ -17,12 +19,11 @@ protected:
 	virtual void Tick(float DeltaTime) override;
 
 public:
-	virtual void InitializeProjectile(AActor* TargetActor);
+	virtual void InitializeProjectile(const FBossSkillRow& SkillRow, AActor* TargetActor);
 
 public:
 	UFUNCTION()
 	void OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
-	void SetDamage(float DamageAmount);
 
 protected:
 	UPROPERTY(VisibleAnywhere)
@@ -35,6 +36,6 @@ protected:
 	TObjectPtr<class UParticleSystem> Particle;
 	UPROPERTY(EditAnywhere, Category = "Effect")
 	TObjectPtr<class USoundBase> Sound;
-
+	UPROPERTY(EditAnywhere, Category = "Damage")
 	float Damage = 0.0f;
 };

@@ -25,6 +25,12 @@ public:
 	TSubclassOf<class ABaseProjectile> ProjectileClass;
 	
 	UPROPERTY(EditAnywhere)
+	TObjectPtr<class UParticleSystem> HitParticle;
+
+	UPROPERTY(EditAnywhere)
+	TObjectPtr<class USoundBase> HitSound;
+
+	UPROPERTY(EditAnywhere)
 	EBossSkillType SkillType;
 
 	UPROPERTY(EditAnywhere)
