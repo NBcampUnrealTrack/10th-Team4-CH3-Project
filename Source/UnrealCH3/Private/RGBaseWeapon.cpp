@@ -217,7 +217,7 @@ void ARGBaseWeapon::Fire()
 	
 }
 
-bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors , FHitResult* OutHit , bool bTriggerCoreEffects)
+bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors , FHitResult* OutHit , bool bTriggerCoreEffects , float TraceRadius	)
 {	
 	//광선의 끝 지점을 계산 
 	const FVector EndLocation = StartLocation + FireDirection * TraceRange;
@@ -246,10 +246,19 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	//트레이스 결과를 담을 그릇.
 	//라인트레이스에 들어가서 맞은 적들 다 Hit에 집어넣어버리고 Hit 안에 있는 엑터들에 대미지 줄 예정
 	FHitResult Hit;
-	//Hit -> 맞은 녀석들을 Hit에 넣을 것이다. / StartLocation -> 라인트레이스 시작 / EndLocation -> 라인트레이스 끝지점 /
-	// TraceChannel -> 라인트레이스에 걸릴 녀석들의 채널 종류 ex)TraceChannel = ECC_Visibility 하면 Visibility 채널에 있는 녀석들만 걸림. / 
-	//그래서 맞았으면 true 아니면 false
-	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, StartLocation, EndLocation, TraceChannel, QueryParams);
+	bool bHit = false;
+
+	if (TraceRadius > 0.f)
+	{
+		// 굵은 스윕 트레이스 - 히트박스 확대
+		FCollisionShape SweepShape = FCollisionShape::MakeSphere(TraceRadius);
+		bHit = GetWorld()->SweepSingleByChannel(Hit, StartLocation, EndLocation, FQuat::Identity, TraceChannel, SweepShape, QueryParams);
+	}
+	else
+	{
+		// 기존 얇은 라인트레이스
+		bHit = GetWorld()->LineTraceSingleByChannel(Hit, StartLocation, EndLocation, TraceChannel, QueryParams);
+	}
 
 	if (!bHit || !Hit.GetActor())
 	{
