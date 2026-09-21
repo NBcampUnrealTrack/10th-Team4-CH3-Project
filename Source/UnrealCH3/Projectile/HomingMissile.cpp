@@ -12,8 +12,9 @@ void AHomingMissile::BeginPlay()
 
 }
 
-void AHomingMissile::InitializeProjectile(AActor* TargetActor)
+void AHomingMissile::InitializeProjectile(const FBossSkillRow& SkillRow, AActor* TargetActor)
 {
+	Super::InitializeProjectile(SkillRow, TargetActor);
 	if (TargetActor && ProjectileMovementComp)
 	{
 		DirectHoming(TargetActor);
@@ -39,7 +40,7 @@ void AHomingMissile::DirectHoming(AActor* TargetActor)
 		TWeakObjectPtr<AActor> WeakPtr = TargetActor;
 		GetWorldTimerManager().SetTimer(HomingTimerHandle, FTimerDelegate::CreateWeakLambda(this, [this, WeakPtr]()
 			{
-				if (WeakPtr.IsValid() && ProjectileMovementComp)
+				if (WeakPtr.IsValid())
 				{
 					ProjectileMovementComp->bIsHomingProjectile = true;
 					ProjectileMovementComp->HomingAccelerationMagnitude = 3000.0f;

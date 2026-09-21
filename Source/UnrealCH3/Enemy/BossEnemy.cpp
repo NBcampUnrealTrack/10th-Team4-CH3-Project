@@ -77,7 +77,7 @@ void ABossEnemy::UseAttackPattern()
 
 void ABossEnemy::SpawnProjectile(EBossSkillType Type)
 {
-	FBossSkillRow* Row = CachedSkills.Find(Type);
+	const FBossSkillRow* Row = CachedSkills.Find(Type);
 	if (!Row) return;
 
 	int32 SpawnCount = Row->SpawnCount;
@@ -97,8 +97,7 @@ void ABossEnemy::SpawnProjectile(EBossSkillType Type)
 		ABaseProjectile* Projectile = GetWorld()->SpawnActorDeferred<ABaseProjectile>(Row->ProjectileClass, FTransform(SpawnRotation, SpawnLocation));
 		if (Projectile)
 		{
-			Projectile->SetDamage(Row->Damage);
-			Projectile->InitializeProjectile(TargetActor);
+			Projectile->InitializeProjectile(*Row, TargetActor);
 			UGameplayStatics::FinishSpawningActor(Projectile, FTransform(SpawnRotation, SpawnLocation));
 		}
 	}
@@ -113,7 +112,7 @@ void ABossEnemy::FireProjectile()
 void ABossEnemy::ShockWave()
 {
 	ProjectileFireCount = 0;
-	FBossSkillRow* Row = CachedSkills.Find(EBossSkillType::ShockWave);
+	const FBossSkillRow* Row = CachedSkills.Find(EBossSkillType::ShockWave);
 	if (!Row) return;
 
 	float ShockWaveDistance = 2000.0f;
@@ -129,8 +128,11 @@ void ABossEnemy::ShockWave()
 
 		if (Dot >= FMath::Cos(FMath::DegreesToRadians(ShockWaveAngle)))
 		{
-			UGameplayStatics::ApplyDamage(TargetActor, Row->Damage, GetController(), this, UDamageType::StaticClass());
-			UE_LOG(LogTemp, Warning, TEXT("ShockWave"));
+			if (TargetActor && TargetActor->ActorHasTag(TEXT("Player")))
+			{
+				UGameplayStatics::ApplyDamage(TargetActor, Row->Damage, GetController(), this, UDamageType::StaticClass());
+				UE_LOG(LogTemp, Warning, TEXT("ShockWave"));
+			}
 		}
 	}
 

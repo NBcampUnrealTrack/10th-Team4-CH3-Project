@@ -4,6 +4,8 @@
 #include "Projectile/BaseProjectile.h"
 #include "HomingMissile.generated.h"
 
+struct FBossSkillRow;
+
 UCLASS()
 class UNREALCH3_API AHomingMissile : public ABaseProjectile
 {
@@ -16,7 +18,7 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-	virtual void InitializeProjectile(AActor* TargetActor) override;
+	virtual void InitializeProjectile(const FBossSkillRow& SkillRow, AActor* TargetActor) override;
 	void DirectHoming(AActor* TargetActor);
 	
 public:
