@@ -31,6 +31,8 @@ ARGCharacter::ARGCharacter()
 	Camera->SetupAttachment(SpringArm);
 	Camera->bUsePawnControlRotation = false;
 
+	GetMesh()->SetupAttachment(Camera);
+
 	WallRunMovement = CreateDefaultSubobject<URGWallRunMovement>(TEXT("WallRunMovement"));
 	GrappleComponent = CreateDefaultSubobject<URGGrappleComponent>(TEXT("GrappleComponent"));
 
@@ -646,7 +648,14 @@ void ARGCharacter::StopFire(const FInputActionValue& value)
 
 	if (ARGRailgun* Railgun = Cast<ARGRailgun>(CurrentWeapon))
 	{
-		Railgun->ReleaseChargeAndFire();
+		if (Railgun->IsBeamFiring())
+		{
+			Railgun->StopFire();   // BeamFire 중이면 진짜 StopFire()를 호출
+		}
+		else
+		{
+			Railgun->ReleaseChargeAndFire();   // 기존 차지샷은 그대로 유지
+		}
 	}
 	else
 	{
