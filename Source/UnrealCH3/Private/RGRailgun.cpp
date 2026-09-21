@@ -4,9 +4,26 @@
 #include "RGRailgun.h"
 #include "gamemode/RGProgressionSubsystem.h"
 #include "Engine/World.h"
+#include "Enemy/BaseEnemy.h"
+#include "Engine/OverlapResult.h"
+#include "Kismet/GameplayStatics.h" 
 
 //충전 시작만 하는 함수
 void ARGRailgun::StartFire() {
+
+	// BeamFire 강화 보유 시 차징 없이 즉시 지속 발사 시작
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			if (Progression->HasCoreUpgrade(FName(TEXT("BeamFire"))))
+			{
+				StartBeamFire();
+				return;
+			}
+		}
+	}
+
 	//차징중이거나 CanFire로직에 걸리면 발사 안됨
 	if (bIsCharging) {
 		return;
@@ -26,6 +43,14 @@ void ARGRailgun::StartFire() {
 }
 //충전 위한 변수 초기화 함수
 void ARGRailgun::StopFire() {
+
+	//BeamFire 강화 적용되어있으면 체크
+	if (bIsBeamFiring)
+	{
+		StopBeamFire();
+		return;
+	}
+
 	//충전 중 아님으로 설정
 	bIsCharging = false;
 	//차징 시작 시간 0초로 초기화
@@ -101,14 +126,18 @@ void ARGRailgun::FireChargedShot(float ChargeRatio01) {
 
 	// 충전을 조금 했으면 MinDamage에 가깝게, 완전 충전했으면 MaxDamage에 가깝게
 	const float Damage = FMath::Lerp(MinDamage, MaxDamage, ChargeRatio01);
+	const float TraceRadius = GetFireTraceRadius();
 
 	//같은 방향으로 여러번 쏘면서 이미 맞은 적은 무시 대상에 넣으면 관통 처리 완료.
 	TSet<AActor*> AlreadyHitActors;
 	for (int32 i = 0; i < MaxPierceCount; i++) {
-		const bool bHit = FireHitscan(StartLocation, FireDirection, Damage, &AlreadyHitActors);
+
+		FHitResult Hit;
+		const bool bHit = FireHitscan(StartLocation, FireDirection, Damage, &AlreadyHitActors , &Hit , true, TraceRadius);
 		if (!bHit) {
 			break;
 		}
+		TryTriggerHomingDamage(Hit, Damage);   // 추가: 이 관통 지점마다 유도 데미지 시도
 	}
 }
 
@@ -127,3 +156,174 @@ float ARGRailgun::GetChargeSpeedMultiplier() const
 	return Multiplier;
 }
 
+void ARGRailgun::StartBeamFire()
+{
+	if (bIsBeamFiring || !CanFire())
+	{
+		return;
+	}
+
+	bIsBeamFiring = true;
+	// BeamFireElapsedSinceLastAmmoConsumed는 여기서 리셋하지 않음
+	// -> 끊어 쏴도 누적된 시간이 계속 유지되어 정확히 계산됨
+
+	const float TickInterval = 0.1f;
+	GetWorldTimerManager().SetTimer(BeamFireTimerHandle, this, &ARGRailgun::HandleBeamFireTick, TickInterval, true);
+}
+
+void ARGRailgun::StopBeamFire()
+{
+	bIsBeamFiring = false;
+	GetWorldTimerManager().ClearTimer(BeamFireTimerHandle);
+}
+
+void ARGRailgun::HandleBeamFireTick()
+{
+	if (!bIsBeamFiring || !HasAmmo())
+	{
+		StopBeamFire();
+		if (!HasAmmo())
+		{
+			StartReloaded();
+		}
+		return;
+	}
+
+	FVector StartLocation, FireDirection;
+	if (!GetMuzzleAimTransform(StartLocation, FireDirection))
+	{
+		return;
+	}
+
+	const float TargetDPS = 80.f;
+	const float TickInterval = 0.1f;
+	const float DamageMult = GetUpgradeDamageMultiplier();
+	const float TickDamage = TargetDPS * TickInterval * DamageMult;
+
+	FHitResult Hit;
+	const float TraceRadius = GetFireTraceRadius();
+	const bool bHit = FireHitscan(StartLocation, FireDirection, TickDamage, nullptr, &Hit, true, TraceRadius);
+
+	if (bHit)
+	{
+		TryTriggerHomingDamage(Hit, TickDamage);   // 추가
+	}
+
+	// 시간 기반 탄약 소모: 누적 1초마다 탄약 1발 차감 (끊어 쏴도 정확히 누적됨)
+	const float AmmoConsumeInterval = 1.0f;
+	BeamFireElapsedSinceLastAmmoConsumed += TickInterval;
+
+	if (BeamFireElapsedSinceLastAmmoConsumed >= AmmoConsumeInterval)
+	{
+		BeamFireElapsedSinceLastAmmoConsumed -= AmmoConsumeInterval;
+
+		CurrentAmmo = FMath::Max(0, CurrentAmmo - 1);
+		OnAmmoChanged.Broadcast(CurrentAmmo, GetMagazineCapacity());
+
+		if (CurrentAmmo <= 0)
+		{
+			StopBeamFire();
+			StartReloaded();
+		}
+	}
+}
+
+void ARGRailgun::TryTriggerHomingDamage(const FHitResult& Hit, float DealtDamage)
+{
+	if (!Hit.GetActor())
+	{
+		return;
+	}
+
+	UGameInstance* GI = GetGameInstance();
+	URGProgressionSubsystem* Progression = GI ? GI->GetSubsystem<URGProgressionSubsystem>() : nullptr;
+	if (!Progression || !Progression->HasCoreUpgrade(FName(TEXT("HomingDamage"))))
+	{
+		return;
+	}
+
+	const FRGCoreUpgradeRow* Row = Progression->FindCoreUpgradeRow(FName(TEXT("HomingDamage")));
+	if (!Row)
+	{
+		return;
+	}
+
+	// MaxTargets에 원래 맞은 대상까지 포함 -> 추가로 찾아야 할 인원은 (MaxTargets - 1)
+	const int32 AdditionalTargetCount = Row->MaxTargets - 1;
+	if (AdditionalTargetCount <= 0)
+	{
+		return;
+	}
+
+	AActor* OriginalTarget = Hit.GetActor();
+
+	TArray<FOverlapResult> Overlaps;
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(OriginalTarget);
+	if (OwningCharacter)
+	{
+		QueryParams.AddIgnoredActor(OwningCharacter);
+	}
+
+	const float HomingSearchRadius = 1000.f;   // 유도 탐색 범위
+	GetWorld()->OverlapMultiByChannel(Overlaps, Hit.ImpactPoint, FQuat::Identity, ECC_Pawn,
+		FCollisionShape::MakeSphere(HomingSearchRadius), QueryParams);
+
+	// 가까운 순으로 정렬
+	Overlaps.Sort([&Hit](const FOverlapResult& A, const FOverlapResult& B)
+		{
+			const float DistA = A.GetActor() ? FVector::DistSquared(Hit.ImpactPoint, A.GetActor()->GetActorLocation()) : TNumericLimits<float>::Max();
+			const float DistB = B.GetActor() ? FVector::DistSquared(Hit.ImpactPoint, B.GetActor()->GetActorLocation()) : TNumericLimits<float>::Max();
+			return DistA < DistB;
+		});
+
+	int32 HitCount = 0;
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		if (HitCount >= AdditionalTargetCount)
+		{
+			break;
+		}
+
+		AActor* Candidate = Overlap.GetActor();
+		if (!Cast<ABaseEnemy>(Candidate) || Candidate == OriginalTarget || Candidate == OwningCharacter)
+		{
+			continue;
+		}
+
+		// "동시에 맞는다" - 원본과 같은 데미지, 같은 순간에 적용
+		UGameplayStatics::ApplyPointDamage(
+			Candidate,
+			DealtDamage,
+			(Candidate->GetActorLocation() - Hit.ImpactPoint).GetSafeNormal(),
+			Hit,
+			OwningCharacter ? OwningCharacter->GetController() : nullptr,
+			this,
+			UDamageType::StaticClass()
+		);
+
+		HitCount++;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[HomingDamage] 추가 %d명 동시 타격 (원본 포함 총 %d명, 배율 100%%)"), HitCount, HitCount + 1);
+}
+
+float ARGRailgun::GetFireTraceRadius() const
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			if (Progression->HasCoreUpgrade(FName(TEXT("WideBeam"))))
+			{
+				if (const FRGCoreUpgradeRow* Row = Progression->FindCoreUpgradeRow(FName(TEXT("WideBeam"))))
+				{	 // 기본 두께(cm)
+					const float BaseRadius = 50.f;  
+					// DT의 DamagePercent를 반경 배율로 사용
+					return BaseRadius * Row->DamagePercent;  
+				}
+			}
+		}
+	}
+	return 0.f;
+}
