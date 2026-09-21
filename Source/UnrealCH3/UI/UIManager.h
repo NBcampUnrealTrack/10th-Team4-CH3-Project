@@ -18,6 +18,7 @@ class UCrosshairWidget;
 class ARGCharacter;
 class ARGGameModeBase;
 class URailgunChargeWidget;
+class URGCraftingStationWidget;
 
 /**
  * 
@@ -56,6 +57,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI|Debug")
 	TSubclassOf<UUserWidget> TestSelectionClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI|View")
+	TSubclassOf<UUserWidget> CraftingStationClass;
 
 	UFUNCTION()
 	void HandleResumeRequested();
@@ -143,6 +147,12 @@ public:
 	
 	UFUNCTION(Exec)
 	void TestCloseSelection();
+
+	UFUNCTION(Exec, BlueprintCallable, Category = "UI|Debug")
+	void TestOpenCraftingStation();
+
+	UFUNCTION(Exec, BlueprintCallable, Category = "UI|Debug")
+	void TestCloseCraftingStation();
 
 	//HUD 생성
 	UFUNCTION(Exec, BlueprintCallable, Category = "UI")
