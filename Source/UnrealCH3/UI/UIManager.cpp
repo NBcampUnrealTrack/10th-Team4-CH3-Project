@@ -17,6 +17,7 @@
 // [추가] RunFlow TopUI 정책 수신
 #include "Gamemode/RGGameModeBase.h"
 #include "Kismet/GameplayStatics.h"
+#include "UI/View/Combat/RailgunChargeWidget.h"
 
 void AUIManager::BeginPlay()
 {
@@ -311,6 +312,21 @@ void AUIManager::TestCloseSelection()
 	CloseView(TestSelectionClass);
 }
 
+void AUIManager::TestOpenCraftingStation()
+{
+	if (!CraftingStationClass)
+	{
+		return;
+	}
+
+	OpenView(CraftingStationClass, EUILayer::Menu);
+}
+
+void AUIManager::TestCloseCraftingStation()
+{
+	CloseView(CraftingStationClass);
+}
+
 void AUIManager::CreateHUDWidget()
 {
 	if (!HUDWidgetClass)
@@ -351,20 +367,38 @@ void AUIManager::CreateHUDWidget()
 		return;
 	}
 
-	HUDWidgetInstance->AddToViewport();
-	HUDWidgetInstance->SetLowHealthEffectVisible(bPreviewLowHealthEffect);
+	HUDWidgetInstance->SetLowHealthEffectVisible(
+		bPreviewLowHealthEffect
+	);
 
-	HUDControllerInstance = NewObject<UHUDController>(this);
+	HUDControllerInstance =
+		NewObject<UHUDController>(this);
 
-	if (HUDControllerInstance)
+	if (!IsValid(HUDControllerInstance))
 	{
-		HUDControllerInstance->Initialize(HUDWidgetInstance);
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("Failed to create HUDController")
+		);
 
-		HUDControllerInstance->OnDamageNumberRequested.AddUObject(
+		HUDWidgetInstance = nullptr;
+		return;
+	}
+
+	HUDControllerInstance->Initialize(
+		HUDWidgetInstance
+	);
+
+	HUDControllerInstance
+		->OnDamageNumberRequested
+		.AddUObject(
 			this,
 			&AUIManager::HandleDamageNumberRequested
 		);
-	}
+
+	HUDWidgetInstance->AddToViewport();
+
 }
 
 void AUIManager::RemoveHUDWidget()
@@ -656,6 +690,44 @@ void AUIManager::NotifyDirectionalDamage(AActor* Attacker, FVector AttackOrigin)
 	AActor* ValidAttacker = IsValid(Attacker) ? Attacker : nullptr;
 
 	OnDirectionDamageDisplayRequested(ValidAttacker, AttackOrigin);
+}
+
+void AUIManager::RegisterRailgunChargeView(URailgunChargeWidget* InRailgunChargeView)
+{
+	if (!IsValid(HUDControllerInstance))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[UIManager] Cannot register railgun charge view: "
+				"HUDController is not ready."
+			)
+		);
+		return;
+	}
+
+	if (!IsValid(InRailgunChargeView))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[UIManager] Cannot register railgun charge view: "
+				"View is invalid."
+			)
+		);
+		return;
+	}
+
+	HUDControllerInstance->SetRailgunChargeView(InRailgunChargeView);
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[RailgunUI] Registered View: %s"),
+		*InRailgunChargeView->GetName()
+	);
 }
 
 

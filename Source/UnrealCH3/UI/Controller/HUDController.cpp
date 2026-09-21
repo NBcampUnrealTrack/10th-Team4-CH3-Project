@@ -8,6 +8,8 @@
 #include "UI/View/Combat/CrosshairWidget.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include "Public/RGRailgun.h"
+#include "UI/View/Combat/RailgunChargeWidget.h"
 
 //Controller가 제어할 HUD를 저장 후 초기값 셋팅
 void UHUDController::Initialize(UHUDWidget* InHUDWidget)
@@ -71,6 +73,13 @@ void UHUDController::Shutdown()
 
 	CrosshairView.Reset();
 
+	if (URailgunChargeWidget* View = RailgunChargeView.Get())
+	{
+		View->ResetChargeState();
+	}
+
+	RailgunChargeView.Reset();
+
 }
 
 void UHUDController::SetWeaponInfoView(UWeaponInfoWidget* InWeaponInfoView)
@@ -128,10 +137,24 @@ void UHUDController::BindWeapon(ARGBaseWeapon* InWeapon, const FText& InWeaponDi
 	);
 
 	RefreshWeaponInfo();
+	RefreshRailgunChargeUI();
 }
 
 void UHUDController::UnbindWeapon()
 {
+	StopReloadProgressTimer();
+	StopRailgunChargeTimer();
+
+	if (UCrosshairWidget* View = CrosshairView.Get())
+	{
+		View->ApplyReloadState(false, 0.0f);
+	}
+
+	if (URailgunChargeWidget* View = RailgunChargeView.Get())
+	{
+		View->ResetChargeState();
+	}
+
 	if (ARGBaseWeapon* Weapon = BoundWeapon.Get())
 	{
 		Weapon->OnAmmoChanged.RemoveDynamic(
@@ -168,6 +191,7 @@ void UHUDController::UnbindWeapon()
 			this,
 			&UHUDController::HandleWeaponDamageNumberRequested
 		);
+
 	}
 
 	BoundWeapon.Reset();
@@ -176,8 +200,6 @@ void UHUDController::UnbindWeapon()
 
 void UHUDController::SetCrosshairView(UCrosshairWidget* InCrosshairView)
 {
-	CrosshairView = InCrosshairView;
-
 	if (UCrosshairWidget* PreviousView = CrosshairView.Get())
 	{
 		PreviousView->ApplyReloadState(false, 0.f);
@@ -185,6 +207,32 @@ void UHUDController::SetCrosshairView(UCrosshairWidget* InCrosshairView)
 
 	CrosshairView = InCrosshairView;
 	RefreshReloadUI();
+}
+
+void UHUDController::SetRailgunChargeView(URailgunChargeWidget* InRailgunChargeView)
+{
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[RailgunUI] SetRailgunChargeView called: %s"),
+		IsValid(InRailgunChargeView)
+		? *InRailgunChargeView->GetName()
+		: TEXT("NULL")
+	);
+
+	if (URailgunChargeWidget* PreviousView = RailgunChargeView.Get())
+	{
+		PreviousView->ResetChargeState();
+	}
+
+	RailgunChargeView = InRailgunChargeView;
+
+	if (URailgunChargeWidget* NewView = RailgunChargeView.Get())
+	{
+		NewView->ResetChargeState();
+	}
+
+	RefreshRailgunChargeUI();
 }
 
 void UHUDController::HandleWeaponAmmoChanged(int32 CurrentAmmo, int32 MagazineCapacity)
@@ -320,6 +368,100 @@ void UHUDController::HandleWeaponDamageNumberRequested(float AppliedDamage, AAct
 	}
 
 	OnDamageNumberRequested.Broadcast(AppliedDamage, TargetActor, WorldLocation);
+}
+
+void UHUDController::RefreshRailgunChargeUI()
+{
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[RailgunUI] Refresh called / View=%s / Weapon=%s"),
+		RailgunChargeView.IsValid() ? TEXT("Valid") : TEXT("Invalid"),
+		BoundWeapon.IsValid() ? *BoundWeapon->GetName() : TEXT("NULL")
+	);
+
+	StopRailgunChargeTimer();
+
+	URailgunChargeWidget* View = RailgunChargeView.Get();
+
+	if (!IsValid(View))
+	{
+		return;
+	}
+
+	View->ResetChargeState();
+
+	ARGRailgun* Railgun = Cast<ARGRailgun>(BoundWeapon.Get());
+
+	if (!IsValid(Railgun))
+	{
+		return;
+	}
+
+	UWorld* World = Railgun->GetWorld();
+
+	if (!IsValid(World))
+	{
+		return;
+	}
+
+	RailgunChargeTimerWorld = World;
+
+	UpdateRailgunChargeProgress();
+
+	World->GetTimerManager().SetTimer(
+		RailgunChargeTimerHandle,
+		this,
+		&UHUDController::UpdateRailgunChargeProgress,
+		1.0f / 60.0f,
+		true
+	);
+}
+
+void UHUDController::UpdateRailgunChargeProgress()
+{
+	URailgunChargeWidget* View = RailgunChargeView.Get();
+
+	if (!IsValid(View))
+	{
+		StopRailgunChargeTimer();
+		return;
+	}
+
+	ARGRailgun* Railgun = Cast<ARGRailgun>(BoundWeapon.Get());
+
+	if (!IsValid(Railgun))
+	{
+		View->ResetChargeState();
+		StopRailgunChargeTimer();
+		return;
+	}
+
+	const bool bIsCharging = Railgun->IsCharging();
+	const float ChargeRatio = Railgun->GetChargeRatio01();
+	const float MinimumFireRatio = Railgun->GetChargeFireRatio();
+	const bool bHasAmmo = Railgun->GetCurrentAmmo() > 0;
+
+	View->ApplyChargeState(
+		bIsCharging,
+		ChargeRatio,
+		MinimumFireRatio,
+		bHasAmmo
+	);
+}
+
+void UHUDController::StopRailgunChargeTimer()
+{
+	if (UWorld* World =
+		RailgunChargeTimerWorld.Get())
+	{
+		World->GetTimerManager().ClearTimer(
+			RailgunChargeTimerHandle
+		);
+	}
+
+	RailgunChargeTimerHandle.Invalidate();
+	RailgunChargeTimerWorld.Reset();
 }
 
 void UHUDController::HandleWeaponReloadStarted()

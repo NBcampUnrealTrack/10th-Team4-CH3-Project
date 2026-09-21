@@ -24,6 +24,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Weapon|Railgun")
 	float GetChargeRatio01() const;
 
+	//레일건 최소 발사 가능 지점 비율 반환
+	UFUNCTION(BlueprintPure, Category = "Weapon|Railgun")
+	float GetChargeFireRatio() const;
+
 protected:
 	// 발사 대신 충전 시작
 	virtual void StartFire() override;

@@ -17,6 +17,8 @@ class ARGBaseWeapon;
 class UCrosshairWidget;
 class ARGCharacter;
 class ARGGameModeBase;
+class URailgunChargeWidget;
+class URGCraftingStationWidget;
 
 /**
  * 
@@ -55,6 +57,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI|Debug")
 	TSubclassOf<UUserWidget> TestSelectionClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI|View")
+	TSubclassOf<UUserWidget> CraftingStationClass;
 
 	UFUNCTION()
 	void HandleResumeRequested();
@@ -143,6 +148,12 @@ public:
 	UFUNCTION(Exec)
 	void TestCloseSelection();
 
+	UFUNCTION(Exec, BlueprintCallable, Category = "UI|Debug")
+	void TestOpenCraftingStation();
+
+	UFUNCTION(Exec, BlueprintCallable, Category = "UI|Debug")
+	void TestCloseCraftingStation();
+
 	//HUD 생성
 	UFUNCTION(Exec, BlueprintCallable, Category = "UI")
 	void CreateHUDWidget();
@@ -193,4 +204,9 @@ public:
 	//호출할 함수 공격자, 공격 발생 위치
 	UFUNCTION(BlueprintCallable, Category = "UI|CombatFeedback")
 	void NotifyDirectionalDamage(AActor* Attacker, FVector AttackOrigin);
+
+	UFUNCTION(BlueprintCallable, Category = "UI|Binding")
+	void RegisterRailgunChargeView(URailgunChargeWidget* InRailgunChargeView);
+
+
 };
