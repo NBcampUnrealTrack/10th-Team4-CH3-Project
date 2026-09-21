@@ -312,6 +312,21 @@ void AUIManager::TestCloseSelection()
 	CloseView(TestSelectionClass);
 }
 
+void AUIManager::TestOpenCraftingStation()
+{
+	if (!CraftingStationClass)
+	{
+		return;
+	}
+
+	OpenView(CraftingStationClass, EUILayer::Menu);
+}
+
+void AUIManager::TestCloseCraftingStation()
+{
+	CloseView(CraftingStationClass);
+}
+
 void AUIManager::CreateHUDWidget()
 {
 	if (!HUDWidgetClass)
