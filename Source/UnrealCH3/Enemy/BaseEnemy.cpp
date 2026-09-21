@@ -277,12 +277,24 @@ void ABaseEnemy::FaceTarget(float DeltaTime, float RotationSpeed)
 	if (!TargetActor) return;
 
 	FVector ToTarget = TargetActor->GetActorLocation() - GetActorLocation();
-	//ToTarget.Z = 0.f;
+	ToTarget.Z = 0.f;
 
 	if (ToTarget.IsNearlyZero()) return;
 
 	FRotator TargetRotation = ToTarget.Rotation();
 	FRotator NewRotation = FMath::RInterpTo(GetActorRotation(), TargetRotation, DeltaTime, RotationSpeed);
+	SetActorRotation(NewRotation);
+}
+
+void ABaseEnemy::FaceLocation(FVector Location, float DeltaSeconds)
+{
+	FVector ToLocation = Location - GetActorLocation();
+	ToLocation.Z = 0.0f;
+
+	if (ToLocation.IsNearlyZero()) return;
+
+	FRotator TargetRotation = ToLocation.Rotation();
+	FRotator NewRotation = FMath::RInterpTo(GetActorRotation(), TargetRotation, DeltaSeconds, 7.0f);
 	SetActorRotation(NewRotation);
 }
 
@@ -406,6 +418,11 @@ void ABaseEnemy::SetTargetActor(AActor* NewTarget)
 	TargetActor = NewTarget;
 }
 
+void ABaseEnemy::SetAttackLocation(FVector Location)
+{
+	AttackLocation = Location;
+}
+
 AActor* ABaseEnemy::GetTargetActor() const
 {
 	return TargetActor;
@@ -424,6 +441,11 @@ float ABaseEnemy::GetViewingAngle()
 float ABaseEnemy::GetViewingDistance()
 {
 	return ViewingDistance;
+}
+
+float ABaseEnemy::GetHearingDistance()
+{
+	return HearingDistance;
 }
 
 float ABaseEnemy::GetAttackMaxRange()
@@ -454,6 +476,11 @@ int ABaseEnemy::GetScore()
 float ABaseEnemy::GetExp()
 {
 	return Exp;
+}
+
+FVector ABaseEnemy::GetAttackLocation()
+{
+	return AttackLocation;
 }
 
 void ABaseEnemy::SetState(EEnemyStateEnum State)

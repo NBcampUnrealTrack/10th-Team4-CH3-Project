@@ -9,11 +9,13 @@
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISenseConfig_Sight.h"
+#include "Perception/AISenseConfig_Hearing.h"
 
 AAIEnemyController::AAIEnemyController()
 {
 	Perception = CreateDefaultSubobject<UAIPerceptionComponent>(TEXT("AIPerceptionComponent"));
 	Sight = CreateDefaultSubobject<UAISenseConfig_Sight>(TEXT("Sight Config"));
+	Hearing = CreateDefaultSubobject<UAISenseConfig_Hearing>(TEXT("Hearing Config"));
 
 	Sight->SightRadius = 2200.0f;
 	Sight->LoseSightRadius = 3500.0f;
@@ -23,7 +25,13 @@ AAIEnemyController::AAIEnemyController()
 	Sight->DetectionByAffiliation.bDetectNeutrals = true;
 	Sight->DetectionByAffiliation.bDetectFriendlies = false;
 
+	Hearing->HearingRange = 2200.0f;
+	Hearing->DetectionByAffiliation.bDetectEnemies = true;
+	Hearing->DetectionByAffiliation.bDetectNeutrals = true;
+	Hearing->DetectionByAffiliation.bDetectFriendlies = true;
+
 	Perception->ConfigureSense(*Sight);
+	Perception->ConfigureSense(*Hearing);
 	Perception->SetDominantSense(*Sight->GetSenseImplementation());
 
 	Perception->OnTargetPerceptionUpdated.AddDynamic(this, &AAIEnemyController::OnPerceptionUpdated);
@@ -41,10 +49,21 @@ void AAIEnemyController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus
 	if (!Enemy || !Actor) return;
 	ARGCharacter* Player = Cast<ARGCharacter>(Actor);
 	if (!Player) return;
-
+	
 	UBlackboardComponent* BlackboardComponent = GetBlackboardComponent();
+	
+	if (!Stimulus.WasSuccessfullySensed())
+	{
+		Enemy->SetTargetActor(nullptr);
+		if (BlackboardComponent)
+		{
+			BlackboardComponent->ClearValue(TEXT("Target"));
+		}
+		return;
+	}
 
-	if (Stimulus.WasSuccessfullySensed())
+
+	if (Stimulus.Type == UAISense::GetSenseID<UAISense_Sight>())
 	{
 		Enemy->SetTargetActor(Actor);
 		if (BlackboardComponent)
@@ -52,12 +71,12 @@ void AAIEnemyController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus
 			BlackboardComponent->SetValueAsObject(TEXT("Target"), Actor);
 		}
 	}
-	else
+	else if(Stimulus.Type == UAISense::GetSenseID<UAISenseConfig_Hearing>())
 	{
-		Enemy->SetTargetActor(nullptr);
 		if (BlackboardComponent)
 		{
-			BlackboardComponent->ClearValue(TEXT("Target"));
+			BlackboardComponent->SetValueAsVector(TEXT("HeardLocation"), Stimulus.StimulusLocation);
+			BlackboardComponent->SetValueAsBool(TEXT("bHeardNoise"), true);
 		}
 	}
 }
@@ -77,7 +96,10 @@ void AAIEnemyController::UpdateSight()
 		Sight->SightRadius = Enemy->GetViewingDistance();
 		Sight->LoseSightRadius = Enemy->GetViewingDistance() + 500.0f;
 		Sight->PeripheralVisionAngleDegrees = Enemy->GetViewingAngle() / 2.0f;
+
+		Hearing->HearingRange = Enemy->GetHearingDistance();
 		Perception->ConfigureSense(*Sight);
+		Perception->ConfigureSense(*Hearing);
 
 		if (Enemy->GetEnemyBehaviorTree())
 		{

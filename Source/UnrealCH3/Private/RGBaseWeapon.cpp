@@ -214,6 +214,7 @@ void ARGBaseWeapon::Fire()
 
 	// FireHitscan()에 StartLocation , (퍼짐 적용된) SpreadDirection 전달
 	FireHitscan(StartLocation, SpreadDirection, -1.f, nullptr);
+	
 }
 
 bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors , FHitResult* OutHit , bool bTriggerCoreEffects)

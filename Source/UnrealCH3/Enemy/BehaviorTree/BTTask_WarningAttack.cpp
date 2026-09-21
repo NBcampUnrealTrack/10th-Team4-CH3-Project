@@ -57,6 +57,16 @@ void UBTTask_WarningAttack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* N
 	if (*ElapsedTime >= WarningTime)
 	{
 		WarningTime = 0;
+		if (Target)
+		{
+			UBlackboardComponent* BB = OwnerComp.GetBlackboardComponent();
+			if (BB)
+			{
+				BB->SetValueAsVector(TEXT("LastWarningLocation"), Target->GetActorLocation());
+				Enemy->SetAttackLocation(Target->GetActorLocation());
+			}
+		}
+		Enemy->HideAttackRangeLine();
 		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
 	}
 }
