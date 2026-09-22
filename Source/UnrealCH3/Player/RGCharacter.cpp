@@ -13,6 +13,10 @@
 #include "Component/RGWallRunMovement.h"
 #include "Component/RGGrappleComponent.h"
 #include "Gamemode/RGProgressionSubsystem.h"
+#include "Perception/AISense_Hearing.h"
+
+#include "RGGrenade.h"
+#include "Engine/Engine.h"
 
 ARGCharacter::ARGCharacter()
 {
@@ -180,6 +184,15 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 		{
 			EnhancedInput->BindAction(PlayerController->ReloadAction, ETriggerEvent::Started, this, &ARGCharacter::Reload);
 		}
+		if (PlayerController->HealAction)
+		{
+			EnhancedInput->BindAction(PlayerController->HealAction, ETriggerEvent::Started, this, &ARGCharacter::UseHealPack);
+		}
+		if (PlayerController->GrenadeAction)
+		{
+			EnhancedInput->BindAction(PlayerController->GrenadeAction, ETriggerEvent::Started, this, &ARGCharacter::ThrowGrenade);
+		}
+
 	}
 
 }
@@ -640,7 +653,7 @@ void ARGCharacter::StartFire(const FInputActionValue& value)
 	{
 		return;
 	}
-
+	UAISense_Hearing::ReportNoiseEvent(GetWorld(), GetActorLocation(), 1.0f, this, 2000.f);
 	CurrentWeapon->StartFire();
 }
 
@@ -696,6 +709,63 @@ void ARGCharacter::Reload(const FInputActionValue& value)
 	}
 
 	CurrentWeapon->StartReloaded();
+}
+
+void ARGCharacter::UseHealPack(const FInputActionValue& value)
+{
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1, 2.0f, FColor::Yellow, TEXT("5 Key Received")
+		);
+	}
+
+	if (!CanUseHealPack())
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1, 2.0f, FColor::Red,
+				TEXT("Heal Failed: Full Health, Dead, or Cooldown")
+			);
+		}
+
+		return;
+	}
+
+	AddHealth(HealAmount);
+
+	if (UWorld* World = GetWorld())
+	{
+		LastHealUseTime = World->GetTimeSeconds();
+
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			2.0f,
+			FColor::Green,
+			FString::Printf(TEXT("Heal Pack Used | Health: %.0f"), CurrentHealth));
+	}
+}
+
+void ARGCharacter::ThrowGrenade(const FInputActionValue& value)
+{
+	if (bIsDead || !GrenadeClass)
+	{
+		UE_LOG(
+			LogTemp, 
+			Warning, 
+			TEXT("Grenade blocked: Dead=%d, ClassValid=%d"),
+			bIsDead, GrenadeClass != nullptr);
+		return;
+	}
+
+	ARGGrenade::ThrowFromActor(this, GrenadeClass, GrenadeThrowSpeed);
+
+	UE_LOG(LogTemp,
+		Warning,
+		TEXT("Grenade input: Spawned=%d, Cooldown=%.2f"),
+		GrenadeClass != nullptr,
+		ARGGrenade::GetGrenadeCooldownRemaining(this));
 }
 
 void ARGCharacter::StartCrouch()
@@ -939,4 +1009,28 @@ float ARGCharacter::GetRegenerationPerSecond() const
 	}
 
 	return RegenPerSecond;
+}
+
+bool ARGCharacter::CanUseHealPack() const
+{
+	if (bIsDead || CurrentHealth >= GetMaxHealthWithUpgrade())
+	{
+		return false;
+	}
+
+	return GetHealCooldownRemaining() <= 0.0f;
+}
+
+float ARGCharacter::GetHealCooldownRemaining() const
+{
+	const UWorld* World = GetWorld();
+
+	if (!World)
+	{
+		return 0.0f;
+	}
+
+	const float ElapsedTime = World->GetTimeSeconds() - LastHealUseTime;
+
+	return FMath::Max(0.0f, HealCooldownDuration - ElapsedTime);
 }

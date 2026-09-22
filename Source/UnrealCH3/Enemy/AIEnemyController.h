@@ -33,4 +33,5 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "AI")
 	UAIPerceptionComponent* Perception;
 	class UAISenseConfig_Sight* Sight;
+	class UAISenseConfig_Hearing* Hearing;
 };
