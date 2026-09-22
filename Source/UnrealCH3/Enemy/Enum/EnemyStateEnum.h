@@ -14,5 +14,6 @@ enum class EEnemyStateEnum :uint8
     Attack  UMETA(DisplayName = "Attack"),
     Hit     UMETA(DisplayName = "Hit"),
     Dead    UMETA(DisplayName = "Dead"),
-    SoClose UMETA(DisplayName = "SoClose")
+    SoClose UMETA(DisplayName = "SoClose"),
+
 };
