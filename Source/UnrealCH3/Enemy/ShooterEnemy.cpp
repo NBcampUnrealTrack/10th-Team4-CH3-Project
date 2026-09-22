@@ -3,6 +3,7 @@
 
 #include "Enemy/ShooterEnemy.h"
 #include "Kismet/GameplayStatics.h"
+#include "BehaviorTree/BlackboardComponent.h"
 
 AShooterEnemy::AShooterEnemy()
 {
@@ -14,14 +15,16 @@ AShooterEnemy::AShooterEnemy()
 	AttackRangeMesh->SetCastShadow(false);
 	AttackRangeMesh->SetVisibility(false);
 	AttackRangeMesh->SetWorldScale3D(FVector(AttackMaxRange / 100.0f, 1.0f, 0.2f));
+	AttackRangeMesh->SetUsingAbsoluteRotation(true); 
+	AttackRangeMesh->SetUsingAbsoluteLocation(false);
 }
 
 void AShooterEnemy::Attack()
 {
 	if (!TargetActor) return; // 널 체크도 없었네요
-
+	
 	FVector Start = GetActorLocation() + FVector(0, 0, 50.f);
-	FVector End = TargetActor->GetActorLocation(); // Forward가 아니라 타겟 위치로 직접
+	FVector End = AttackLocation;// Forward가 아니라 타겟 위치로 직접
 
 	FHitResult Hit;
 	FCollisionQueryParams Params;
