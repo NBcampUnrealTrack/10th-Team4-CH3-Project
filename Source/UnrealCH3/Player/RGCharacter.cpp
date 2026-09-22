@@ -487,6 +487,7 @@ void ARGCharacter::EquipWeapon(TSubclassOf<ARGBaseWeapon> SpawnWeaponClass)
 
 		// 애니메이션 바인딩
 		CurrentWeapon->OnShotFired.AddDynamic(this, &ARGCharacter::PlayFireAnimation);
+		CurrentWeapon->OnShotFired.AddDynamic(this, &ARGCharacter::ApplyRecoil);   // 추가
 		CurrentWeapon->OnShotFiredStop.AddDynamic(this, &ARGCharacter::StopFireAnimation);
 		CurrentWeapon->OnReloadStarted.AddDynamic(this, &ARGCharacter::PlayReloadAnimation);
 		CurrentWeapon->OnReloadCanceled.AddDynamic(this, &ARGCharacter::StopReloadAnimation);
@@ -943,4 +944,31 @@ float ARGCharacter::GetRegenerationPerSecond() const
 	}
 
 	return RegenPerSecond;
+}
+
+void ARGCharacter::ApplyRecoil()
+{
+	if (!CurrentWeapon || !Controller)
+	{
+		return;
+	}
+
+	// BeamFire 중이면 반동 없음
+	if (ARGRailgun* Railgun = Cast<ARGRailgun>(CurrentWeapon))
+	{
+		if (Railgun->IsBeamFiring())
+		{
+			return;
+		}
+	}
+
+	const float VerticalRecoil = CurrentWeapon->GetVerticalRecoil();
+	const float HorizontalRecoil = CurrentWeapon->GetHorizontalRecoil();
+
+	// 위로 튕김 (Pitch는 위를 볼수록 음수 방향이므로 빼줌)
+	AddControllerPitchInput(-VerticalRecoil);
+
+	// 좌우는 랜덤하게 튕김 (매번 같은 방향이면 부자연스러움)
+	const float RandomHorizontal = FMath::RandRange(-HorizontalRecoil, HorizontalRecoil);
+	AddControllerYawInput(RandomHorizontal);
 }
