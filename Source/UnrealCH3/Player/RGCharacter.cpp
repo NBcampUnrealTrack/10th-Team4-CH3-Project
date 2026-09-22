@@ -13,6 +13,8 @@
 #include "Component/RGWallRunMovement.h"
 #include "Component/RGGrappleComponent.h"
 #include "Gamemode/RGProgressionSubsystem.h"
+#include "Perception/AISense_Hearing.h"
+
 #include "RGGrenade.h"
 #include "Engine/Engine.h"
 
@@ -646,7 +648,7 @@ void ARGCharacter::StartFire(const FInputActionValue& value)
 	{
 		return;
 	}
-
+	UAISense_Hearing::ReportNoiseEvent(GetWorld(), GetActorLocation(), 1.0f, this, 2000.f);
 	CurrentWeapon->StartFire();
 }
 
