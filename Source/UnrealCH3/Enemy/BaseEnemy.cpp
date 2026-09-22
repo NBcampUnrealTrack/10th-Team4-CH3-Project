@@ -17,7 +17,6 @@
 #include "AIController.h"
 #include "TimerManager.h"
 
-
 // Sets default values
 ABaseEnemy::ABaseEnemy()
 {
@@ -172,6 +171,12 @@ float ABaseEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
 
 	CurrentHP = FMath::Clamp(CurrentHP - ActualDamage, 0.0f, MaxHP);
 
+	// 피해 받았을때 뭔가 할거 있을때 가상함수
+	OnChangedHealth();
+
+	// 피해 받은거 방송
+	OnEnemyTakeDamage.Broadcast(CurrentHP);
+
 	//실제 피해량 계산
 	const float AppliedDamage = PreviousHP - CurrentHP;
 
@@ -212,6 +217,11 @@ float ABaseEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
 	}
 
 	return AppliedDamage;
+}
+
+void ABaseEnemy::OnChangedHealth()
+{
+	// TODO 피가 달았을때 뭔가 할거있으면
 }
 
 void ABaseEnemy::Die()

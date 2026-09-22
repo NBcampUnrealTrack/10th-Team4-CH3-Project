@@ -11,6 +11,12 @@
 class UBehaviorTree;
 class ABaseEnemy;
 
+// 적이 피해입었을때 호출하는 이벤트
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+    FOnEnemyTakeDamage,
+    float, CurrentHP
+);
+
 // [추가] 적의 정상 사망을 외부 시스템에 알리는 이벤트
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
     FOnEnemyDeath,
@@ -25,6 +31,9 @@ class UNREALCH3_API ABaseEnemy : public ACharacter
 public:
     // Sets default values for this character's properties
     ABaseEnemy();
+
+    UPROPERTY(BlueprintAssignable, Category = "Enemy|Event")
+    FOnEnemyTakeDamage OnEnemyTakeDamage;
 
     // [추가] 정상 사망 시 1회 Broadcast. SpawnManager가 이 이벤트를 구독한다.
     UPROPERTY(BlueprintAssignable, Category = "Enemy|Event")
@@ -113,6 +122,9 @@ public:
     // 복귀 보호 시간 이후 공격 제한 해제
     void FinishSafetyRecovery();
 
+    // 피해 입었을때 TakeDamage에서 호출해주는 함수 (지금은 Boss때문에 만듬)
+    UFUNCTION()
+    virtual void OnChangedHealth();
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "Enemy|Data")

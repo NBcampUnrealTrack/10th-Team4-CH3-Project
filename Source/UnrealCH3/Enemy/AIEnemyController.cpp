@@ -23,7 +23,7 @@ AAIEnemyController::AAIEnemyController()
 
 	Sight->DetectionByAffiliation.bDetectEnemies = true;
 	Sight->DetectionByAffiliation.bDetectNeutrals = true;
-	Sight->DetectionByAffiliation.bDetectFriendlies = false;
+	Sight->DetectionByAffiliation.bDetectFriendlies = true;
 
 	Hearing->HearingRange = 2200.0f;
 	Hearing->DetectionByAffiliation.bDetectEnemies = true;
@@ -33,8 +33,15 @@ AAIEnemyController::AAIEnemyController()
 	Perception->ConfigureSense(*Sight);
 	Perception->ConfigureSense(*Hearing);
 	Perception->SetDominantSense(*Sight->GetSenseImplementation());
+}
 
-	Perception->OnTargetPerceptionUpdated.AddDynamic(this, &AAIEnemyController::OnPerceptionUpdated);
+void AAIEnemyController::BeginPlay()
+{
+	Super::BeginPlay();
+	if (Perception && Sight)
+	{
+		Perception->OnTargetPerceptionUpdated.AddDynamic(this, &AAIEnemyController::OnPerceptionUpdated);
+	}
 }
 
 void AAIEnemyController::OnPossess(APawn* InPawn)
@@ -43,13 +50,13 @@ void AAIEnemyController::OnPossess(APawn* InPawn)
 	
 }
 
+
 void AAIEnemyController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 {
 	ABaseEnemy* Enemy = Cast<ABaseEnemy>(GetPawn());
 	if (!Enemy || !Actor) return;
 	ARGCharacter* Player = Cast<ARGCharacter>(Actor);
 	if (!Player) return;
-	
 	UBlackboardComponent* BlackboardComponent = GetBlackboardComponent();
 	
 	if (!Stimulus.WasSuccessfullySensed())
@@ -69,6 +76,7 @@ void AAIEnemyController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus
 		if (BlackboardComponent)
 		{
 			BlackboardComponent->SetValueAsObject(TEXT("Target"), Actor);
+			UE_LOG(LogTemp, Warning, TEXT("Target On"));
 		}
 	}
 	else if(Stimulus.Type == UAISense::GetSenseID<UAISenseConfig_Hearing>())

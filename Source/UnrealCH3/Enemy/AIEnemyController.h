@@ -15,6 +15,11 @@ class UNREALCH3_API AAIEnemyController : public AAIController
 	
 public:
 	AAIEnemyController();
+
+protected:
+	virtual void BeginPlay() override;
+
+public:
 	UFUNCTION()
 	virtual void OnPossess(APawn* InPawn) override;
 	UFUNCTION()
@@ -25,6 +30,7 @@ public:
 	void UpdateSight();
 
 protected:
+	UPROPERTY(VisibleAnywhere, Category = "AI")
 	UAIPerceptionComponent* Perception;
 	class UAISenseConfig_Sight* Sight;
 	class UAISenseConfig_Hearing* Hearing;
