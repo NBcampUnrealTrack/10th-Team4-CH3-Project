@@ -113,6 +113,11 @@ float ARGGrenade::GetGrenadeCooldownRemaining(const UObject* WorldContext)
 		return 0.f;
 	}
 
+	if (World->GetTimeSeconds() < LastThrowTime)
+	{
+		LastThrowTime = -1000.0f;
+	}
+
 	// 마지막 투척 이후 얼마나 시간이 지났는지 계산
 	float ElapsedTime = World->GetTimeSeconds() - LastThrowTime;
 
