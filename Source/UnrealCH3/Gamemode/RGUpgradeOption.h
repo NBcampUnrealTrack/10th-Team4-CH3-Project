@@ -78,8 +78,8 @@ enum class ECoreUpgradeEffectType : uint8
 	FocusedSpread,
 	KnockBack,
 	//레일건 강화
-	MultiPierce,
-	ChargeBlast,
+	HomingDamage,
+	BeamFire,
 	KillDetonation
 };
 

@@ -99,7 +99,7 @@ void URGWallRunMovement::CheckWallRun()
 		}
 		if (FVector::DotProduct(LeftHit.ImpactNormal, LastWallNormal) >= 0.9f)
 		{
-			if (FVector::Dist2D(Start, LastWallRunLocation) < 1300.0f)
+			if (FVector::DistSquared2D(Start, LastWallRunLocation) < FMath::Square(1300.0f))
 			{
 				return;
 			}
@@ -119,7 +119,7 @@ void URGWallRunMovement::CheckWallRun()
 		}
 		if (FVector::DotProduct(RightHit.ImpactNormal, LastWallNormal) >= 0.9f)
 		{
-			if (FVector::Dist2D(Start, LastWallRunLocation) < 1300.0f)
+			if (FVector::DistSquared2D(Start, LastWallRunLocation) < FMath::Square(1300.0f))
 			{
 				return;
 			}
@@ -190,6 +190,7 @@ void URGWallRunMovement::UpdateWallRun()
 		if (!bHit || MaintainHit.Distance > CanWallRunDistance)
 		{
 			StopWallRun();
+			return;
 		}
 		FVector ForwardDir = FVector::VectorPlaneProject(CharacterOwner->GetActorForwardVector(), WallNormal).GetSafeNormal();
 		if (FVector::DotProduct(StartWallRunDirection, ForwardDir) <= 0.0f)
@@ -202,7 +203,6 @@ void URGWallRunMovement::UpdateWallRun()
 		FVector FinalVelocity = (ForwardDir * WallRunSpeed) + (PushDir * 250.0f);
 		CharacterOwner->LaunchCharacter(FinalVelocity, true, false);
 
-		return;
 	}
 }
 

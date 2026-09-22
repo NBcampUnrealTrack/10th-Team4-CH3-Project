@@ -317,4 +317,5 @@ public:
 	
 	UFUNCTION(BlueprintPure, Category = "QuickSlot|Heal")
 	float GetHealCooldownRemaining()const;
+
 };
