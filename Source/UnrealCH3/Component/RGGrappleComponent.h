@@ -51,5 +51,6 @@ private:
 	FVector GrappleTargetLocation = FVector::ZeroVector;
 	float DefaultGravity = 0.0f;
 	bool bIsGrappling = false;
+	bool bJustStarted = false;
 	bool bCanGrapple = true;
 };
