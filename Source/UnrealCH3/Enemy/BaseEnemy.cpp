@@ -287,7 +287,7 @@ void ABaseEnemy::FaceTarget(float DeltaTime, float RotationSpeed)
 	if (!TargetActor) return;
 
 	FVector ToTarget = TargetActor->GetActorLocation() - GetActorLocation();
-	ToTarget.Z = 0.f;
+	//ToTarget.Z = 0.f;
 
 	if (ToTarget.IsNearlyZero()) return;
 
@@ -296,86 +296,18 @@ void ABaseEnemy::FaceTarget(float DeltaTime, float RotationSpeed)
 	SetActorRotation(NewRotation);
 }
 
-void ABaseEnemy::FaceLocation(FVector Location, float DeltaSeconds)
-{
-	FVector ToLocation = Location - GetActorLocation();
-	ToLocation.Z = 0.0f;
-
-	if (ToLocation.IsNearlyZero()) return;
-
-	FRotator TargetRotation = ToLocation.Rotation();
-	FRotator NewRotation = FMath::RInterpTo(GetActorRotation(), TargetRotation, DeltaSeconds, 7.0f);
-	SetActorRotation(NewRotation);
-}
-
 void ABaseEnemy::ShowAttackRangeLine()
 {
-	if (!AttackRangeMesh || !AttackRangeMesh)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Is not Have AttackRangeMesh OR AttackRangeMesh"));
-		return;
-	}
-	// 매번 새로 만들지 않도록 캐싱
-	if (!WarningDynMat)
-	{
-		WarningDynMat = UMaterialInstanceDynamic::Create(WarningMaterialBase, this);
-	}
-	const float CubeSizeUU = AttackRangeMesh->GetStaticMesh()->GetBounds().BoxExtent.X * 2.0f; // 100uu
-	const float ScaleXY = AttackMaxRange / CubeSizeUU;
-	AttackRangeMesh->SetRelativeScale3D(FVector(ScaleXY, 0.5f, 0.1f));
-	const float ForwardOffset = (CubeSizeUU * ScaleXY) * 0.5f; // = AttackRange
-	AttackRangeMesh->SetRelativeLocation(FVector(ForwardOffset, 0.0f, 0.0f));
-	AttackRangeMesh->SetMaterial(0, WarningDynMat);
+	FVector Center = GetActorLocation() + GetActorForwardVector() * (AttackMaxRange / 2.0f);
+	FRotator Rot = GetActorRotation();
+	AttackRangeMesh->SetWorldLocation(Center);
+	AttackRangeMesh->SetWorldRotation(Rot);
 	AttackRangeMesh->SetVisibility(true);
-
-	// 시작 상태 초기화
-	WarningDynMat->SetScalarParameterValue(TEXT("Opacity"), 0.0f);
-}
-
-void ABaseEnemy::UpdateAttackWarning(float Alpha)
-{
-	if (!WarningDynMat) return;
-
-	Alpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
-
-	// 시간이 지날수록 점점 진해지는 경고
-	WarningDynMat->SetScalarParameterValue(TEXT("Opacity"), Alpha);
-
-	// 노란색 -> 빨간색으로 색상 보간 (임박할수록 위험하게)
-	FLinearColor WarnColor = FLinearColor::LerpUsingHSV(
-		FLinearColor(1.0f, 0.8f, 0.0f), // 노랑
-		FLinearColor(1.0f, 0.0f, 0.0f), // 빨강
-		Alpha
-	);
-	WarningDynMat->SetVectorParameterValue(TEXT("EmissiveColor"), WarnColor);
-}
-
-void ABaseEnemy::UpdateAttackWarningTransform()
-{
-	if (!AttackRangeMesh || !TargetActor) return;
-
-	const FVector StartLocation = GetActorLocation();
-	const FVector TargetLocation = TargetActor->GetActorLocation();
-
-	FVector Direction = TargetLocation - StartLocation;
-	Direction = Direction.GetSafeNormal(); // 길이 1인 방향 벡터로 정규화
-
-	// 방향 벡터를 Yaw/Pitch/Roll 회전값으로 변환 (Z가 포함되어 있으므로 위아래 각도까지 반영됨)
-	const FRotator LookAtRotation = Direction.Rotation();
-	AttackRangeMesh->SetWorldRotation(LookAtRotation);
-	const float CubeSizeUU = AttackRangeMesh->GetStaticMesh()->GetBounds().BoxExtent.X * 2.0f; // 100uu
-	const float ScaleXY = AttackMaxRange / CubeSizeUU;
-	// 회전된 방향을 따라 큐브를 앞으로 배치 (기존 로컬 오프셋 대신 월드 좌표로 계산)
-	const float ForwardOffset = (CubeSizeUU * ScaleXY) * 0.5f;
-	AttackRangeMesh->SetWorldLocation(StartLocation + Direction * ForwardOffset);
 }
 
 void ABaseEnemy::HideAttackRangeLine()
 {
-	if (AttackRangeMesh)
-	{
-		AttackRangeMesh->SetVisibility(false);
-	}
+	AttackRangeMesh->SetVisibility(false);
 }
 
 void ABaseEnemy::SetEnemyTurn(bool bIsTurn)
@@ -406,8 +338,6 @@ void ABaseEnemy::StartAttackCooldown()
 	);
 }
 
-
-
 void ABaseEnemy::ResetAttackCooldown()
 {
 	bCanAttack = true;
@@ -428,11 +358,6 @@ void ABaseEnemy::SetTargetActor(AActor* NewTarget)
 	TargetActor = NewTarget;
 }
 
-void ABaseEnemy::SetAttackLocation(FVector Location)
-{
-	AttackLocation = Location;
-}
-
 AActor* ABaseEnemy::GetTargetActor() const
 {
 	return TargetActor;
@@ -451,11 +376,6 @@ float ABaseEnemy::GetViewingAngle()
 float ABaseEnemy::GetViewingDistance()
 {
 	return ViewingDistance;
-}
-
-float ABaseEnemy::GetHearingDistance()
-{
-	return HearingDistance;
 }
 
 float ABaseEnemy::GetAttackMaxRange()
@@ -486,11 +406,6 @@ int ABaseEnemy::GetScore()
 float ABaseEnemy::GetExp()
 {
 	return Exp;
-}
-
-FVector ABaseEnemy::GetAttackLocation()
-{
-	return AttackLocation;
 }
 
 void ABaseEnemy::SetState(EEnemyStateEnum State)

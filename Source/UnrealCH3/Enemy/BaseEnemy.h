@@ -59,8 +59,6 @@ public:
     UFUNCTION()
     void SetTargetActor(AActor* NewTarget);
     UFUNCTION()
-    void SetAttackLocation(FVector Location);
-    UFUNCTION()
     AActor* GetTargetActor() const;
     UFUNCTION()
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -71,32 +69,23 @@ public:
     UFUNCTION()
     virtual void ShowAttackRangeLine();
     UFUNCTION()
-    virtual void UpdateAttackWarningTransform();
-    UFUNCTION()
     virtual void HideAttackRangeLine();
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void FaceTarget(float DeltaTime, float RotationSpeed = 10.f);
     UFUNCTION(BlueprintCallable, Category = "Combat")
-    void FaceLocation(FVector Location, float DeltaSeconds);
-    UFUNCTION(BlueprintCallable, Category = "Combat")
     void StartAttackCooldown();
-    UFUNCTION(BlueprintCallable, Category = "AttackWarning")
-    void UpdateAttackWarning(float Alpha);
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void ResetAttackCooldown();
 
     UBehaviorTree* GetEnemyBehaviorTree() const;
     float GetViewingAngle();
     float GetViewingDistance();
-    float GetHearingDistance();
     float GetAttackMaxRange();
     float GetAttackMinRange();
     float GetAttackDamage();
     float GetWarningTime();
     int GetScore();
     float GetExp();
-    UFUNCTION()
-    FVector GetAttackLocation();
 
     //낙사 중 공격 방지를 위해 CanAttack 수정(조건 추가)
     UFUNCTION(BlueprintPure, Category = "Combat")
@@ -134,12 +123,8 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "BehaivorTree")
     TObjectPtr<UBehaviorTree> EnemyBehaviorTree;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AttackRangeMesh")
+    UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "AttackRangeMesh")
     UStaticMeshComponent* AttackRangeMesh;
-    UPROPERTY(EditDefaultsOnly, Category = "AttackWarning")
-    UMaterialInterface* WarningMaterialBase;
-    UPROPERTY()
-    UMaterialInstanceDynamic* WarningDynMat;
     UPROPERTY()
     FName EnemyName;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
@@ -182,9 +167,6 @@ protected:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     AActor* TargetActor;    // 현재 추적 중인 타겟(목표)
-    
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    FVector AttackLocation;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     float AttackCoolTime;   // 공격 쿨타임
