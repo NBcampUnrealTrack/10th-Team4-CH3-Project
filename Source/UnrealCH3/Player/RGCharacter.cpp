@@ -22,6 +22,8 @@ ARGCharacter::ARGCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
+	ArmMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("ArmMesh"));
+
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
 	SpringArm->SetupAttachment(RootComponent);
 	SpringArm->TargetArmLength = 0.0f;
@@ -35,7 +37,10 @@ ARGCharacter::ARGCharacter()
 	Camera->SetupAttachment(SpringArm);
 	Camera->bUsePawnControlRotation = false;
 
-	GetMesh()->SetupAttachment(Camera);
+	ArmMesh->SetupAttachment(Camera);
+
+	CapsuleHalfHeight = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	CrouchedHalfHeight = GetCharacterMovement()->GetCrouchedHalfHeight();
 
 	WallRunMovement = CreateDefaultSubobject<URGWallRunMovement>(TEXT("WallRunMovement"));
 	GrappleComponent = CreateDefaultSubobject<URGGrappleComponent>(TEXT("GrappleComponent"));
@@ -487,7 +492,7 @@ void ARGCharacter::EquipWeapon(TSubclassOf<ARGBaseWeapon> SpawnWeaponClass)
 	if (CurrentWeapon)
 	{
 		CurrentWeapon->SetOwningCharacter(this);
-		CurrentWeapon->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TEXT("WeaponSocket"));
+		CurrentWeapon->AttachToComponent(ArmMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, TEXT("WeaponSocket"));
 
 		// 애니메이션 바인딩
 		CurrentWeapon->OnShotFired.AddDynamic(this, &ARGCharacter::PlayFireAnimation);
@@ -877,31 +882,32 @@ void ARGCharacter::OnAimUpdate(float Alpha)
 
 void ARGCharacter::OnCrouchCameraUpdate(float Alpha)
 {
-	float SpringArmTargetZ = FMath::Lerp(0.0f, CrouchCapsuleHeight, Alpha);
-	FVector SpringArmCurrentOffset = SpringArm->TargetOffset;
-	SpringArmCurrentOffset.Z = SpringArmTargetZ;
-	SpringArm->TargetOffset = SpringArmCurrentOffset;
-
-	float MeshLocationZ = MeshRelativeLocation.Z;
-	float MeshTargetZ = FMath::Lerp(MeshLocationZ, MeshLocationZ + CrouchCapsuleHeight, Alpha);
-	FVector MeshCurrentRelativeLocation = GetMesh()->GetRelativeLocation();
-	MeshCurrentRelativeLocation.Z = MeshTargetZ;
-	GetMesh()->SetRelativeLocation(MeshCurrentRelativeLocation);
+	float TargetZ = CapsuleHalfHeight - CrouchedHalfHeight;
+	if (bIsCrouched)
+	{
+		SpringArm->TargetOffset.Z = FMath::Lerp(TargetZ, 0.0f, Alpha);
+	}
+	else
+	{
+		SpringArm->TargetOffset.Z = FMath::Lerp(0.0f, -TargetZ, Alpha);
+	}
 }
 
 void ARGCharacter::PlayFireAnimation()
 {
-	if (FireMontage)
+	UAnimInstance* ArmInstance = ArmMesh->GetAnimInstance();
+	if (ArmInstance && FireMontage)
 	{
-		PlayAnimMontage(FireMontage);
+		ArmInstance->Montage_Play(FireMontage);
 	}
 }
 
 void ARGCharacter::StopFireAnimation()
 {
-	if (FireMontage)
+	UAnimInstance* ArmInstance = ArmMesh->GetAnimInstance();
+	if (ArmInstance && FireMontage)
 	{
-		StopAnimMontage(FireMontage);
+		ArmInstance->Montage_Stop(0.1f, FireMontage);
 	}
 }
 
@@ -921,15 +927,18 @@ void ARGCharacter::PlayReloadAnimation()
 	{
 		PlayRate = MontageLength / ActualReloadTime;
 	}
-
-	PlayAnimMontage(ReloadMontage, PlayRate);
+	if (UAnimInstance* ArmInstance = ArmMesh->GetAnimInstance())
+	{
+		ArmInstance->Montage_Play(ReloadMontage, PlayRate);
+	}
 }
 
 void ARGCharacter::StopReloadAnimation()
 {
-	if (ReloadMontage)
+	UAnimInstance* ArmInstance = ArmMesh->GetAnimInstance();
+	if (ArmInstance && ReloadMontage)
 	{
-		StopAnimMontage(ReloadMontage);
+		ArmInstance->Montage_Stop(0.1f, ReloadMontage);
 	}
 }
 

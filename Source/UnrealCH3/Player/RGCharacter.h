@@ -166,6 +166,9 @@ private:
 	void ThrowGrenade(const FInputActionValue& value);
 
 private:
+	// 팔 매쉬
+	UPROPERTY(VisibleAnywhere, Category = "Mesh")
+	TObjectPtr<USkeletalMeshComponent> ArmMesh;
 	// 카메라
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<USpringArmComponent> SpringArm;
@@ -222,9 +225,9 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Crouch")
 	TObjectPtr<UCurveFloat> CrouchCurve;
 	UPROPERTY(EditAnywhere, Category = "Crouch")
-	float CrouchCapsuleHeight = -48.0f;
-	UPROPERTY(EditAnywhere, Category = "Crouch")
 	FVector MeshRelativeLocation = FVector::ZeroVector;
+	float CapsuleHalfHeight = 0.0f;
+	float CrouchedHalfHeight = 0.0f;
 
 	// 대쉬 변수
 	UPROPERTY(VisibleAnywhere, Category = "Movement|Dash")
