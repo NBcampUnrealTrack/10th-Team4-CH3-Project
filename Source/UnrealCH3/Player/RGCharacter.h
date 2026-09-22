@@ -292,6 +292,12 @@ public:
 	float GetMaxHealthWithUpgrade() const;
 	float GetCurrentMaxHealth() const;
 	float GetRegenerationPerSecond() const;
-	//팔 위아래 회전
+	
+// =============== 반동 관련 함수 추가 ================
+	UFUNCTION()
+	void ApplyRecoil();
 
+private:
+	UPROPERTY(EditAnywhere, Category = "Weapon|Recoil")
+	float RecoilInterpSpeed = 15.f;   // 반동이 얼마나 빠르게 "튀는지" (별도 부드러움 처리용, 필요없으면 즉시 적용)
 };

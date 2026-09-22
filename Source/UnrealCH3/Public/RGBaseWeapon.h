@@ -251,4 +251,9 @@ public:
 		void TriggerDoubleShot(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
 		void TriggerChainPulse(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
 		void TriggerExplosiveRound(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
+
+	// ============= 반동 관련 함수 ===================
+public:
+	float GetVerticalRecoil() const { return WeaponStats.VerticalRecoil; }
+	float GetHorizontalRecoil() const { return WeaponStats.HorizontalRecoil; }
 };
