@@ -35,22 +35,29 @@ void URGGrappleComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 		return;
 	}
 
-	FVector CurrentLocation = CharacterOwner->GetActorLocation();
-	FVector GrappleDir = (GrappleTargetLocation - CurrentLocation).GetSafeNormal();
-	FVector SwingDir = (GrappleDir + (FVector::UpVector * SwingMultiplier)).GetSafeNormal();
-	CharacterMovementComponent->Velocity = SwingDir * GrappleSpeed;
-	
-	float CurrentSpeed = CharacterMovementComponent->Velocity.Size();
-	if (CurrentSpeed < 500.0f)
+	if (bJustStarted)
 	{
-		StopGrapple();
-		return;
+		bJustStarted = false;
+	}
+	else
+	{
+		float CurrentSpeed = CharacterMovementComponent->Velocity.Size();
+		if (CurrentSpeed < 1000.0f)
+		{
+			StopGrapple();
+			return;
+		}
 	}
 
+	FVector CurrentLocation = CharacterOwner->GetActorLocation();
 	if (FVector::DistSquared(GrappleTargetLocation, CurrentLocation) <= FMath::Square(StopDistance))
 	{
 		StopGrapple();
 	}
+
+	FVector GrappleDir = (GrappleTargetLocation - CurrentLocation).GetSafeNormal();
+	FVector SwingDir = (GrappleDir + (FVector::UpVector * SwingMultiplier)).GetSafeNormal();
+	CharacterMovementComponent->Velocity = SwingDir * GrappleSpeed;
 }
 
 float URGGrappleComponent::GetGrappleDelay() const
@@ -83,6 +90,7 @@ void URGGrappleComponent::StartGrapple()
 	}
 
 	bIsGrappling = true;
+	bJustStarted = true;
 	bCanGrapple = false;
 	CharacterMovementComponent->GravityScale = 0.0f;
 	CharacterMovementComponent->SetMovementMode(EMovementMode::MOVE_Falling);
