@@ -779,10 +779,9 @@ void ARGBaseWeapon::TriggerExplosiveRound(const FHitResult& Hit, float DealtDama
 		return;
 	}
 
-	const float DamagePercent = 0.35f;   // 원본 대비 35%
+	const float DamagePercent = 0.35f;
 	const float ExplosionRadius = 300.f;
 
-	// 명중 지점 주변에 있는 액터들을 찾음
 	TArray<FOverlapResult> Overlaps;
 	FCollisionQueryParams QueryParams;
 	if (OwningCharacter)
@@ -793,17 +792,23 @@ void ARGBaseWeapon::TriggerExplosiveRound(const FHitResult& Hit, float DealtDama
 	GetWorld()->OverlapMultiByChannel(Overlaps, Hit.ImpactPoint, FQuat::Identity, ECC_Pawn,
 		FCollisionShape::MakeSphere(ExplosionRadius), QueryParams);
 
+	TSet<AActor*> AlreadyDamaged;   // 추가: 이번 폭발 한 번 안에서 이미 데미지를 준 적을 기록
 	int32 HitCount = 0;
 
 	for (const FOverlapResult& Overlap : Overlaps)
 	{
 		AActor* Target = Overlap.GetActor();
 
-		// 적이 아니면 건너뜀 (벽 등 제외)
 		if (!Cast<ABaseEnemy>(Target))
 		{
 			continue;
 		}
+
+		if (AlreadyDamaged.Contains(Target))   // 추가: 같은 적이면 건너뜀
+		{
+			continue;
+		}
+		AlreadyDamaged.Add(Target);   // 추가: 처리한 적으로 기록
 
 		const float ExplosionDamage = DealtDamage * DamagePercent;
 
@@ -814,7 +819,7 @@ void ARGBaseWeapon::TriggerExplosiveRound(const FHitResult& Hit, float DealtDama
 			Hit,
 			OwningCharacter ? OwningCharacter->GetController() : nullptr,
 			this,
-			UDamageType::StaticClass()   // 수류탄 판정 아님 - 일반 데미지 타입 사용
+			UDamageType::StaticClass()
 		);
 
 		OnWeaponHit.Broadcast(Target, ExplosionDamage, false, Target->GetActorLocation());
