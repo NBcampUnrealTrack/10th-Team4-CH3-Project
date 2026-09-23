@@ -18,6 +18,7 @@
 #include "Gamemode/RGGameModeBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "UI/View/Combat/RailgunChargeWidget.h"
+#include "UI/View/Combat/RGQuickSlotWidget.h"
 
 void AUIManager::BeginPlay()
 {
@@ -134,6 +135,11 @@ void AUIManager::TryBindPlayerWeaponSource()
 			this,
 			&AUIManager::HandlePlayerWeaponEquipped
 		);
+	}
+
+	if (IsValid(HUDControllerInstance))
+	{
+		HUDControllerInstance->BindQuickSlotCharacter(PlayerCharacter);
 	}
 
 	// Character가 UIManager보다 먼저 BeginPlay를 끝낸 경우를 처리한다.
@@ -388,6 +394,11 @@ void AUIManager::CreateHUDWidget()
 
 	HUDControllerInstance->Initialize(
 		HUDWidgetInstance
+	);
+
+	RegisterQuickSlotView(
+		HUDWidgetInstance->GetHealQuickSlotView(),
+		HUDWidgetInstance->GetGrenadeQuickSlotView()
 	);
 
 	HUDControllerInstance
@@ -728,6 +739,37 @@ void AUIManager::RegisterRailgunChargeView(URailgunChargeWidget* InRailgunCharge
 		TEXT("[RailgunUI] Registered View: %s"),
 		*InRailgunChargeView->GetName()
 	);
+}
+
+void AUIManager::RegisterQuickSlotView(URGQuickSlotWidget* InHealQuickSlotView, URGQuickSlotWidget* InGrenadeQuickSlotView)
+{
+	if (!IsValid(HUDControllerInstance))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[UIManager] Cannot register quick slots: "
+				"HUDController is not ready."
+			)
+		);
+		return;
+	}
+
+	if (!IsValid(InHealQuickSlotView)||!IsValid(InGrenadeQuickSlotView))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[UIManager] Cannot register quick slots: "
+				"One or more views are invalid."
+			)
+		);
+		return;
+	}
+
+	HUDControllerInstance->SetQuickSlotViews(InHealQuickSlotView,InGrenadeQuickSlotView);
 }
 
 
