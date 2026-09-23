@@ -10,6 +10,10 @@
 #include "TimerManager.h"
 #include "Public/RGRailgun.h"
 #include "UI/View/Combat/RailgunChargeWidget.h"
+#include "UI/View/Combat/RGQuickSlotWidget.h"
+#include "Player/RGCharacter.h"
+#include "RGGrenade.h"
+#include "UI/View/Combat/RGQuickSlotWidget.h"
 
 //Controller가 제어할 HUD를 저장 후 초기값 셋팅
 void UHUDController::Initialize(UHUDWidget* InHUDWidget)
@@ -233,6 +237,21 @@ void UHUDController::SetRailgunChargeView(URailgunChargeWidget* InRailgunChargeV
 	}
 
 	RefreshRailgunChargeUI();
+}
+
+void UHUDController::SetQuickSlotViews(URGQuickSlotWidget* InHealQuikSlotView, URGQuickSlotWidget* InGrenadeQuickSlotView)
+{
+	HealQuickSlotView = InHealQuikSlotView;
+	GrenadeQuickSlotView = InGrenadeQuickSlotView;
+
+	RefreshQuickSlotUI();
+}
+
+void UHUDController::BindQuickSlotCharacter(ARGCharacter* InCharacter)
+{
+	QuickSlotCharacter = InCharacter;
+
+	RefreshQuickSlotUI();
 }
 
 void UHUDController::HandleWeaponAmmoChanged(int32 CurrentAmmo, int32 MagazineCapacity)
@@ -462,6 +481,74 @@ void UHUDController::StopRailgunChargeTimer()
 
 	RailgunChargeTimerHandle.Invalidate();
 	RailgunChargeTimerWorld.Reset();
+}
+
+void UHUDController::RefreshQuickSlotUI()
+{
+	StopQuickSlotTimer();
+
+	ARGCharacter* Character = QuickSlotCharacter.Get();
+
+	if (!IsValid(Character))
+	{
+		return;
+	}
+
+	if (!HealQuickSlotView.IsValid()&&!GrenadeQuickSlotView.IsValid())
+	{
+		return;
+	}
+
+	UWorld* World = Character->GetWorld();
+
+	if (!IsValid(World))
+	{
+		return;
+	}
+
+	QickSlotTimerWorld = World;
+
+	UpdateQuickSlotUI();
+
+	World->GetTimerManager().SetTimer(
+		QuickSlotTimerHandle,
+		this,
+		&UHUDController::UpdateQuickSlotUI,
+		0.05f,
+		true
+	);
+}
+
+void UHUDController::UpdateQuickSlotUI()
+{
+	ARGCharacter* Character = QuickSlotCharacter.Get();
+
+	if (!IsValid(Character))
+	{
+		StopQuickSlotTimer();
+		return;
+	}
+
+	if (URGQuickSlotWidget* HealView = HealQuickSlotView.Get())
+	{
+		HealView->ApplyCooldown(Character->GetHealCooldownRemaining(), 0.0f);
+	}
+
+	if (URGQuickSlotWidget* GrenadeView = GrenadeQuickSlotView.Get())
+	{
+		GrenadeView->ApplyCooldown(ARGGrenade::GetGrenadeCooldownRemaining(Character), 0.0f);
+	}
+}
+
+void UHUDController::StopQuickSlotTimer()
+{
+	if (UWorld* World = QickSlotTimerWorld.Get())
+	{
+		World->GetTimerManager().ClearTimer(QuickSlotTimerHandle);
+	}
+
+	QuickSlotTimerHandle.Invalidate();
+	QickSlotTimerWorld.Reset();
 }
 
 void UHUDController::HandleWeaponReloadStarted()

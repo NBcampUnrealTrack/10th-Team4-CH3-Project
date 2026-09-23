@@ -19,6 +19,7 @@ class ARGCharacter;
 class ARGGameModeBase;
 class URailgunChargeWidget;
 class URGCraftingStationWidget;
+class URQuickSlotWidget;
 
 /**
  * 
@@ -208,5 +209,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI|Binding")
 	void RegisterRailgunChargeView(URailgunChargeWidget* InRailgunChargeView);
 
+	UFUNCTION()
+	void RegisterQuickSlotView(URGQuickSlotWidget* InHealQuickSlotView, URGQuickSlotWidget* InGrenadeQuickSlotView);
 
 };

@@ -9,6 +9,7 @@
 
 class UImage;
 class UOverlay;
+class URGQuickSlotWidget;
 
 /**
  * 
@@ -28,6 +29,11 @@ public:
 	void SetLowHealthEffectIntensity(float Intensity);
 
 	UOverlay* GetLayer(EUILayer Layer) const;
+
+	URGQuickSlotWidget* GetHealQuickSlotView() const { return QuickSlot_Heal; }
+
+	URGQuickSlotWidget* GetGrenadeQuickSlotView() const { return QuickSlot_Grenade; }
+
 
 protected:
 	UPROPERTY(meta = (BindWidget))
@@ -53,5 +59,11 @@ protected:
 	
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UOverlay> Overlay_ResultLayer;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<URGQuickSlotWidget> QuickSlot_Heal;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<URGQuickSlotWidget> QuickSlot_Grenade;
 	
 };
