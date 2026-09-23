@@ -235,6 +235,8 @@ void ABaseEnemy::Die()
 	//죽은 객체 상태 변화
 	CurrentState = EEnemyStateEnum::Dead;
 
+	OnEnemyDeath.Broadcast(this);
+
 	if (URGProgressionSubsystem* Progression = GetGameInstance()->GetSubsystem<URGProgressionSubsystem>())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[%s] 경험치 지급 요청: %.1f"), *GetName(), Exp);   // 추가
@@ -255,7 +257,7 @@ void ABaseEnemy::Die()
 		*GetName()
 	);
 
-	OnEnemyDeath.Broadcast(this);
+	
 
 	// [추가] 사망한 적은 즉시 화면/충돌에서 제거하고,
 	// 같은 프레임의 데미지 피드백(히트마커/킬마커/데미지 숫자)이 끝난 뒤

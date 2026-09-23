@@ -303,7 +303,7 @@ void ARGCharacter::AddHealth(float Amount)
 
 void ARGCharacter::SetCheckPoint()
 {
-	if (GetActorLocation().Z > 1.0f || CurrentMovementState == EMovementState::Falling || CurrentMovementState == EMovementState::WallRunning)
+	if (GetCharacterMovement()->IsFalling() || CurrentMovementState == EMovementState::WallRunning)
 	{
 		return;
 	}
@@ -410,11 +410,14 @@ void ARGCharacter::ClearTimerHandle()
 
 void ARGCharacter::ResetAllState()
 {
+	if (UAnimInstance* AnimInstance = ArmMesh->GetAnimInstance())
+	{
+		AnimInstance->StopAllMontages(0.0f);
+	}
 	UnCrouch();
 	SetAimState(false);
 	SetSprintState(false);
 	GetCharacterMovement()->StopMovementImmediately();
-	// TODO 장전등 애니메이션 초기화
 }
 
 void ARGCharacter::ReturnCheckPoint()
