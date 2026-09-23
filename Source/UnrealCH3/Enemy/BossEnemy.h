@@ -40,4 +40,7 @@ protected:
 	TMap<EBossSkillType, FBossSkillRow> CachedSkills;
 	int32 CurrentPhase = 1;
 	int32 ProjectileFireCount = 0;
+
+private:
+	bool bCanUseHoming = true;
 };

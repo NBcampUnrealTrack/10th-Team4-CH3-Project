@@ -51,11 +51,13 @@ void ABaseProjectile::InitializeProjectile(const FBossSkillRow& SkillRow, AActor
 	Damage = FMath::Max(1.0f, SkillRow.Damage);
 	Particle = SkillRow.HitParticle;
 	Sound = SkillRow.HitSound;
+	TWeakObjectPtr<ABaseProjectile> WeakPtr = this;
+	GetWorldTimerManager().SetTimer(DestroyTimerHandle, [WeakPtr]() { if (WeakPtr.IsValid()) { WeakPtr.Get()->Destroy(); }}, DestroyDelay, false);
 }
 
 void ABaseProjectile::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
-	if (OtherActor && OtherActor->ActorHasTag("Player"))
+	if (OtherActor && OtherActor->ActorHasTag(TEXT("Player")))
 	{
 		UGameplayStatics::ApplyDamage(OtherActor, Damage, nullptr, this, UDamageType::StaticClass());
 

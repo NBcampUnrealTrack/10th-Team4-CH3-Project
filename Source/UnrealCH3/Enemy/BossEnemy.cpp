@@ -86,11 +86,18 @@ void ABossEnemy::SpawnProjectile(EBossSkillType Type)
 	float StartSpawnAngle = -SpawnAngle / 2;
 	float AngleGap = SpawnCount > 1 ? SpawnAngle / (SpawnCount - 1) : 0.0f;
 	
+	FVector SpawnLocation = GetActorLocation() + GetActorForwardVector() * 100;
+	FRotator BaseRotation = GetActorRotation();
+	if (TargetActor)
+	{
+		FVector ToTargetDir = TargetActor->GetActorLocation() - GetActorLocation();
+		BaseRotation = ToTargetDir.Rotation();
+	}
+
 	for (int32 i = 0; i < SpawnCount; ++i)
 	{
 		float NewSpawnYaw = StartSpawnAngle + (AngleGap * i);
-		FVector SpawnLocation = GetActorLocation() + GetActorForwardVector() * 100;
-		FRotator SpawnRotation = GetActorRotation();
+		FRotator SpawnRotation = BaseRotation;
 		SpawnRotation.Yaw += NewSpawnYaw;
 
 		// 데미지랑 발사체 셋팅하기위해 딜레이 걸기
@@ -112,6 +119,7 @@ void ABossEnemy::FireProjectile()
 void ABossEnemy::ShockWave()
 {
 	ProjectileFireCount = 0;
+	bCanUseHoming = true;
 	const FBossSkillRow* Row = CachedSkills.Find(EBossSkillType::ShockWave);
 	if (!Row) return;
 
@@ -154,6 +162,7 @@ void ABossEnemy::ShockWave()
 
 void ABossEnemy::HomingMissile()
 {
+	bCanUseHoming = false;
 	SpawnProjectile(EBossSkillType::HomingMissile);
 }
 
@@ -171,11 +180,14 @@ void ABossEnemy::PhaseOnePattern()
 
 void ABossEnemy::PhaseTwoPattern()
 {
-	if (ProjectileFireCount == 0)
+	if (bCanUseHoming)
 	{
 		HomingMissile();
 	}
-	PhaseOnePattern();
+	else
+	{
+		PhaseOnePattern();
+	}
 }
 
 void ABossEnemy::ChangePhase(int32 NewPhase)
