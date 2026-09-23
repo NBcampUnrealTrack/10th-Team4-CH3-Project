@@ -18,6 +18,8 @@
 #include "RGGrenade.h"
 #include "Engine/Engine.h"
 
+#include "RGGrenade.h"
+
 ARGCharacter::ARGCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -183,6 +185,14 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 		if (PlayerController->ReloadAction)
 		{
 			EnhancedInput->BindAction(PlayerController->ReloadAction, ETriggerEvent::Started, this, &ARGCharacter::Reload);
+		}
+		if (PlayerController->HealAction)
+		{
+			EnhancedInput->BindAction(PlayerController->HealAction,ETriggerEvent::Started,this,&ARGCharacter::UseHealPack);
+		}
+		if (PlayerController->GrenadeAction)
+		{
+			EnhancedInput->BindAction(PlayerController->GrenadeAction,ETriggerEvent::Started,this,&ARGCharacter::ThrowGrenade);
 		}
 	}
 
@@ -703,6 +713,35 @@ void ARGCharacter::Reload(const FInputActionValue& value)
 	CurrentWeapon->StartReloaded();
 }
 
+void ARGCharacter::UseHealPack(const FInputActionValue& value)
+{
+	if (!CanUseHealPack())
+	{
+		return;
+	}
+
+	AddHealth(HealAmount);
+
+	if (UWorld* World = GetWorld())
+	{
+		LastHealUseTime = World->GetTimeSeconds();
+	}
+}
+
+void ARGCharacter::ThrowGrenade(const FInputActionValue& value)
+{
+	if (bIsDead || !GrenadeClass)
+	{
+		return;
+	}
+
+	ARGGrenade::ThrowFromActor(
+		this,
+		GrenadeClass,
+		GrenadeThrowSpeed
+	);
+}
+
 void ARGCharacter::StartCrouch()
 {
 	Crouch();
@@ -971,4 +1010,32 @@ void ARGCharacter::ApplyRecoil()
 	// 좌우는 랜덤하게 튕김 (매번 같은 방향이면 부자연스러움)
 	const float RandomHorizontal = FMath::RandRange(-HorizontalRecoil, HorizontalRecoil);
 	AddControllerYawInput(RandomHorizontal);
+}
+
+bool ARGCharacter::CanUseHealPack() const
+{
+	if (bIsDead || CurrentHealth >= GetMaxHealthWithUpgrade())
+	{
+		return false;
+	}
+
+	return GetHealCooldownRemaining() <= 0.0f;
+}
+
+float ARGCharacter::GetHealCooldownRemaining() const
+{
+	const UWorld* World = GetWorld();
+
+	if (!World)
+	{
+		return 0.0f;
+	}
+
+	const float ElapsedTime =
+		World->GetTimeSeconds() - LastHealUseTime;
+
+	return FMath::Max(
+		0.0f,
+		HealCooldownDuration - ElapsedTime
+	);
 }

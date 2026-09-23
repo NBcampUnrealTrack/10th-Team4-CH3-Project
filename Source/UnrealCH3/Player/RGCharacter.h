@@ -8,6 +8,7 @@ class USpringArmComponent;
 class UCameraComponent;
 class UTimelineComponent;
 class ARGBaseWeapon;
+class ARGGrenade;
 struct FInputActionValue;
 
 // [추가] 무기가 실제로 생성/교체된 순간을 외부 시스템(UI 등)에 알린다.
@@ -160,6 +161,10 @@ private:
 
 	void Reload(const FInputActionValue& value);
 
+	// 퀵슬롯
+	void UseHealPack(const FInputActionValue& value);
+	void ThrowGrenade(const FInputActionValue& value);
+
 private:
 	// 팔 매쉬
 	UPROPERTY(VisibleAnywhere, Category = "Mesh")
@@ -182,6 +187,13 @@ private:
 	TObjectPtr<ARGBaseWeapon> CurrentWeapon;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<ARGBaseWeapon> WeaponClass;
+
+	// 수류탄
+	UPROPERTY(EditAnywhere, Category = "QuickSlot|Grenade")
+	TSubclassOf<ARGGrenade> GrenadeClass;
+
+	UPROPERTY(EditAnywhere, Category = "QuickSlot|Grenade", meta = (ClampMin = "1.0"))
+	float GrenadeThrowSpeed = 1200.0f;
 
 private:
 	// 애니메이션
@@ -270,6 +282,15 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health", meta = (AllowPrivateAccess = "true"))
 	float CurrentHealth = MaxHealth;
 
+	// 힐팩
+	UPROPERTY(EditAnywhere, Category = "QuickSlot|Heal", meta = (ClampMin = "0.0"))
+	float HealAmount = 35.0f;
+
+	UPROPERTY(EditAnywhere, Category = "QuickSlot|Heal", meta = (ClampMin = "0.1"))
+	float HealCooldownDuration = 12.0f;
+
+	float LastHealUseTime = -1000.0f;
+
 	// Movement
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement", meta = (AllowPrivateAccess = "true"))
 	float DefaultSpeed = 650.0f;
@@ -292,6 +313,13 @@ public:
 	float GetMaxHealthWithUpgrade() const;
 	float GetCurrentMaxHealth() const;
 	float GetRegenerationPerSecond() const;
+
+	// 퀵슬롯 UI용
+	UFUNCTION(BlueprintPure, Category = "QuickSlot|Heal")
+	bool CanUseHealPack() const;
+
+	UFUNCTION(BlueprintPure, Category = "QuickSlot|Heal")
+	float GetHealCooldownRemaining() const;
 	
 // =============== 반동 관련 함수 추가 ================
 	UFUNCTION()
