@@ -105,6 +105,8 @@ void ARGRailgun::ReleaseChargeAndFire() {
 	//탄환 한발 소모 및 브로드캐스팅
 	CurrentAmmo = FMath::Max(0, CurrentAmmo - 1);
 	OnAmmoChanged.Broadcast(CurrentAmmo, GetMagazineCapacity());
+	//반동 트리거 방송
+	OnShotFired.Broadcast();
 
 	if (CurrentAmmo <= 0) {
 		StartReloaded();

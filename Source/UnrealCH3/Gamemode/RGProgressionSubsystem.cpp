@@ -223,7 +223,8 @@ void URGProgressionSubsystem::PresentNextPendingLevelUpIfAny()
 	LastPresentedOptions = GenerateUpgradeOptions(ChoiceCount);
 	//업글중임.
 	bIsPresentingUpgradeChoice = true;
-	UE_LOG(LogTemp, Warning, TEXT("OnLevelUpReady Broadcast!"));
+	//카드 뜨는 순간 일시정지
+	SetGamePausedForUpgradeSelection(true);   
 	OnLevelUpReady.Broadcast(LastPresentedOptions);
 }
 
@@ -259,6 +260,12 @@ void URGProgressionSubsystem::ApplyUpgrade(FName UpgradeId)
 
 	PendingLevelUpCount = FMath::Max(0, PendingLevelUpCount - 1);
 	bIsPresentingUpgradeChoice = false;
+
+	// 대기 중인 다음 레벨업이 없으면 여기서 재개, 있으면 다음 카드 띄우기 직전에 다시 멈춤
+	if (PendingLevelUpCount <= 0)
+	{
+		SetGamePausedForUpgradeSelection(false);   // 추가
+	}
 
 	// 대기 중이던 다음 레벨업이 있으면 순차적으로 이어서 띄움
 	PresentNextPendingLevelUpIfAny();
@@ -606,8 +613,8 @@ bool URGProgressionSubsystem::PresentCoreUpgradeChoiceWithCount(int32 CandidateC
 	}
 
 	LastPresentedCoreOptions = Options;
+	
 	bIsPresentingCoreUpgradeChoice = true;
-
 	UE_LOG(
 		LogTemp,
 		Warning,
@@ -901,4 +908,17 @@ void URGProgressionSubsystem::DebugForceCoreUpgradeChoice()
 void URGProgressionSubsystem::DebugApplyCoreUpgradeByName(const FString& UpgradeName)
 {
 	ApplyCoreUpgrade(FName(*UpgradeName));
+}
+
+//게임 중 일시 정지
+
+void URGProgressionSubsystem::SetGamePausedForUpgradeSelection(bool bPaused)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	UGameplayStatics::SetGamePaused(World, bPaused);
 }

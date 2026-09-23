@@ -313,4 +313,8 @@ public:
 
 
 	//===================================================================================
+
+	// 강화 선택 시 일시 정지 전용 함수
+	private:
+		void SetGamePausedForUpgradeSelection(bool bPaused);
 };
