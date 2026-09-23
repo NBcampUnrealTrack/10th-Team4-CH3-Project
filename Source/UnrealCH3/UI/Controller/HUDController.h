@@ -15,6 +15,8 @@ class UCrosshairWidget;
 class UWorld;
 class ARGRailgun;
 class URailgunChargeWidget;
+class URGQuickSlotWidget;
+class ARGCharacter;
 
 /**
  * 
@@ -49,6 +51,10 @@ public:
 	void SetRailgunChargeView(URailgunChargeWidget* InRailgunChargeView);
 
 	FOnHUDDamageNumberRequested OnDamageNumberRequested;
+
+	void SetQuickSlotViews(URGQuickSlotWidget* InHealQuikSlotView, URGQuickSlotWidget* InGrenadeQuickSlotView);
+
+	void BindQuickSlotCharacter(ARGCharacter* InCharacter);
 
 protected:
 	//HUDWidget 약한 참조 연결
@@ -121,4 +127,25 @@ protected:
 
 	// 충전 UI 갱신 타이머 해제
 	void StopRailgunChargeTimer();
+
+private:
+	TWeakObjectPtr<URGQuickSlotWidget> HealQuickSlotView;
+	TWeakObjectPtr<URGQuickSlotWidget> GrenadeQuickSlotView;
+
+	// 쿨타임 정보 가져오기
+	TWeakObjectPtr<ARGCharacter> QuickSlotCharacter;
+		
+	//쿨타임 타이머
+	FTimerHandle QuickSlotTimerHandle;
+	TWeakObjectPtr<UWorld> QickSlotTimerWorld;
+
+	//타이머 초기화
+	void RefreshQuickSlotUI();
+
+	// 남은 쿨타임 전달
+	void UpdateQuickSlotUI();
+
+	// 타이머 정리
+	void StopQuickSlotTimer();
+
 };
