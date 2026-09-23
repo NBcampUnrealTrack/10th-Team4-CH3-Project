@@ -20,6 +20,7 @@ class ARGGameModeBase;
 class URailgunChargeWidget;
 class URGCraftingStationWidget;
 class URQuickSlotWidget;
+class URGResultWidget;
 
 /**
  * 
@@ -61,6 +62,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI|View")
 	TSubclassOf<UUserWidget> CraftingStationClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI|View")
+	TSubclassOf<URGResultWidget> ResultWidgetClass;
 
 	UFUNCTION()
 	void HandleResumeRequested();
@@ -211,5 +215,17 @@ public:
 
 	UFUNCTION()
 	void RegisterQuickSlotView(URGQuickSlotWidget* InHealQuickSlotView, URGQuickSlotWidget* InGrenadeQuickSlotView);
+
+	UFUNCTION(Exec, BlueprintCallable, Category = "UI|Debug")
+	void TestOpenGameOverResult();
+
+	UFUNCTION(Exec, BlueprintCallable, Category = "UI|Debug")
+	void TestOpenClearResult();
+
+	UFUNCTION(BlueprintCallable, Category = "UI|Result")
+	void ShowGameOverResult();
+
+	UFUNCTION(BlueprintCallable, Category = "UI|Result")
+	void ShowClearResult();
 
 };

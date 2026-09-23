@@ -19,6 +19,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "UI/View/Combat/RailgunChargeWidget.h"
 #include "UI/View/Combat/RGQuickSlotWidget.h"
+#include "UI/View/Menu/RGResultWidget.h"
 
 void AUIManager::BeginPlay()
 {
@@ -770,6 +771,54 @@ void AUIManager::RegisterQuickSlotView(URGQuickSlotWidget* InHealQuickSlotView, 
 	}
 
 	HUDControllerInstance->SetQuickSlotViews(InHealQuickSlotView,InGrenadeQuickSlotView);
+}
+
+void AUIManager::TestOpenGameOverResult()
+{
+	ShowGameOverResult();
+}
+
+void AUIManager::TestOpenClearResult()
+{
+	ShowClearResult();
+}
+
+void AUIManager::ShowGameOverResult()
+{
+	if (!ResultWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ResultWidgetClass is not assigned."));
+		return;
+	}
+
+	URGResultWidget* ResultWidget =
+		Cast<URGResultWidget>(OpenView(ResultWidgetClass, EUILayer::Result));
+
+	if (!IsValid(ResultWidget))
+	{
+		return;
+	}
+
+	ResultWidget->ShowGameOver();
+}
+
+void AUIManager::ShowClearResult()
+{
+	if (!ResultWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ResultWidgetClass is not assigned."));
+		return;
+	}
+
+	URGResultWidget* ResultWidget =
+		Cast<URGResultWidget>(OpenView(ResultWidgetClass, EUILayer::Result));
+
+	if (!IsValid(ResultWidget))
+	{
+		return;
+	}
+
+	ResultWidget->ShowClear();
 }
 
 
