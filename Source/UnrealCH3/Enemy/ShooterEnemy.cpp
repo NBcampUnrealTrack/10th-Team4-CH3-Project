@@ -21,10 +21,17 @@ AShooterEnemy::AShooterEnemy()
 
 void AShooterEnemy::Attack()
 {
-	if (!TargetActor) return; // 널 체크도 없었네요
-	
+	if (!TargetActor) return;
+
 	FVector Start = GetActorLocation() + FVector(0, 0, 50.f);
-	FVector End = AttackLocation;// Forward가 아니라 타겟 위치로 직접
+
+	// AttackLocation 방향으로 최대 사거리까지
+	FVector Dir = (AttackLocation - Start).GetSafeNormal();
+	if (Dir.IsNearlyZero())
+	{
+		Dir = GetActorForwardVector(); // 타겟이 바로 겹쳐 있을 때 대비
+	}
+	FVector End = Start + Dir * AttackMaxRange;
 
 	FHitResult Hit;
 	FCollisionQueryParams Params;
