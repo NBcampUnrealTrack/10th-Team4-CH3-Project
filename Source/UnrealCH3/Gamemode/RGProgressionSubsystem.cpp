@@ -406,6 +406,8 @@ TArray<FRGUpgradeOption> URGProgressionSubsystem::GenerateCoreUpgradeOptions(int
 			? TEXT("PendingWeaponClass")
 			: TEXT("None")
 			)
+
+
 	);
 
 
@@ -584,8 +586,22 @@ TArray<FRGUpgradeOption> URGProgressionSubsystem::GenerateCoreUpgradeOptions(int
 		);
 	}
 
+	// 부족한 자리 UpgradeId를 None으로 반환하고 , BP에서 None이면 그 카드 visiblity를 안보이게 만들기 위한 작업.
+	// 핵심 강화 두번째 선택을 위함
+	while (Result.Num() < Count)
+	{
+		FRGUpgradeOption EmptyOption;
+		EmptyOption.UpgradeId = NAME_None;
+		EmptyOption.CategoryText = FText::GetEmpty();
+		EmptyOption.NameText = FText::GetEmpty();
+		EmptyOption.DescriptionText = FText::GetEmpty();
+		EmptyOption.ValueChangeText = FText::GetEmpty();
+		Result.Add(EmptyOption);
+	}
 
 	return Result;
+
+	
 }
 
 void URGProgressionSubsystem::PresentCoreUpgradeChoice()
