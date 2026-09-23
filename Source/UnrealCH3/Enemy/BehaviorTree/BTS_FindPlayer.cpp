@@ -26,8 +26,8 @@ void UBTS_FindPlayer::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMem
 	if (!Enemy) return;
 	
 	AActor* TargetActor = Cast<AActor>(Enemy->GetTargetActor());
-	
-	BlackboardComp->SetValueAsObject(TEXT("Target"), TargetActor);
+
+	//BlackboardComp->SetValueAsObject(TEXT("Target"), TargetActor);
 	
 	MaxRange = Enemy->GetAttackMaxRange();
 	MinRange = Enemy->GetAttackMinRange();
