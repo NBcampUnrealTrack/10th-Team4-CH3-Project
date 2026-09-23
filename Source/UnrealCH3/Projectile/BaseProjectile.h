@@ -38,4 +38,9 @@ protected:
 	TObjectPtr<class USoundBase> Sound;
 	UPROPERTY(EditAnywhere, Category = "Damage")
 	float Damage = 0.0f;
+	UPROPERTY(EditAnywhere, Category = "Destroy", meta = (ClampMin = "3.0"))
+	float DestroyDelay = 7.0f;
+
+private:
+	FTimerHandle DestroyTimerHandle;
 };
