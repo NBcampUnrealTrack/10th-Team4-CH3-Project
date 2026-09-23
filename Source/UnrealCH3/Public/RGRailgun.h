@@ -48,10 +48,10 @@ protected:
 	float MaxChargeTime = 1.25f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Railgun")
-	float MinDamage = 40.f;
+	float MinDamage = 20.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Railgun")
-	float MaxDamage = 140.f;
+	float MaxDamage = 70.f;
 
 	// 한 발이 최대 몇 명까지 관통하는지
 	UPROPERTY(EditDefaultsOnly, Category = "Railgun")
