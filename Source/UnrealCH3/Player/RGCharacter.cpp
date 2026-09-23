@@ -17,6 +17,8 @@
 
 #include "RGGrenade.h"
 #include "Engine/Engine.h"
+#include "GameFramework/PlayerController.h"
+#include "UI/UIManager.h"
 
 #include "RGGrenade.h"
 
@@ -200,19 +202,51 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 
 float ARGCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DmageEvent, AController* EventIntigator, AActor* DamageCauser)
 {
-
 	if (bIsGodMode || bIsDead)
 	{
 		return 0.0f;
 	}
+
 	UE_LOG(LogTemp, Warning, TEXT("Player TakeDamage called! Amount: %f, Causer: %s"),
 		DamageAmount, DamageCauser ? *DamageCauser->GetName() : TEXT("None"));
+
 	// 1초 재생타이머 정리
 	GetWorldTimerManager().ClearTimer(TickRegenerationTimerHandle);
+
 	// 5초 타이머 시작
 	GetWorldTimerManager().SetTimer(StartRegenerationTimerHandle, this, &ARGCharacter::StartRegenerateHealth, StartRegenerationDelay, false);
 
 	CurrentHealth = FMath::Clamp(CurrentHealth - DamageAmount, 0.0f, GetMaxHealthWithUpgrade());
+
+	// 피격 방향 UI 표시
+	// 낙사 등 자기 자신이 DamageCauser인 경우에는 방향 표시를 띄우지 않는다.
+	if (IsValid(DamageCauser) && DamageCauser != this)
+	{
+		APlayerController* PlayerController = Cast<APlayerController>(GetController());
+
+		if (IsValid(PlayerController))
+		{
+			AUIManager* UIManager = Cast<AUIManager>(PlayerController->GetHUD());
+
+			if (IsValid(UIManager))
+			{
+				const FVector AttackOrigin = DamageCauser->GetActorLocation();
+
+				UIManager->NotifyDirectionalDamage(
+					DamageCauser,
+					AttackOrigin
+				);
+
+				UE_LOG(
+					LogTemp,
+					Warning,
+					TEXT("[DirectionalDamage] Source=%s | Origin=%s"),
+					*DamageCauser->GetName(),
+					*AttackOrigin.ToString()
+				);
+			}
+		}
+	}
 
 	if (CurrentHealth <= 0.0f)
 	{
