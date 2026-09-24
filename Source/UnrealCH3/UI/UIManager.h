@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
 #include "UI/UITypes.h"
+#include "Gamemode/RGGameModeBase.h"
 // [추가] RunFlow 정책 Delegate 타입
 #include "Gamemode/DataTableStruct/RGRunConfigRows.h"
 #include "UIManager.generated.h"
@@ -66,6 +67,12 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "UI|View")
 	TSubclassOf<URGResultWidget> ResultWidgetClass;
 
+	UPROPERTY(EditDefaultsOnly, Category = "UI|Result")
+	FName MainMenuLevelName = TEXT("L_MainMenu");
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI|Result")
+	FName FirstRunLevelName = TEXT("L_Map01_Blockout");
+
 	UFUNCTION()
 	void HandleResumeRequested();
 
@@ -104,6 +111,20 @@ protected:
 	// [추가] GameMode RunFlow 정책 연결
 	void TryBindRunFlowSource();
 	void UnbindRunFlowSource();
+
+	UFUNCTION()
+	void HandleGameOver(EDeathReason Reason);
+
+	UFUNCTION()
+	void HandleStageCleared();
+
+	URGResultWidget* OpenResultView();
+	void BindResultActions(URGResultWidget* ResultWidget);
+
+	void HandleResultRetryRequested();
+	void HandleResultStartOverRequested();
+	void HandleResultMainMenuRequested();
+	void HandleResultExitRequested();
 
 	UFUNCTION()
 	void HandleRunFlowPolicyChanged(

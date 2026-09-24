@@ -1110,6 +1110,13 @@ public:
 		return RemainingTime;
 	}
 
+	//UI 연동용 플레이 시간
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Run|Timer")
+	float InitialTimeLimit = 60.0f;
+
+	UFUNCTION(BlueprintPure, Category = "Run|Timer")
+	float GetElapsedRunTimeSeconds() const { return FMath::Max(0.0f, InitialTimeLimit - RemainingTime); }
+
 
 	// =========================================================
 	// Kill / Stage Clear
