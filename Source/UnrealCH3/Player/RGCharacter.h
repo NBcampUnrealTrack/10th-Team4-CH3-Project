@@ -311,8 +311,10 @@ public:
 	float GetDefaultMoveSpeed() const;
 	float GetSprintSpeed() const;
 	float GetMaxHealthWithUpgrade() const;
-	float GetCurrentMaxHealth() const;
 	float GetRegenerationPerSecond() const;
+
+	UFUNCTION(BlueprintPure, Category = "Health")
+	float GetCurrentMaxHealth() const;
 
 	// 퀵슬롯 UI용
 	UFUNCTION(BlueprintPure, Category = "QuickSlot|Heal")
