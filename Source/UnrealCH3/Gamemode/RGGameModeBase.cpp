@@ -605,6 +605,8 @@ void ARGGameModeBase::BeginPlay()
 			)
 		);
 	}
+
+	GetWorldTimerManager().SetTimerForNextTick(this, &ARGGameModeBase::BroadcastInitialRunStatus);
 }
 
 
@@ -2327,6 +2329,12 @@ void ARGGameModeBase::UpdateRunTimer()
 			true
 		);
 	}
+}
+
+void ARGGameModeBase::BroadcastInitialRunStatus()
+{
+	OnRemainingTimeChanged.Broadcast(RemainingTime);
+	OnKillCountChanged.Broadcast(CurrentKills, TargetKillsToClear);
 }
 
 
