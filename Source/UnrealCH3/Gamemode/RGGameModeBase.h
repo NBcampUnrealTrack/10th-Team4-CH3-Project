@@ -1083,6 +1083,8 @@ protected:
 	UFUNCTION()
 	void UpdateRunTimer();
 
+	void BroadcastInitialRunStatus();
+
 
 public:
 

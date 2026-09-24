@@ -199,6 +199,10 @@ void AUIManager::HandlePlayerWeaponEquipped(ARGBaseWeapon* NewWeapon)
 	WeaponDisplayName.RemoveFromStart(TEXT("BP_"));
 	WeaponDisplayName.RemoveFromEnd(TEXT("_C"));
 
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponUI][PlayerBind] %s / %d"),
+		*WeaponDisplayName,
+		NewWeapon->GetCurrentAmmo());
+
 	HUDControllerInstance->BindWeapon(
 		NewWeapon,
 		FText::FromString(WeaponDisplayName)
@@ -763,6 +767,10 @@ void AUIManager::SetEquippedWeapon(ARGBaseWeapon* InWeapon, const FText& InWeapo
 		);
 		return;
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponUI][ExternalBind] %s / %d"),
+		*InWeaponDisplayName.ToString(),
+		IsValid(InWeapon) ? InWeapon->GetCurrentAmmo() : -1);
 
 	HUDControllerInstance->BindWeapon(InWeapon, InWeaponDisplayName);
 }

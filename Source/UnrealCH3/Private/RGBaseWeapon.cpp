@@ -53,6 +53,7 @@ void ARGBaseWeapon::BeginPlay()
 	}
 
 	CurrentAmmo = GetMagazineCapacity();
+	OnAmmoChanged.Broadcast(CurrentAmmo, GetMagazineCapacity());
 
 	// 강화 즉시 반영을 위한 구독
 	

@@ -263,6 +263,10 @@ void UHUDController::HandleWeaponAmmoChanged(int32 CurrentAmmo, int32 MagazineCa
 
 	if (UWeaponInfoWidget* View = WeaponInfoView.Get())
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponUI][AmmoChanged] %s / %d"),
+			*BoundWeaponDisplayName.ToString(),
+			CurrentAmmo);
+
 		View->ApplyWeaponInfo(
 			BoundWeaponDisplayName,
 			CurrentAmmo
@@ -280,6 +284,10 @@ void UHUDController::RefreshWeaponInfo()
 		return;
 	}
 	
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponUI][Refresh] %s / %d"),
+		*BoundWeaponDisplayName.ToString(),
+		Weapon->GetCurrentAmmo());
+
 	View->ApplyWeaponInfo(
 		BoundWeaponDisplayName,
 		Weapon->GetCurrentAmmo()
