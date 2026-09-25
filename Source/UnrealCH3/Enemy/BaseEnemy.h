@@ -10,6 +10,7 @@
 
 class UBehaviorTree;
 class ABaseEnemy;
+class UAnimMontage;
 
 // 적이 피해입었을때 호출하는 이벤트
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
@@ -44,6 +45,8 @@ public:
     virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
     UFUNCTION()
     virtual void Attack();
+    UFUNCTION(BlueprintCallable, Category = "Animation")
+    void PlayAttackMontage();
     UFUNCTION()
     virtual void WarningBeforAttack();
     UFUNCTION()
@@ -86,6 +89,8 @@ public:
     void ResetAttackCooldown();
 
     UBehaviorTree* GetEnemyBehaviorTree() const;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Animation")
+    TObjectPtr<UAnimMontage> AttackMontage;
     float GetViewingAngle();
     float GetViewingDistance();
     float GetHearingDistance();
