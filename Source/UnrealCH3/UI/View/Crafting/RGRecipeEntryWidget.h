@@ -28,25 +28,25 @@ protected:
 	UFUNCTION()
 	void HandleCraftButtonClicked();
 
-	UPROPERTY(meta =(BindWidget))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> Text_RecipeName;
 	
-	UPROPERTY(meta =(BindWidget))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> Text_RecipeDescription;
 	
-	UPROPERTY(meta =(BindWidget))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> Text_RecipeMaterials;
 
-	UPROPERTY(meta= (BindWidget))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> Text_MaterialName_1;
 	
-	UPROPERTY(meta= (BindWidget))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> Text_MaterialCount_1;
 	
-	UPROPERTY(meta= (BindWidget))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> Text_MaterialName_2;
 	
-	UPROPERTY(meta= (BindWidget))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> Text_MaterialCount_2;
 	
 	UPROPERTY(meta =(BindWidget))

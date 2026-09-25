@@ -128,6 +128,9 @@ ARGGameModeBase::ARGGameModeBase()
 
 	RemainingTime = 60.0f;
 
+	//UI 용 실제시간 계산용
+	InitialTimeLimit = RemainingTime;
+
 	CurrentKills = 0;
 
 	TargetKillsToClear = 10;
@@ -527,6 +530,8 @@ void ARGGameModeBase::BeginPlay()
 				TargetKillsToClear
 			);
 		}
+
+		InitialTimeLimit = RemainingTime;
 	}
 
 
@@ -600,6 +605,8 @@ void ARGGameModeBase::BeginPlay()
 			)
 		);
 	}
+
+	GetWorldTimerManager().SetTimerForNextTick(this, &ARGGameModeBase::BroadcastInitialRunStatus);
 }
 
 
@@ -2322,6 +2329,12 @@ void ARGGameModeBase::UpdateRunTimer()
 			true
 		);
 	}
+}
+
+void ARGGameModeBase::BroadcastInitialRunStatus()
+{
+	OnRemainingTimeChanged.Broadcast(RemainingTime);
+	OnKillCountChanged.Broadcast(CurrentKills, TargetKillsToClear);
 }
 
 

@@ -19,6 +19,26 @@
 #include "Kismet/GameplayStatics.h"
 #include "UI/View/Combat/RailgunChargeWidget.h"
 #include "UI/View/Combat/RGQuickSlotWidget.h"
+#include "UI/View/Menu/RGResultWidget.h"
+#include "Gamemode/RGProgressionSubsystem.h"
+#include "Kismet/KismetSystemLibrary.h"
+
+//UI 시간 포맷용 함수
+namespace
+{
+	FText MakeResultTimeText(float Seconds)
+	{
+		const int32 TotalSeconds = FMath::Max(0, FMath::FloorToInt(Seconds));
+
+		return FText::FromString(
+			FString::Printf(
+				TEXT("%02d:%02d"),
+				TotalSeconds / 60,
+				TotalSeconds % 60
+			)
+		);
+	}
+}
 
 void AUIManager::BeginPlay()
 {
@@ -41,6 +61,7 @@ void AUIManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// [추가] Character Delegate부터 안전하게 해제한다.
 	UnbindPlayerWeaponSource();
+	UnbindRunFlowSource();
 
 	UE_LOG(LogTemp,
 		Log,
@@ -178,6 +199,10 @@ void AUIManager::HandlePlayerWeaponEquipped(ARGBaseWeapon* NewWeapon)
 	WeaponDisplayName.RemoveFromStart(TEXT("BP_"));
 	WeaponDisplayName.RemoveFromEnd(TEXT("_C"));
 
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponUI][PlayerBind] %s / %d"),
+		*WeaponDisplayName,
+		NewWeapon->GetCurrentAmmo());
+
 	HUDControllerInstance->BindWeapon(
 		NewWeapon,
 		FText::FromString(WeaponDisplayName)
@@ -208,6 +233,10 @@ void AUIManager::TryBindRunFlowSource()
 			this,
 			&AUIManager::HandleRunFlowPolicyChanged
 		);
+
+		GameMode->OnGameOver.AddUniqueDynamic(this,&AUIManager::HandleGameOver);
+
+		GameMode->OnStageCleared.AddUniqueDynamic(this,&AUIManager::HandleStageCleared);
 	}
 
 	// BeginPlay 순서와 관계없이 현재 TopUI를 즉시 동기화
@@ -228,6 +257,10 @@ void AUIManager::UnbindRunFlowSource()
 			this,
 			&AUIManager::HandleRunFlowPolicyChanged
 		);
+
+
+		GameMode->OnGameOver.RemoveDynamic(this,&AUIManager::HandleGameOver);
+		GameMode->OnStageCleared.RemoveDynamic(this,&AUIManager::HandleStageCleared);
 	}
 
 	BoundRunFlowGameMode.Reset();
@@ -248,6 +281,100 @@ void AUIManager::HandleRunFlowPolicyChanged(
 	);
 }
 
+URGResultWidget* AUIManager::OpenResultView()
+{
+	if (!ResultWidgetClass)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[UIManager] ResultWidgetClass is not assigned.")
+		);
+
+		return nullptr;
+	}
+
+	URGResultWidget* ResultWidget = Cast<URGResultWidget>(OpenView(ResultWidgetClass, EUILayer::Result));
+
+	if (IsValid(ResultWidget))
+	{
+		BindResultActions(ResultWidget);
+	}
+
+	return ResultWidget;
+}
+
+void AUIManager::BindResultActions(URGResultWidget* ResultWidget)
+{
+	ResultWidget->OnRetryRequested.RemoveAll(this);
+	ResultWidget->OnStartOverRequested.RemoveAll(this);
+	ResultWidget->OnMainMenuRequested.RemoveAll(this);
+	ResultWidget->OnExitRequested.RemoveAll(this);
+
+	ResultWidget->OnRetryRequested.AddUObject(
+		this,
+		&AUIManager::HandleResultRetryRequested
+	);
+
+	ResultWidget->OnStartOverRequested.AddUObject(
+		this,
+		&AUIManager::HandleResultStartOverRequested
+	);
+
+	ResultWidget->OnMainMenuRequested.AddUObject(
+		this,
+		&AUIManager::HandleResultMainMenuRequested
+	);
+
+	ResultWidget->OnExitRequested.AddUObject(
+		this,
+		&AUIManager::HandleResultExitRequested
+	);
+}
+
+
+void AUIManager::HandleGameOver(EDeathReason /*Reason*/)
+{
+	ARGGameModeBase* GameMode = BoundRunFlowGameMode.Get();
+
+	if (!IsValid(GameMode))
+	{
+		return;
+	}
+
+	URGResultWidget* ResultWidget = OpenResultView();
+
+	if (!IsValid(ResultWidget))
+	{
+		return;
+	}
+
+	ResultWidget->ShowGameOver();
+
+	ResultWidget->SetGameOverStats(MakeResultTimeText(GameMode->GetElapsedRunTimeSeconds()),GameMode->GetCurrentKills());
+}
+
+void AUIManager::HandleStageCleared()
+{
+	ARGGameModeBase* GameMode = BoundRunFlowGameMode.Get();
+
+	
+	if (!IsValid(GameMode) || GameMode->GetStageCompletionDestination() != TEXT("Result"))
+	{
+		return;
+	}
+
+	URGResultWidget* ResultWidget = OpenResultView();
+
+	if (!IsValid(ResultWidget))
+	{
+		return;
+	}
+
+	ResultWidget->ShowClear();
+
+	ResultWidget->SetClearStats(MakeResultTimeText(GameMode->GetElapsedRunTimeSeconds()),GameMode->GetCurrentKills());
+}
 
 void AUIManager::TestOpenPauseMenu()
 {
@@ -641,6 +768,10 @@ void AUIManager::SetEquippedWeapon(ARGBaseWeapon* InWeapon, const FText& InWeapo
 		return;
 	}
 
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponUI][ExternalBind] %s / %d"),
+		*InWeaponDisplayName.ToString(),
+		IsValid(InWeapon) ? InWeapon->GetCurrentAmmo() : -1);
+
 	HUDControllerInstance->BindWeapon(InWeapon, InWeaponDisplayName);
 }
 
@@ -772,7 +903,114 @@ void AUIManager::RegisterQuickSlotView(URGQuickSlotWidget* InHealQuickSlotView, 
 	HUDControllerInstance->SetQuickSlotViews(InHealQuickSlotView,InGrenadeQuickSlotView);
 }
 
+void AUIManager::TestOpenGameOverResult()
+{
+	ShowGameOverResult();
+}
 
+void AUIManager::TestOpenClearResult()
+{
+	ShowClearResult();
+}
+
+void AUIManager::ShowGameOverResult()
+{
+	if (!ResultWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ResultWidgetClass is not assigned."));
+		return;
+	}
+
+	URGResultWidget* ResultWidget =
+		Cast<URGResultWidget>(OpenView(ResultWidgetClass, EUILayer::Result));
+
+	if (!IsValid(ResultWidget))
+	{
+		return;
+	}
+
+	ResultWidget->ShowGameOver();
+}
+
+void AUIManager::ShowClearResult()
+{
+	if (!ResultWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ResultWidgetClass is not assigned."));
+		return;
+	}
+
+	URGResultWidget* ResultWidget =
+		Cast<URGResultWidget>(OpenView(ResultWidgetClass, EUILayer::Result));
+
+	if (!IsValid(ResultWidget))
+	{
+		return;
+	}
+
+	ResultWidget->ShowClear();
+}
+
+void AUIManager::HandleResultRetryRequested()
+{
+	const FString CurrentLevelName =
+		UGameplayStatics::GetCurrentLevelName(this, true);
+
+	if (!CurrentLevelName.IsEmpty())
+	{
+		UGameplayStatics::OpenLevel(
+			this,
+			FName(*CurrentLevelName)
+		);
+	}
+}
+
+void AUIManager::HandleResultStartOverRequested()
+{
+	if (UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (
+			URGProgressionSubsystem* Progression =
+			GameInstance->GetSubsystem<URGProgressionSubsystem>()
+			)
+		{
+			Progression->ResetRun();
+		}
+	}
+
+	UGameplayStatics::OpenLevel(this, FirstRunLevelName);
+}
+
+void AUIManager::HandleResultMainMenuRequested()
+{
+	if (UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (
+			URGProgressionSubsystem* Progression =
+			GameInstance->GetSubsystem<URGProgressionSubsystem>()
+			)
+		{
+			Progression->ResetRun();
+		}
+	}
+
+	UGameplayStatics::OpenLevel(this, MainMenuLevelName);
+}
+
+void AUIManager::HandleResultExitRequested()
+{
+	APlayerController* PlayerController =
+		GetWorld()
+		? GetWorld()->GetFirstPlayerController()
+		: nullptr;
+
+	UKismetSystemLibrary::QuitGame(
+		this,
+		PlayerController,
+		EQuitPreference::Quit,
+		false
+	);
+}
 
 
 
