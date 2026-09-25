@@ -33,6 +33,7 @@ EBTNodeResult::Type UBTTask_WarningAttack::ExecuteTask(UBehaviorTreeComponent& O
 	}
 	WarningTime = Enemy->GetWarningTime();
 	Enemy->ShowAttackRangeLine();
+	Enemy->PlayAttackMontage();
 	*ElapsedTime = 0.0f;
 	return EBTNodeResult::InProgress;
 }

@@ -16,6 +16,8 @@
 #include "Enemy/Interface/EnemyRecoveryProvider.h"
 #include "AIController.h"
 #include "TimerManager.h"
+// Animation 추가용
+#include "Animation/AnimMontage.h"
 
 // Sets default values
 ABaseEnemy::ABaseEnemy()
@@ -130,6 +132,14 @@ void ABaseEnemy::FellOutOfWorld(const UDamageType& DamageType)
 void ABaseEnemy::Attack()
 {
 	UE_LOG(LogTemp, Warning, TEXT("%s Attack"), *EnemyName.ToString());
+}
+
+void ABaseEnemy::PlayAttackMontage()
+{
+	if (AttackMontage)
+	{
+		PlayAnimMontage(AttackMontage);
+	}
 }
 
 void ABaseEnemy::WarningBeforAttack()
