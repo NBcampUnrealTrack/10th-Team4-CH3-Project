@@ -25,8 +25,8 @@ void AHomingMissile::DirectHoming(AActor* TargetActor)
 {
 	if (bIsDirectHoming)
 	{
-		ProjectileMovementComp->InitialSpeed = 800.0f;
-		ProjectileMovementComp->MaxSpeed = 800.0f;
+		ProjectileMovementComp->InitialSpeed = 1000.0f;
+		ProjectileMovementComp->MaxSpeed = 1000.0f;
 		ProjectileMovementComp->bIsHomingProjectile = true;
 		ProjectileMovementComp->HomingAccelerationMagnitude = 3000.0f;
 		ProjectileMovementComp->HomingTargetComponent = TargetActor->GetRootComponent();

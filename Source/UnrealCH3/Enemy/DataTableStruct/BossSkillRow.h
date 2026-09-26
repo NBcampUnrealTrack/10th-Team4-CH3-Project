@@ -9,7 +9,8 @@ enum class EBossSkillType : uint8
 {
 	FireProjectile	UMETA(DisplayName = "Fire Projectile"),
 	ShockWave		UMETA(DisplayName = "Shock Wave"),
-	HomingMissile	UMETA(DisplayNAme = "Homing Missile")
+	HomingMissile	UMETA(DisplayName = "Homing Missile"),
+	RiseSpike		UMETA(DisplayName = "Rise Spike")
 };
 
 USTRUCT(BlueprintType)
@@ -23,6 +24,9 @@ public:
 
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<class ABaseProjectile> ProjectileClass;
+
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<class ABaseAreaAttack> AreaAttackClass;
 	
 	UPROPERTY(EditAnywhere)
 	TObjectPtr<class UParticleSystem> HitParticle;
