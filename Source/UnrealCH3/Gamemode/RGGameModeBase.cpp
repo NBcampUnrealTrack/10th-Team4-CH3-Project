@@ -101,9 +101,9 @@ ARGGameModeBase::ARGGameModeBase()
 
 	ObjectiveConfigTable = nullptr;
 
-	// 현재 기능을 깨지 않도록, 실제 DataCore/AliveEnemyGate 연결 전에는
-	// Kill 목표만 StageClear 필수 조건으로 사용한다.
-	bEnforceCoreObjective = false;
+	// RequiredCores가 1 이상인 스테이지는 Kill 목표와 함께
+	// Core 파괴 목표도 실제 StageClear 조건으로 사용한다.
+	bEnforceCoreObjective = true;
 	bEnforceRemainingEnemyObjective = false;
 
 	CurrentCoresDestroyed = 0;
@@ -884,6 +884,10 @@ bool ARGGameModeBase::ApplyStageConfigForCurrentMap()
 	// [추가] DT_ObjectiveConfig Kill_Default 진행도도 함께 알린다.
 	BroadcastObjectiveProgress(
 		TEXT("Kill_Default")
+	);
+
+	BroadcastObjectiveProgress(
+		TEXT("Core_Default")
 	);
 
 
@@ -2335,6 +2339,9 @@ void ARGGameModeBase::BroadcastInitialRunStatus()
 {
 	OnRemainingTimeChanged.Broadcast(RemainingTime);
 	OnKillCountChanged.Broadcast(CurrentKills, TargetKillsToClear);
+
+	BroadcastObjectiveProgress(TEXT("Kill_Default"));
+	BroadcastObjectiveProgress(TEXT("Core_Default"));
 }
 
 
@@ -2442,12 +2449,12 @@ bool ARGGameModeBase::CheckStageClearCondition() const
 	// -----------------------------------------------------
 	// Core objective
 	//
-	// 현재 실제 DataCore 이벤트가 없는 맵을 깨지 않도록
-	// bEnforceCoreObjective=true일 때만 StageClear 필수 조건으로 사용.
+	// DT_StageConfig의 RequiredCores가 1 이상이면
+	// Kill 목표와 동일하게 StageClear 필수 조건으로 사용한다.
+	// 보스 스테이지는 RequiredCores=0이므로 이 조건을 사용하지 않는다.
 	// -----------------------------------------------------
 
 	if (
-		bEnforceCoreObjective &&
 		RequiredCoresToClear > 0 &&
 		CurrentCoresDestroyed < RequiredCoresToClear
 		)
@@ -2488,8 +2495,9 @@ bool ARGGameModeBase::CheckStageClearCondition() const
 	}
 
 
-	// Kill 목표가 0인 일반 스테이지가 실수로 자동 완료되지 않도록 한다.
-	return TargetKillsToClear > 0;
+	// Kill 또는 Core 중 최소 하나의 목표가 정의된 일반 스테이지만 완료 가능.
+	// 둘 다 0이고 Result가 아닌 맵은 실수로 자동 완료되지 않는다.
+	return TargetKillsToClear > 0 || RequiredCoresToClear > 0;
 }
 
 
@@ -2591,6 +2599,10 @@ void ARGGameModeBase::OnEnemyDied()
 	OnKillCountChanged.Broadcast(
 		CurrentKills,
 		TargetKillsToClear
+	);
+
+	BroadcastObjectiveProgress(
+		TEXT("Kill_Default")
 	);
 
 
@@ -2732,7 +2744,12 @@ void ARGGameModeBase::ExecuteStageClear()
 			ERunState::Result
 		);
 
+		// UIManager가 결과 UI를 먼저 열 수 있도록 Delegate를 먼저 보낸다.
 		OnStageCleared.Broadcast();
+
+		// 최종 클리어에서는 월드 전체를 완전히 정지한다.
+		// 결과 UI 버튼에서 레벨 이동 직전에 다시 Unpause한다.
+		UGameplayStatics::SetGamePaused(this, true);
 
 		UE_LOG(
 			LogTemp,

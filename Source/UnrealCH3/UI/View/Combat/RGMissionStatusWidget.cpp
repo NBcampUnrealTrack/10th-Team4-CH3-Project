@@ -3,6 +3,8 @@
 
 #include "UI/View/Combat/RGMissionStatusWidget.h"
 #include "Components/TextBlock.h"
+#include "Gamemode/RGGameModeBase.h"
+#include "Kismet/GameplayStatics.h"
 
 void URGMissionStatusWidget::ApplyMissionStatus(float RemainingSeconds, int32 CurrentKills, int32 RequiredKills)
 {
@@ -37,6 +39,8 @@ void URGMissionStatusWidget::ApplyMissionStatus(float RemainingSeconds, int32 Cu
 	{
 		if (RequiredKills > 0)
 		{
+			Text_KillObjective->SetVisibility(ESlateVisibility::Visible);
+
 			const FText KillText = FText::Format(
 				NSLOCTEXT(
 					"MissionHUD",
@@ -51,13 +55,45 @@ void URGMissionStatusWidget::ApplyMissionStatus(float RemainingSeconds, int32 Cu
 		}
 		else
 		{
-			Text_KillObjective->SetText(
+			// 보스맵처럼 RequiredKills=0인 맵에서는 요구 수 자체를 표시하지 않는다.
+			Text_KillObjective->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+
+	// Core 목표는 기존 ApplyMissionStatus 시그니처를 바꾸지 않고
+	// GameMode에서 직접 읽는다. 따라서 기존 BP 호출 노드가 깨지지 않는다.
+	int32 CurrentCores = 0;
+	int32 RequiredCores = 0;
+
+	if (const ARGGameModeBase* GameMode =
+		Cast<ARGGameModeBase>(UGameplayStatics::GetGameMode(this)))
+	{
+		CurrentCores = GameMode->GetCurrentCoresDestroyed();
+		RequiredCores = GameMode->GetRequiredCoresToClear();
+	}
+
+	if (Text_CoreObjective)
+	{
+		if (RequiredCores > 0)
+		{
+			Text_CoreObjective->SetVisibility(ESlateVisibility::Visible);
+
+			const FText CoreText = FText::Format(
 				NSLOCTEXT(
 					"MissionHUD",
-					"UnknownKillTarget",
-					"ELIMINATIONS —"
-				)
+					"CoreProgress",
+					"CORES {0} / {1}"
+				),
+				FText::AsNumber(FMath::Max(0, CurrentCores)),
+				FText::AsNumber(RequiredCores)
 			);
+
+			Text_CoreObjective->SetText(CoreText);
+		}
+		else
+		{
+			// 보스맵처럼 RequiredCores=0인 맵에서는 요구 수 자체를 표시하지 않는다.
+			Text_CoreObjective->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
 
@@ -74,11 +110,23 @@ void URGMissionStatusWidget::ApplyMissionStatus(float RemainingSeconds, int32 Cu
 	// 처치 목표 or 목표 이상 처치했는지 확인
 	const bool bNewKillCompleted = RequiredKills > 0 && CurrentKills >= RequiredKills;
 
-	if (!bHasReceivedStatus || bKillObjectiveCompleted != bNewKillCompleted)
+	if (!bHasReceiveKillStatus || bKillObjectiveCompleted != bNewKillCompleted)
 	{
 		bHasReceiveKillStatus = true;
 		bKillObjectiveCompleted = bNewKillCompleted;
 
 		OnKillObjectiveCompletedChanged(bKillObjectiveCompleted);
+	}
+
+	const bool bNewCoreCompleted =
+		RequiredCores > 0 &&
+		CurrentCores >= RequiredCores;
+
+	if (!bHasReceivedCoreStatus || bCoreObjectiveCompleted != bNewCoreCompleted)
+	{
+		bHasReceivedCoreStatus = true;
+		bCoreObjectiveCompleted = bNewCoreCompleted;
+
+		OnCoreObjectiveCompletedChanged(bCoreObjectiveCompleted);
 	}
 }

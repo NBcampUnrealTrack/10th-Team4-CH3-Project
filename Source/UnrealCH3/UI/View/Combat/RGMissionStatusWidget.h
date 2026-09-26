@@ -29,6 +29,11 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "UI|Mission", meta = (BindWidget))
 	TObjectPtr<UTextBlock> Text_KillObjective;
 
+	// 기존 Widget Blueprint에 아직 Text가 없어도 컴파일이 깨지지 않도록 Optional로 둔다.
+	// 표시하려면 WBP에 TextBlock을 추가하고 이름을 정확히 Text_CoreObjective로 지정한다.
+	UPROPERTY(BlueprintReadOnly, Category = "UI|Mission", meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_CoreObjective;
+
 	//경고 표시 시간
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Mission")
 	float TimeWarningThreshold = 30.f;
@@ -39,10 +44,16 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI|Mission")
 	void OnKillObjectiveCompletedChanged(bool bCompleted);
 
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI|Mission")
+	void OnCoreObjectiveCompletedChanged(bool bCompleted);
+
 private:
 	bool bHasReceivedStatus = false;
 	bool bTimeWarningActive = false;
 
 	bool bHasReceiveKillStatus = false;
 	bool bKillObjectiveCompleted = false;
+
+	bool bHasReceivedCoreStatus = false;
+	bool bCoreObjectiveCompleted = false;
 };

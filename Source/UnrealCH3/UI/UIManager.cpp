@@ -953,6 +953,9 @@ void AUIManager::ShowClearResult()
 
 void AUIManager::HandleResultRetryRequested()
 {
+	// 최종 클리어 시 SetGamePaused(true)로 멈춘 월드를 해제한 뒤 이동/종료한다.
+	UGameplayStatics::SetGamePaused(this, false);
+
 	const FString CurrentLevelName =
 		UGameplayStatics::GetCurrentLevelName(this, true);
 
@@ -967,6 +970,9 @@ void AUIManager::HandleResultRetryRequested()
 
 void AUIManager::HandleResultStartOverRequested()
 {
+	// 최종 클리어 시 SetGamePaused(true)로 멈춘 월드를 해제한 뒤 이동/종료한다.
+	UGameplayStatics::SetGamePaused(this, false);
+
 	if (UGameInstance* GameInstance = GetGameInstance())
 	{
 		if (
@@ -983,6 +989,9 @@ void AUIManager::HandleResultStartOverRequested()
 
 void AUIManager::HandleResultMainMenuRequested()
 {
+	// 최종 클리어 시 SetGamePaused(true)로 멈춘 월드를 해제한 뒤 이동/종료한다.
+	UGameplayStatics::SetGamePaused(this, false);
+
 	if (UGameInstance* GameInstance = GetGameInstance())
 	{
 		if (
@@ -999,6 +1008,9 @@ void AUIManager::HandleResultMainMenuRequested()
 
 void AUIManager::HandleResultExitRequested()
 {
+	// 최종 클리어 시 SetGamePaused(true)로 멈춘 월드를 해제한 뒤 이동/종료한다.
+	UGameplayStatics::SetGamePaused(this, false);
+
 	APlayerController* PlayerController =
 		GetWorld()
 		? GetWorld()->GetFirstPlayerController()
