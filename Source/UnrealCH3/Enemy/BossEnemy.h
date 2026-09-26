@@ -26,9 +26,11 @@ public:
 	void FireProjectile();
 	void ShockWave();
 	void HomingMissile();
+	void RiseSpike();
 	void PhaseOnePattern();
 	void PhaseTwoPattern();
 	void ChangePhase(int32 NewPhase);
+	FVector GetGroundLocation(AActor* Actor);
 
 protected:
 	UPROPERTY(EditAnywhere, Category = "Data")

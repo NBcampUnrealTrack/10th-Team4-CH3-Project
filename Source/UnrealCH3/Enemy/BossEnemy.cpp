@@ -1,6 +1,7 @@
 ﻿#include "Enemy/BossEnemy.h"
 #include "Engine/DataTable.h"
 #include "Projectile/BaseProjectile.h"
+#include "BaseAreaAttack.h"
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
 #include "Components/DecalComponent.h"
@@ -121,9 +122,19 @@ void ABossEnemy::ShockWave()
 	ProjectileFireCount = 0;
 	bCanUseHoming = true;
 	const FBossSkillRow* Row = CachedSkills.Find(EBossSkillType::ShockWave);
-	if (!Row) return;
+	if (!Row || !TargetActor) return;
 
-	float ShockWaveDistance = 2000.0f;
+	FVector SpawnLocation = GetGroundLocation(this);
+	FRotator SpawnRotation = GetActorRotation();
+
+	ABaseAreaAttack* Attack = GetWorld()->SpawnActorDeferred<ABaseAreaAttack>(Row->AreaAttackClass, FTransform(SpawnRotation, SpawnLocation));
+	if (Attack)
+	{
+		Attack->InitializeAttack(*Row, TargetActor);
+		UGameplayStatics::FinishSpawningActor(Attack, FTransform(SpawnRotation, SpawnLocation));
+	}
+
+	/*float ShockWaveDistance = 2000.0f;
 	float ShockWaveAngle = Row->SpawnAngle;
 	FVector Forward = GetActorForwardVector();
 	FVector ToTargetVector = TargetActor->GetActorLocation() - GetActorLocation();
@@ -157,13 +168,29 @@ void ABossEnemy::ShockWave()
 		2.0f,
 		0,
 		1.0f
-	);
+	);*/
 }
 
 void ABossEnemy::HomingMissile()
 {
 	bCanUseHoming = false;
 	SpawnProjectile(EBossSkillType::HomingMissile);
+}
+
+void ABossEnemy::RiseSpike()
+{
+	const FBossSkillRow* Row = CachedSkills.Find(EBossSkillType::RiseSpike);
+	if (!Row || !TargetActor) return;
+
+	FVector SpawnLocation = GetGroundLocation(TargetActor);
+	FRotator SpawnRotation = TargetActor->GetActorRotation();
+
+	ABaseAreaAttack* Attack = GetWorld()->SpawnActorDeferred<ABaseAreaAttack>(Row->AreaAttackClass, FTransform(SpawnRotation, SpawnLocation));
+	if (Attack)
+	{
+		Attack->InitializeAttack(*Row, TargetActor);
+		UGameplayStatics::FinishSpawningActor(Attack, FTransform(SpawnRotation, SpawnLocation));
+	}
 }
 
 void ABossEnemy::PhaseOnePattern()
@@ -180,6 +207,13 @@ void ABossEnemy::PhaseOnePattern()
 
 void ABossEnemy::PhaseTwoPattern()
 {
+	if (ProjectileFireCount == 3)
+	{
+		ProjectileFireCount++;
+		RiseSpike();
+		return;
+	}
+
 	if (bCanUseHoming)
 	{
 		HomingMissile();
@@ -194,5 +228,24 @@ void ABossEnemy::ChangePhase(int32 NewPhase)
 {
 	CurrentPhase = NewPhase;
 	ProjectileFireCount = 0;
+}
+
+FVector ABossEnemy::GetGroundLocation(AActor* Actor)
+{
+	if (!Actor) return FVector::ZeroVector;
+
+	FVector Start = Actor->GetActorLocation();
+	FVector End = Start - FVector(0.0f, 0.0f, 2000.0f);
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(Actor);
+	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECollisionChannel::ECC_Visibility, Params);
+	if (bHit)
+	{
+		return Hit.ImpactPoint;
+	}
+
+	return Start;
 }
 
