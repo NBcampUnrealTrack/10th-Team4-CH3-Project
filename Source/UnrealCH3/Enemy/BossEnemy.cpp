@@ -5,6 +5,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
 #include "Components/DecalComponent.h"
+#include "Gamemode/RGGameModeBase.h"
 
 ABossEnemy::ABossEnemy()
 {
@@ -22,6 +23,10 @@ void ABossEnemy::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// 보스맵에 배치된 DataCore 수를 최초 1회 저장한다.
+	// 실제 남은 수는 GameMode의 CurrentCoresDestroyed와 조합해서 계산한다.
+	CacheInitialBossCoreCount();
+
 	if (SkillDataTable)
 	{
 		TArray<FBossSkillRow*> AllRows;
@@ -35,6 +40,120 @@ void ABossEnemy::BeginPlay()
 			}
 		}
 	}
+}
+
+
+float ABossEnemy::TakeDamage(
+	float DamageAmount,
+	FDamageEvent const& DamageEvent,
+	AController* EventInstigator,
+	AActor* DamageCauser
+)
+{
+	if (DamageAmount <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	const int32 RemainingCoreCount = GetRemainingBossCoreCount();
+	const float DamageMultiplier = GetCurrentCoreShieldDamageMultiplier();
+	const float ReducedDamage = DamageAmount * DamageMultiplier;
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT(
+			"[Boss Core Shield] RemainingCores=%d / Incoming=%.2f / "
+			"Multiplier=%.2f / AppliedRequest=%.2f"
+		),
+		RemainingCoreCount,
+		DamageAmount,
+		DamageMultiplier,
+		ReducedDamage
+	);
+
+	return Super::TakeDamage(
+		ReducedDamage,
+		DamageEvent,
+		EventInstigator,
+		DamageCauser
+	);
+}
+
+void ABossEnemy::CacheInitialBossCoreCount()
+{
+	InitialBossCoreCount = 0;
+
+	if (!GetWorld() || BossCoreActorTag.IsNone())
+	{
+		return;
+	}
+
+	TArray<AActor*> FoundCoreActors;
+	UGameplayStatics::GetAllActorsWithTag(
+		this,
+		BossCoreActorTag,
+		FoundCoreActors
+	);
+
+	InitialBossCoreCount = FoundCoreActors.Num();
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT(
+			"[Boss Core Shield] Initial core count=%d / Tag=%s"
+		),
+		InitialBossCoreCount,
+		*BossCoreActorTag.ToString()
+	);
+}
+
+int32 ABossEnemy::GetRemainingBossCoreCount() const
+{
+	if (InitialBossCoreCount <= 0)
+	{
+		return 0;
+	}
+
+	const ARGGameModeBase* GameMode =
+		Cast<ARGGameModeBase>(UGameplayStatics::GetGameMode(this));
+
+	if (!IsValid(GameMode))
+	{
+		return InitialBossCoreCount;
+	}
+
+	return FMath::Clamp(
+		InitialBossCoreCount - GameMode->GetCurrentCoresDestroyed(),
+		0,
+		InitialBossCoreCount
+	);
+}
+
+float ABossEnemy::GetCurrentCoreShieldDamageMultiplier() const
+{
+	const int32 RemainingCoreCount = GetRemainingBossCoreCount();
+
+	if (RemainingCoreCount <= 0)
+	{
+		return 1.0f;
+	}
+
+	const float SafeReductionPerCore =
+		FMath::Clamp(DamageReductionPerRemainingCore, 0.0f, 1.0f);
+
+	const float SafeMinimumMultiplier =
+		FMath::Clamp(MinimumDamageMultiplierWhileCoreAlive, 0.0f, 1.0f);
+
+	const float RawMultiplier =
+		1.0f - (SafeReductionPerCore * RemainingCoreCount);
+
+	return FMath::Clamp(
+		RawMultiplier,
+		SafeMinimumMultiplier,
+		1.0f
+	);
 }
 
 void ABossEnemy::Attack()
