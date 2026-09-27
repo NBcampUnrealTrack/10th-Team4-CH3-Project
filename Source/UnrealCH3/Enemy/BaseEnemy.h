@@ -225,4 +225,8 @@ protected:
 
     // 공격 제한 해제 타이머
     FTimerHandle RecoveryAttackLockTimer;
+
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+    USoundBase* AttackSound;
 };
