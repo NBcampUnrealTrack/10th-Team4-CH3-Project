@@ -5,11 +5,15 @@
 #include "RGBaseWeapon.h"
 #include "RGRailgun.generated.h"
 
+class USoundBase;
+class UAudioComponent;
+
 //현재 레일건은 라인트레이스 방식으로 공격 . 범위 피해는 아직 구현되지 않음
 UCLASS()
 class UNREALCH3_API ARGRailgun : public ARGBaseWeapon
 {
 	GENERATED_BODY()
+
 
 public:
 	// =========== 캐릭터는 레일건에서 좌클릭을 뗄 떼 StopFire()가 아닌 ReleaseChargeAndFire()를 불러와야한다,
@@ -97,4 +101,19 @@ protected:
 protected:
 	float GetFireTraceRadius() const;
 
+	// ============ 사운드 =============
+protected:
+	virtual void PlayFireSound() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	void StartBeamSound();
+	void StopBeamSound();
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Sound")
+	TObjectPtr<USoundBase> BeamLoopSound;
+
+	UPROPERTY()
+	TObjectPtr<UAudioComponent> BeamAudio;
+
 };
+

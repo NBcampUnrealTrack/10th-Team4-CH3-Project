@@ -9,6 +9,7 @@
 class USkeletalMeshComponent;
 class UDataTable;
 class ACharacter;
+class USoundBase;  
 
 //UI 바인딩용 델리게이트 _ 리로드시작 리로드끝 에이밍 총알갯수변경 시 델리게이트 호출 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAmmoChanged, int32, CurrentAmmo, int32, MagazineCapacity);
@@ -256,4 +257,12 @@ public:
 public:
 	float GetVerticalRecoil() const { return WeaponStats.VerticalRecoil; }
 	float GetHorizontalRecoil() const { return WeaponStats.HorizontalRecoil; }
+
+	// =================== 사운드 ==================
+	protected:
+		UPROPERTY(EditDefaultsOnly, Category = "Weapon|Sound")
+		TObjectPtr<USoundBase> FireSound;
+
+		void PlayWeaponSound(USoundBase* Sound);
+		virtual void PlayFireSound();
 };

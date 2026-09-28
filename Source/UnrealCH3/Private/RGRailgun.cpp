@@ -1,6 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
+#include "Components/AudioComponent.h"
 #include "RGRailgun.h"
 #include "gamemode/RGProgressionSubsystem.h"
 #include "Engine/World.h"
@@ -107,6 +108,7 @@ void ARGRailgun::ReleaseChargeAndFire() {
 	OnAmmoChanged.Broadcast(CurrentAmmo, GetMagazineCapacity());
 	//반동 트리거 방송
 	OnShotFired.Broadcast();
+	PlayFireSound();
 
 	if (CurrentAmmo <= 0) {
 		StartReloaded();
@@ -166,6 +168,7 @@ void ARGRailgun::StartBeamFire()
 	}
 
 	bIsBeamFiring = true;
+	StartBeamSound();
 	// BeamFireElapsedSinceLastAmmoConsumed는 여기서 리셋하지 않음
 	// -> 끊어 쏴도 누적된 시간이 계속 유지되어 정확히 계산됨
 
@@ -177,6 +180,7 @@ void ARGRailgun::StopBeamFire()
 {
 	bIsBeamFiring = false;
 	GetWorldTimerManager().ClearTimer(BeamFireTimerHandle);
+	StopBeamSound();
 }
 
 void ARGRailgun::HandleBeamFireTick()
@@ -210,6 +214,8 @@ void ARGRailgun::HandleBeamFireTick()
 	{
 		TryTriggerHomingDamage(Hit, TickDamage);   // 추가
 	}
+
+	OnShotFired.Broadcast();
 
 	// 시간 기반 탄약 소모: 누적 1초마다 탄약 1발 차감 (끊어 쏴도 정확히 누적됨)
 	const float AmmoConsumeInterval = 1.0f;
@@ -328,4 +334,36 @@ float ARGRailgun::GetFireTraceRadius() const
 		}
 	}
 	return 0.f;
+}
+
+
+void ARGRailgun::PlayFireSound()
+{	// 빔 중에는 발사음 X 
+	if (IsBeamFiring()) return;   
+	// 일반 차지샷은 뗄 때 발사되므로 그때 1번 재생
+	Super::PlayFireSound();       
+}
+
+void ARGRailgun::StartBeamSound()
+{
+	if (!BeamLoopSound) return;
+	StopBeamSound();   // 혹시 남아있는 거 정리
+	BeamAudio = UGameplayStatics::SpawnSoundAttached(BeamLoopSound, GetRootComponent());
+}
+
+void ARGRailgun::StopBeamSound()
+{
+	if (BeamAudio)
+
+	{	 // 뚝 끊기지 않게
+		BeamAudio->FadeOut(0.1f, 0.f);  
+		BeamAudio = nullptr;
+	}
+}
+
+void ARGRailgun::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// 무기 교체/파괴 시 소리 남는 것 방지
+	StopBeamSound();   
+	Super::EndPlay(EndPlayReason);
 }
