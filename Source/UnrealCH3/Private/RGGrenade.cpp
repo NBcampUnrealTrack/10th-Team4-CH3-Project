@@ -278,5 +278,11 @@ void ARGGrenade::ExplodeGrenade()
 		InstigatorController
 	);
 
+	if (ExplosionSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, GetActorLocation());
+	}
+
+
 	Destroy();
 }

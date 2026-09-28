@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -9,7 +9,7 @@
 class USphereComponent;
 class UProjectileMovementComponent;
 class UStaticMeshComponent;
-	
+class USoundBase;
 // 수류탄을 담당하는 클래스
 // 투척 -> 이동 -> 신관 -> 폭발까지 처리
 UCLASS()
@@ -93,4 +93,9 @@ private:
 	// 전투가 끝날 떄 날아가는 수류탄을 지울 때 쓰는 코드
 	// 엑터가 살아있으면 포인터 , 죽어있으면 nullptr 반환해서 댕글링포인터 막기
 	static TWeakObjectPtr<ARGGrenade> ActiveGrenade;
+
+	// 사운드
+protected:
+	UPROPERTY(EditDefaultsOnly, Category = "Grenade|Sound")
+	TObjectPtr<USoundBase> ExplosionSound;
 };
