@@ -6,6 +6,8 @@
 #include "Engine/World.h"
 #include "Enemy/BaseEnemy.h"
 #include "Engine/OverlapResult.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
 #include "Kismet/GameplayStatics.h" 
 
 //충전 시작만 하는 함수
@@ -142,6 +144,8 @@ void ARGRailgun::FireChargedShot(float ChargeRatio01) {
 		}
 		TryTriggerHomingDamage(Hit, Damage);   // 추가: 이 관통 지점마다 유도 데미지 시도
 	}
+
+	SpawnChargeShotBeam(GetBeamVisualEnd());
 }
 
 float ARGRailgun::GetChargeSpeedMultiplier() const
@@ -168,6 +172,7 @@ void ARGRailgun::StartBeamFire()
 
 	bIsBeamFiring = true;
 	StartBeamSound();
+	StartBeamVisual();
 	// BeamFireElapsedSinceLastAmmoConsumed는 여기서 리셋하지 않음
 	// -> 끊어 쏴도 누적된 시간이 계속 유지되어 정확히 계산됨
 
@@ -180,6 +185,7 @@ void ARGRailgun::StopBeamFire()
 	bIsBeamFiring = false;
 	GetWorldTimerManager().ClearTimer(BeamFireTimerHandle);
 	StopBeamSound();
+	StopBeamVisual();
 }
 
 void ARGRailgun::HandleBeamFireTick()
@@ -364,5 +370,95 @@ void ARGRailgun::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// 무기 교체/파괴 시 소리 남는 것 방지
 	StopBeamSound();   
+	StopBeamVisual();
 	Super::EndPlay(EndPlayReason);
+}
+
+// 조준 방향으로 트레이스해서 빔이 닿을 끝점 계산 (시각용)
+FVector ARGRailgun::GetBeamVisualEnd() const
+{
+	FVector ViewStart, ViewDir;
+	if (!GetMuzzleAimTransform(ViewStart, ViewDir))
+	{
+		return GetMuzzleLocation();
+	}
+
+	const FVector TraceEnd = ViewStart + ViewDir * TraceRange;
+
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(RailBeamVisual), false);
+	Params.AddIgnoredActor(this);
+	if (OwningCharacter)
+	{
+		Params.AddIgnoredActor(OwningCharacter);
+	}
+
+	FHitResult Hit;
+	if (GetWorld()->LineTraceSingleByChannel(Hit, ViewStart, TraceEnd, TraceChannel, Params))
+	{
+		return Hit.ImpactPoint;
+	}
+	return TraceEnd;
+}
+
+// 차지샷: 잠깐 번쩍이고 사라지는 빔
+void ARGRailgun::SpawnChargeShotBeam(const FVector& EndLocation)
+{
+	if (!RailBeamEffect) return;
+
+	const FVector Start = GetMuzzleLocation();
+	UNiagaraComponent* Beam = UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, RailBeamEffect, Start);
+	if (!Beam) return;
+
+	Beam->SetVariablePosition(TEXT("Beam Start"), Start);
+	Beam->SetVariablePosition(TEXT("Beam End"), EndLocation);
+	Beam->SetVariableLinearColor(TEXT("BeamColor"), ChargeShotColor);
+
+	// 일정 시간 뒤 제거
+	TWeakObjectPtr<UNiagaraComponent> WeakBeam = Beam;
+	FTimerHandle BeamTimer;
+	GetWorldTimerManager().SetTimer(BeamTimer, [WeakBeam]()
+		{
+			if (WeakBeam.IsValid())
+			{
+				WeakBeam->DestroyComponent();
+			}
+		}, ChargeShotBeamDuration, false);
+}
+
+// 빔 모드: 누르는 동안 유지되는 빔 생성
+void ARGRailgun::StartBeamVisual()
+{
+	if (!RailBeamEffect) return;
+
+	StopBeamVisual();   // 혹시 남아있는 거 정리
+
+	ActiveBeamComponent = UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+		this, RailBeamEffect, GetMuzzleLocation(), FRotator::ZeroRotator,
+		FVector(1.f), false);   // 자동 삭제 끔 (직접 관리)
+
+	if (ActiveBeamComponent)
+	{
+		ActiveBeamComponent->SetVariableLinearColor(TEXT("BeamColor"), BeamModeColor);
+	}
+}
+
+void ARGRailgun::StopBeamVisual()
+{
+	if (ActiveBeamComponent)
+	{
+		ActiveBeamComponent->DestroyComponent();
+		ActiveBeamComponent = nullptr;
+	}
+}
+
+// 빔 모드 중 매 프레임 시작점/끝점 갱신 (조준 따라 부드럽게 움직이게)
+void ARGRailgun::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (bIsBeamFiring && ActiveBeamComponent)
+	{
+		ActiveBeamComponent->SetVariablePosition(TEXT("Beam Start"), GetMuzzleLocation());
+		ActiveBeamComponent->SetVariablePosition(TEXT("Beam End"), GetBeamVisualEnd());
+	}
 }

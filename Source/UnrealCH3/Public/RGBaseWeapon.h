@@ -290,4 +290,8 @@ protected:
 	void PlayTracerEffect(const FVector& EndLocation);
 	void PlayImpactEffect(const FHitResult& Hit);
 	void PlayExplosionEffect(const FVector& Location);
+
+	// 총구 위치 표시용 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon|Effect")
+	TObjectPtr<USceneComponent> MuzzlePoint;
 };

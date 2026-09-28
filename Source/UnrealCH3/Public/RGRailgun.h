@@ -8,6 +8,9 @@
 class USoundBase;
 class UAudioComponent;
 
+class UNiagaraSystem;
+class UNiagaraComponent;
+
 //현재 레일건은 라인트레이스 방식으로 공격 . 범위 피해는 아직 구현되지 않음
 UCLASS()
 class UNREALCH3_API ARGRailgun : public ARGBaseWeapon
@@ -114,6 +117,35 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UAudioComponent> BeamAudio;
+
+	// ============ 이펙트 =============
+public:
+	virtual void Tick(float DeltaTime) override;
+
+protected:
+	UPROPERTY(EditDefaultsOnly, Category = "Railgun|Effect")
+	TObjectPtr<UNiagaraSystem> RailBeamEffect;
+
+	// 일반 차지샷 빔 색
+	UPROPERTY(EditDefaultsOnly, Category = "Railgun|Effect")
+	FLinearColor ChargeShotColor = FLinearColor(0.2f, 0.6f, 1.0f);
+
+	// 빔 모드 색
+	UPROPERTY(EditDefaultsOnly, Category = "Railgun|Effect")
+	FLinearColor BeamModeColor = FLinearColor(1.0f, 0.2f, 0.2f);
+
+	// 차지샷 빔이 보이는 시간
+	UPROPERTY(EditDefaultsOnly, Category = "Railgun|Effect")
+	float ChargeShotBeamDuration = 0.15f;
+
+	// 빔 모드 중 유지되는 빔
+	UPROPERTY()
+	TObjectPtr<UNiagaraComponent> ActiveBeamComponent;
+
+	FVector GetBeamVisualEnd() const;
+	void SpawnChargeShotBeam(const FVector& EndLocation);
+	void StartBeamVisual();
+	void StopBeamVisual();
 
 };
 

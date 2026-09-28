@@ -12,6 +12,9 @@ class UStaticMeshComponent;
 class USoundBase;
 // 수류탄을 담당하는 클래스
 // 투척 -> 이동 -> 신관 -> 폭발까지 처리
+
+class UNiagaraSystem;
+
 UCLASS()
 class UNREALCH3_API ARGGrenade : public AActor
 {
@@ -98,4 +101,7 @@ private:
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Grenade|Sound")
 	TObjectPtr<USoundBase> ExplosionSound;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Grenade|Effect")
+	TObjectPtr<UNiagaraSystem> ExplosionEffect;
 };

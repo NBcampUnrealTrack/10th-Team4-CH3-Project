@@ -21,6 +21,8 @@ ARGBaseWeapon::ARGBaseWeapon()
 
 	WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMesh"));
 	RootComponent = WeaponMesh;
+	MuzzlePoint = CreateDefaultSubobject<USceneComponent>(TEXT("MuzzlePoint"));
+	MuzzlePoint->SetupAttachment(WeaponMesh);
 }
 
 void ARGBaseWeapon::ReceiveDamageFeedback(float AppliedDamage, bool bKilled, AActor* TargetActor, const FVector& WorldLocation)
@@ -165,6 +167,7 @@ void ARGBaseWeapon::HandleFireTick()
 	// 발사 처리 Broadcast
 	OnShotFired.Broadcast();
 	PlayFireSound();
+	PlayMuzzleEffect();
 
 	// 탄약이 바뀌는 이 시점에만 딱 한 번 방송. 누가 듣고 있는지는 몰라도 됨.
 	OnAmmoChanged.Broadcast(CurrentAmmo, GetMagazineCapacity());
@@ -848,19 +851,15 @@ void ARGBaseWeapon::PlayFireSound()
 
 FVector ARGBaseWeapon::GetMuzzleLocation() const
 {
-	if (WeaponMesh && WeaponMesh->DoesSocketExist(MuzzleSocketName))
-	{
-		return WeaponMesh->GetSocketLocation(MuzzleSocketName);
-	}
-	return GetActorLocation();
+	return MuzzlePoint ? MuzzlePoint->GetComponentLocation() : GetActorLocation();
 }
 
 void ARGBaseWeapon::PlayMuzzleEffect()
 {
-	if (!MuzzleEffect || !WeaponMesh) return;
+	if (!MuzzleEffect || !MuzzlePoint) return;
 
 	UNiagaraFunctionLibrary::SpawnSystemAttached(
-		MuzzleEffect, WeaponMesh, MuzzleSocketName,
+		MuzzleEffect, MuzzlePoint, NAME_None,
 		FVector::ZeroVector, FRotator::ZeroRotator,
 		EAttachLocation::SnapToTarget, true);
 }
