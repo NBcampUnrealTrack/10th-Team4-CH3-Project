@@ -1,8 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
-
-#include "Components/AudioComponent.h"
 #include "RGRailgun.h"
+#include "Components/AudioComponent.h"
 #include "gamemode/RGProgressionSubsystem.h"
 #include "Engine/World.h"
 #include "Enemy/BaseEnemy.h"

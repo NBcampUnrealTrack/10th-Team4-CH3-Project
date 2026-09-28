@@ -1,8 +1,10 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RGGrenade.h"
 
 #include "Components/SphereComponent.h"
+#include "Player/RGCharacter.h"
+#include "RGBaseWeapon.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "GameFramework/Pawn.h"
@@ -239,34 +241,42 @@ void ARGGrenade::OnFuseTimerComplete()
 // 수류탄 폭발 처리
 void ARGGrenade::ExplodeGrenade()
 {
-	// 폭발 데미지를 받지 않을 액터 목록
 	TArray<AActor*> IgnoreActors;
-	// 던진 사람은 폭발 데미지를 받지 않음
 	if (Thrower)
 	{
 		IgnoreActors.Add(Thrower);
 	}
-	// 데미지를 준 사람의 Controller
+	IgnoreActors.Add(this);   // 추가: 수류탄 자신이 판정에 끼지 않게
+
 	AController* InstigatorController = nullptr;
-	// 던진 사람이 Pawn이면 Controller 가져오기
 	if (APawn* Pawn = Cast<APawn>(Thrower))
 	{
 		InstigatorController = Pawn->GetController();
 	}
-	// 폭발 범위 안에 있는 액터들에게 데미지 적용
+
+	// 추가: 피드백(히트마커/데미지 숫자)을 받을 대상 = 플레이어의 현재 무기
+	AActor* FeedbackCauser = this;
+	if (ARGCharacter* Character = Cast<ARGCharacter>(Thrower))
+	{
+		if (ARGBaseWeapon* Weapon = Character->GetCurrentWeapon())
+		{
+			FeedbackCauser = Weapon;
+		}
+	}
+
 	UGameplayStatics::ApplyRadialDamageWithFalloff(
-		this,                       // 데미지를 발생시킨 액터
-		ExplosionDamage,            // 최대 데미지
-		ExplosionDamage,            // 최소 데미지
-		GetActorLocation(),         // 폭발 위치
-		ExplosionRadius,            // 데미지 범위 시작
-		ExplosionRadius,            // 최대 데미지 범위
-		1.f,                        // 데미지 감소 정도
-		UDamageType::StaticClass(), // 데미지 타입
-		IgnoreActors,               // 데미지 제외 대상
-		this,                       // 데미지 발생 액터
-		InstigatorController        // 데미지를 발생시킨 Controller
+		this,
+		ExplosionDamage,
+		ExplosionDamage,
+		GetActorLocation(),
+		ExplosionRadius,
+		ExplosionRadius,
+		1.f,
+		UDamageType::StaticClass(),
+		IgnoreActors,
+		FeedbackCauser,        // ← this 대신 무기
+		InstigatorController
 	);
-	// 폭발 끝 수류탄 제거
+
 	Destroy();
 }
