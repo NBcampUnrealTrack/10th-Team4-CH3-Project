@@ -18,6 +18,13 @@
 #include "InputCoreTypes.h"
 #include "TimerManager.h"
 
+// [Result Cleanup] GameOver / Final Result에서 남아 있는 전투 Actor 정리
+#include "Enemy/EnemySpawnManager.h"
+#include "Enemy/BaseEnemy.h"
+#include "Enemy/BaseAreaAttack.h"
+#include "Projectile/BaseProjectile.h"
+#include "RGGrenade.h"
+
 
 // =========================================================
 // Constructor
@@ -465,6 +472,20 @@ void ARGGameModeBase::BeginPlay()
 
 
 	// -----------------------------------------------------
+	// 새 World는 반드시 Unpause 상태로 시작
+	// -----------------------------------------------------
+	//
+	// 이전 Result World에서는 ClearPause()가 Unpause를 막는다.
+	// OpenLevel 이후 생성된 새 GameMode의 CurrentState는 Init이므로
+	// 여기서는 정상적으로 Pause가 해제된다.
+	// -----------------------------------------------------
+	UGameplayStatics::SetGamePaused(
+		this,
+		false
+	);
+
+
+	// -----------------------------------------------------
 	// Progression 초기화
 	// -----------------------------------------------------
 
@@ -607,6 +628,46 @@ void ARGGameModeBase::BeginPlay()
 	}
 
 	GetWorldTimerManager().SetTimerForNextTick(this, &ARGGameModeBase::BroadcastInitialRunStatus);
+}
+
+
+// =========================================================
+// ClearPause
+// =========================================================
+
+bool ARGGameModeBase::ClearPause()
+{
+	// -----------------------------------------------------
+	// Result 화면에서 기존 World를 다시 실행시키지 않는다.
+	// -----------------------------------------------------
+	//
+	// 현재 UIManager의 Result 버튼은
+	// SetGamePaused(false) -> OpenLevel(...) 순서로 동작한다.
+	//
+	// 여기서 Result World의 Unpause를 허용하면 OpenLevel 직전에
+	// 남아 있던 Projectile / Particle Lambda Timer가 다시 Tick하면서
+	// 이미 파괴된 UObject를 참조할 가능성이 있다.
+	//
+	// 따라서 Result 상태에서는 Unpause 요청만 거부하고,
+	// UIManager가 이어서 호출하는 OpenLevel은 그대로 실행되게 둔다.
+	// -----------------------------------------------------
+
+	if (CurrentState == ERunState::Result)
+	{
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT(
+				"[RGGameMode] "
+				"Unpause blocked while Result World is waiting for level travel."
+			)
+		);
+
+		return false;
+	}
+
+
+	return Super::ClearPause();
 }
 
 
@@ -2633,6 +2694,197 @@ void ARGGameModeBase::OnEnemyDied()
 
 
 // =========================================================
+// CleanupTransientGameplayActors
+// =========================================================
+
+void ARGGameModeBase::CleanupTransientGameplayActors()
+{
+	UWorld* World = GetWorld();
+
+	if (!World)
+	{
+		return;
+	}
+
+
+	FTimerManager& TimerManager =
+		World->GetTimerManager();
+
+
+	// -----------------------------------------------------
+	// 1. EnemySpawnManager부터 중지
+	// -----------------------------------------------------
+	// 적을 먼저 Destroy했을 때 SpawnManager가 빈 자리를 감지해
+	// 다시 적을 보충하지 못하도록 Spawn 기능부터 끈다.
+	// -----------------------------------------------------
+
+	TArray<AActor*> SpawnManagers;
+
+	UGameplayStatics::GetAllActorsOfClass(
+		this,
+		AEnemySpawnManager::StaticClass(),
+		SpawnManagers
+	);
+
+
+	for (AActor* Actor : SpawnManagers)
+	{
+		AEnemySpawnManager* SpawnManager =
+			Cast<AEnemySpawnManager>(Actor);
+
+		if (!IsValid(SpawnManager))
+		{
+			continue;
+		}
+
+
+		SpawnManager->SetSpawningEnabled(
+			false
+		);
+
+		TimerManager.ClearAllTimersForObject(
+			SpawnManager
+		);
+	}
+
+
+	// -----------------------------------------------------
+	// 2. Player / Weapon의 반복 Timer와 행동 정리
+	// -----------------------------------------------------
+	// Player 자체를 Destroy하면 Result UI / Controller 연결에 영향을
+	// 줄 수 있으므로 Player는 유지하고 반복 동작만 중단한다.
+	// -----------------------------------------------------
+
+	if (
+		ARGCharacter* PlayerCharacter =
+		Cast<ARGCharacter>(
+			UGameplayStatics::GetPlayerCharacter(
+				this,
+				0
+			)
+		)
+		)
+	{
+		PlayerCharacter->ClearTimerHandle();
+		PlayerCharacter->ResetAllState();
+
+		TimerManager.ClearAllTimersForObject(
+			PlayerCharacter
+		);
+
+
+		if (
+			ARGBaseWeapon* CurrentWeapon =
+			PlayerCharacter->GetCurrentWeapon()
+			)
+		{
+			CurrentWeapon->SetExternalActionsAllowed(
+				false
+			);
+
+			TimerManager.ClearAllTimersForObject(
+				CurrentWeapon
+			);
+		}
+	}
+
+
+	// -----------------------------------------------------
+	// 3. 전투 중 생성되는 Actor만 선별 Destroy
+	// -----------------------------------------------------
+	// 절대로 GetAllActorsOfClass(AActor)로 전체 Actor를 지우면 안 된다.
+	// UIManager / HUD / PlayerController / GameMode 등이 사라지면
+	// Retry / Start Over / Main Menu 버튼이 더 이상 동작하지 않는다.
+	// -----------------------------------------------------
+
+	auto DestroyActorsOfClass =
+		[this, &TimerManager](
+			TSubclassOf<AActor> ActorClass,
+			const TCHAR* DebugLabel
+		)
+		{
+			if (!ActorClass)
+			{
+				return;
+			}
+
+
+			TArray<AActor*> FoundActors;
+
+			UGameplayStatics::GetAllActorsOfClass(
+				this,
+				ActorClass,
+				FoundActors
+			);
+
+
+			int32 DestroyedCount = 0;
+
+
+			for (AActor* Actor : FoundActors)
+			{
+				if (!IsValid(Actor))
+				{
+					continue;
+				}
+
+
+				TimerManager.ClearAllTimersForObject(
+					Actor
+				);
+
+				Actor->SetActorEnableCollision(
+					false
+				);
+
+				Actor->SetActorTickEnabled(
+					false
+				);
+
+
+				if (Actor->Destroy())
+				{
+					++DestroyedCount;
+				}
+			}
+
+
+			UE_LOG(
+				LogTemp,
+				Log,
+				TEXT(
+					"[RGGameMode][Cleanup] %s destroyed: %d"
+				),
+				DebugLabel,
+				DestroyedCount
+			);
+		};
+
+
+	// 공격 Actor를 먼저 제거한 뒤 Enemy를 마지막에 제거한다.
+	DestroyActorsOfClass(
+		ABaseProjectile::StaticClass(),
+		TEXT("Projectile")
+	);
+
+	DestroyActorsOfClass(
+		ABaseAreaAttack::StaticClass(),
+		TEXT("AreaAttack")
+	);
+
+	DestroyActorsOfClass(
+		ARGGrenade::StaticClass(),
+		TEXT("Grenade")
+	);
+
+	DestroyActorsOfClass(
+		ABaseEnemy::StaticClass(),
+		TEXT("Enemy/Boss")
+	);
+}
+
+
+// =========================================================
 // ExecuteGameOver
 // =========================================================
 
@@ -2666,6 +2918,30 @@ void ARGGameModeBase::ExecuteGameOver(
 	OnGameOver.Broadcast(
 		Reason
 	);
+
+
+	// -----------------------------------------------------
+	// World 전체 Pause
+	// -----------------------------------------------------
+	// ChangeRunState(Result)의 TimePolicy=Paused는 RunTimer만 멈춘다.
+	// Enemy / Projectile / Physics / 일반 Actor Tick까지 완전히 정지하려면
+	// World Pause를 별도로 걸어야 한다.
+	// -----------------------------------------------------
+
+	UGameplayStatics::SetGamePaused(
+		this,
+		true
+	);
+
+
+	// -----------------------------------------------------
+	// 전투용 동적 Actor 정리
+	// -----------------------------------------------------
+	// Result UI와 레벨 이동을 담당하는 시스템 Actor는 남기고,
+	// 전투 중 생성된 Actor와 Timer만 정리한다.
+	// -----------------------------------------------------
+
+	CleanupTransientGameplayActors();
 
 
 	// -----------------------------------------------------
@@ -2750,6 +3026,11 @@ void ARGGameModeBase::ExecuteStageClear()
 		// 최종 클리어에서는 월드 전체를 완전히 정지한다.
 		// 결과 UI 버튼에서 레벨 이동 직전에 다시 Unpause한다.
 		UGameplayStatics::SetGamePaused(this, true);
+
+		// 최종 Result에서도 GameOver와 동일하게 전투용 동적 Actor를 정리한다.
+		// Start Over / Main Menu 직전 기존 World의 잔여 공격/Timer가
+		// 다시 실행되는 상황을 방지한다.
+		CleanupTransientGameplayActors();
 
 		UE_LOG(
 			LogTemp,

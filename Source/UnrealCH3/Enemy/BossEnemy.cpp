@@ -228,6 +228,7 @@ void ABossEnemy::SpawnProjectile(EBossSkillType Type)
 			UGameplayStatics::FinishSpawningActor(Projectile, FTransform(SpawnRotation, SpawnLocation));
 		}
 	}
+	PlayAnimMontage(Row->SkillMontage);
 }
 
 void ABossEnemy::FireProjectile()
@@ -252,42 +253,7 @@ void ABossEnemy::ShockWave()
 		Attack->InitializeAttack(*Row, TargetActor);
 		UGameplayStatics::FinishSpawningActor(Attack, FTransform(SpawnRotation, SpawnLocation));
 	}
-
-	/*float ShockWaveDistance = 2000.0f;
-	float ShockWaveAngle = Row->SpawnAngle;
-	FVector Forward = GetActorForwardVector();
-	FVector ToTargetVector = TargetActor->GetActorLocation() - GetActorLocation();
-
-	float Distance = ToTargetVector.Size2D();
-	if (Distance <= ShockWaveDistance)
-	{
-		FVector ToTargetDir = ToTargetVector.GetSafeNormal();
-		float Dot = FVector::DotProduct(ToTargetDir, Forward);
-
-		if (Dot >= FMath::Cos(FMath::DegreesToRadians(ShockWaveAngle)))
-		{
-			if (TargetActor && TargetActor->ActorHasTag(TEXT("Player")))
-			{
-				UGameplayStatics::ApplyDamage(TargetActor, Row->Damage, GetController(), this, UDamageType::StaticClass());
-				UE_LOG(LogTemp, Warning, TEXT("ShockWave"));
-			}
-		}
-	}
-
-	DrawDebugCone(
-		GetWorld(),
-		GetActorLocation(),
-		GetActorForwardVector(),
-		ShockWaveDistance,
-		FMath::DegreesToRadians(ShockWaveAngle),
-		FMath::DegreesToRadians(0.0f),
-		32,
-		FColor::Red,
-		false,
-		2.0f,
-		0,
-		1.0f
-	);*/
+	PlayAnimMontage(Row->SkillMontage);
 }
 
 void ABossEnemy::HomingMissile()
@@ -310,6 +276,7 @@ void ABossEnemy::RiseSpike()
 		Attack->InitializeAttack(*Row, TargetActor);
 		UGameplayStatics::FinishSpawningActor(Attack, FTransform(SpawnRotation, SpawnLocation));
 	}
+	PlayAnimMontage(Row->SkillMontage);
 }
 
 void ABossEnemy::PhaseOnePattern()

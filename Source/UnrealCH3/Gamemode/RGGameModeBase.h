@@ -183,6 +183,15 @@ public:
 
 	ARGGameModeBase();
 
+	/**
+	 * Result 상태에서는 기존 World의 Unpause를 막는다.
+	 *
+	 * Result UI의 Retry / Start Over / Main Menu 버튼이
+	 * SetGamePaused(false)를 호출하더라도 기존 World의 Timer가
+	 * 다시 진행되기 전에 OpenLevel로 새 World로 넘어가게 하기 위한 안전장치다.
+	 */
+	virtual bool ClearPause() override;
+
 
 protected:
 
@@ -1208,6 +1217,26 @@ public:
 		bool bIsPlayerDead,
 		bool bIsTimeOut
 	);
+
+
+	/**
+	 * Result 진입 시 현재 World에 남아 있는 전투용 동적 Actor를 정리한다.
+	 *
+	 * 삭제 대상:
+	 * - Enemy / Boss (ABaseEnemy 계열)
+	 * - Projectile
+	 * - AreaAttack
+	 * - Grenade
+	 *
+	 * SpawnManager는 삭제하지 않고 추가 Spawn만 중지한다.
+	 * UIManager / HUD / PlayerController / GameMode까지 지우면
+	 * Result 버튼이 작동하지 않으므로 시스템 Actor는 유지한다.
+	 */
+	UFUNCTION(
+		BlueprintCallable,
+		Category = "Run|Cleanup"
+	)
+	void CleanupTransientGameplayActors();
 
 
 protected:
