@@ -1,5 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "RGBaseWeapon.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
 #include "Enemy/BaseEnemy.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
@@ -10,6 +12,8 @@
 #include "Gamemode/RGProgressionSubsystem.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/OverlapResult.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 
 ARGBaseWeapon::ARGBaseWeapon()
 {
@@ -160,6 +164,7 @@ void ARGBaseWeapon::HandleFireTick()
 	CurrentAmmo = FMath::Max(0, CurrentAmmo - 1);
 	// 발사 처리 Broadcast
 	OnShotFired.Broadcast();
+	PlayFireSound();
 
 	// 탄약이 바뀌는 이 시점에만 딱 한 번 방송. 누가 듣고 있는지는 몰라도 됨.
 	OnAmmoChanged.Broadcast(CurrentAmmo, GetMagazineCapacity());
@@ -828,4 +833,62 @@ void ARGBaseWeapon::TriggerExplosiveRound(const FHitResult& Hit, float DealtDama
 	}
 
 	UE_LOG(LogTemp, Warning, TEXT("[ExplosiveRound] 폭발! %d명 적중"), HitCount);
+}
+
+void ARGBaseWeapon::PlayWeaponSound(USoundBase* Sound)
+{
+	if (!Sound) return;
+	UGameplayStatics::SpawnSoundAttached(Sound, GetRootComponent());
+}
+
+void ARGBaseWeapon::PlayFireSound()
+{
+	PlayWeaponSound(FireSound);
+}
+
+FVector ARGBaseWeapon::GetMuzzleLocation() const
+{
+	if (WeaponMesh && WeaponMesh->DoesSocketExist(MuzzleSocketName))
+	{
+		return WeaponMesh->GetSocketLocation(MuzzleSocketName);
+	}
+	return GetActorLocation();
+}
+
+void ARGBaseWeapon::PlayMuzzleEffect()
+{
+	if (!MuzzleEffect || !WeaponMesh) return;
+
+	UNiagaraFunctionLibrary::SpawnSystemAttached(
+		MuzzleEffect, WeaponMesh, MuzzleSocketName,
+		FVector::ZeroVector, FRotator::ZeroRotator,
+		EAttachLocation::SnapToTarget, true);
+}
+
+void ARGBaseWeapon::PlayTracerEffect(const FVector& EndLocation)
+{
+	if (!TracerEffect) return;
+
+	const FVector Start = GetMuzzleLocation();
+	if (UNiagaraComponent* Tracer = UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+		this, TracerEffect, Start, (EndLocation - Start).Rotation()))
+	{
+		Tracer->SetVectorParameter(TEXT("BeamStart"), Start);
+		Tracer->SetVectorParameter(TEXT("BeamEnd"), EndLocation);
+	}
+}
+
+void ARGBaseWeapon::PlayImpactEffect(const FHitResult& Hit)
+{
+	if (!ImpactEffect) return;
+
+	UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+		this, ImpactEffect, Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
+}
+
+void ARGBaseWeapon::PlayExplosionEffect(const FVector& Location)
+{
+	if (!ExplosionEffect) return;
+
+	UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ExplosionEffect, Location);
 }
