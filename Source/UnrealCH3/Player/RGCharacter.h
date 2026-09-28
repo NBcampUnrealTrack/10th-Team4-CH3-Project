@@ -8,7 +8,15 @@ class USpringArmComponent;
 class UCameraComponent;
 class UTimelineComponent;
 class ARGBaseWeapon;
+class ARGGrenade;
 struct FInputActionValue;
+
+// [추가] 무기가 실제로 생성/교체된 순간을 외부 시스템(UI 등)에 알린다.
+// Character가 UIManager를 직접 참조하지 않도록 Delegate로 느슨하게 연결한다.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FOnWeaponEquipped,
+	ARGBaseWeapon*, NewWeapon
+);
 
 // 캐릭터 이동상태 ENUM
 UENUM(BlueprintType)
@@ -20,6 +28,7 @@ enum class EMovementState : uint8
 	Dashing,
 	Sliding,
 	WallRunning,
+	Grappling,
 	Falling
 };
 
@@ -31,11 +40,15 @@ class UNREALCH3_API ARGCharacter : public ACharacter
 public:
 	ARGCharacter();
 
+	// [추가] 무기 장착 완료 이벤트. 초기 무기와 이후 무기 교체 모두 동일한 경로로 알린다.
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnWeaponEquipped OnWeaponEquipped;
+
 protected:
 	// override 함수
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-public:	
+public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	UFUNCTION(BlueprintCallable)
@@ -44,13 +57,13 @@ public:
 	virtual void Landed(const FHitResult& Hit) override;
 	virtual bool CanJumpInternal_Implementation() const override;
 public:
-	// Dash 타임라인 함수
+	// Dash 타임라인
 	UFUNCTION()
 	void OnDashUpdate(float Alpha);
 	UFUNCTION()
 	void OnDashFinished();
 
-	// Aim 타임라인 함수
+	// Aim 타임라인
 	UFUNCTION()
 	void OnAimUpdate(float Alpha);
 
@@ -58,6 +71,27 @@ public:
 	UFUNCTION()
 	void OnCrouchCameraUpdate(float Alpha);
 
+	// 벽타기
+	UFUNCTION()
+	void OnStartWallRun();
+	UFUNCTION()
+	void OnStopWallRun();
+
+	// Grapple
+	UFUNCTION()
+	void OnCanGrapple();
+	UFUNCTION()
+	void OnStopGrapple();
+
+	// 애니메이션
+	UFUNCTION()
+	void PlayFireAnimation();
+	UFUNCTION()
+	void StopFireAnimation();
+	UFUNCTION()
+	void PlayReloadAnimation();
+	UFUNCTION()
+	void StopReloadAnimation();
 public:
 	// 겟터
 	UFUNCTION(BlueprintPure, Category = "State")
@@ -76,6 +110,7 @@ public:
 	void SetCheckPoint();
 	void SetAimState(bool bCanAim);
 	void SetSprintState(bool bCanSprint);
+	void SetMovementState(EMovementState NewState, bool bForce = false);
 
 public:
 	// Reset and Clear
@@ -99,40 +134,75 @@ private:
 	// 입력 함수들
 	void Move(const FInputActionValue& value);
 	void StopMove(const FInputActionValue& value);
+
 	void Look(const FInputActionValue& value);
+
 	void StartJump(const FInputActionValue& value);
 	void StopJump(const FInputActionValue& value);
-	void Dash(const FInputActionValue& value);
-	void ToggleSprint(const FInputActionValue& value);
-	void ToggleCrouch(const FInputActionValue& value);
-	void StartFire(const FInputActionValue& value);
-	void StopFire(const FInputActionValue& value);
-	void StartAim(const FInputActionValue& value);
-	void StopAim(const FInputActionValue& value);
-	void Reload(const FInputActionValue& value);
 
-	// 슬라이딩
+	void Dash(const FInputActionValue& value);
+
+	void ToggleSprint(const FInputActionValue& value);
+
+	void ToggleCrouch(const FInputActionValue& value);
+	void StartCrouch();
+	void StopCrouch();
+
 	void StartSliding();
 	void StopSliding();
-	// 벽달리기
-	void StartWallRun();
-	void StopWallRun();
+
+	void StartGrapple(const FInputActionValue& value);
+
+	void StartFire(const FInputActionValue& value);
+	void StopFire(const FInputActionValue& value);
+
+	void StartAim(const FInputActionValue& value);
+	void StopAim(const FInputActionValue& value);
+
+	void Reload(const FInputActionValue& value);
+
+	// 퀵슬롯
+	void UseHealPack(const FInputActionValue& value);
+	void ThrowGrenade(const FInputActionValue& value);
 
 private:
+	// 팔 매쉬
+	UPROPERTY(VisibleAnywhere, Category = "Mesh")
+	TObjectPtr<USkeletalMeshComponent> ArmMesh;
 	// 카메라
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<USpringArmComponent> SpringArm;
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<UCameraComponent> Camera;
 
+	// WallRun 컴포넌트
+	UPROPERTY(VisibleAnywhere, Category = "Movement")
+	TObjectPtr<class URGWallRunMovement> WallRunMovement;
+	UPROPERTY(VisibleAnywhere, Category = "Movement")
+	TObjectPtr<class URGGrappleComponent> GrappleComponent;
+	UPROPERTY(VisibleAnywhere, Category = "Movement")
+	TObjectPtr<class UCableComponent> CableComponent;
 	// 무기
 private:
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<ARGBaseWeapon> CurrentWeapon;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<ARGBaseWeapon> WeaponClass;
 
+	// 수류탄
+	UPROPERTY(EditAnywhere, Category = "QuickSlot|Grenade")
+	TSubclassOf<ARGGrenade> GrenadeClass;
+
+	UPROPERTY(EditAnywhere, Category = "QuickSlot|Grenade", meta = (ClampMin = "1.0"))
+	float GrenadeThrowSpeed = 1200.0f;
+
 private:
+	// 애니메이션
+	UPROPERTY(EditAnywhere, Category = "Animation")
+	TObjectPtr<UAnimMontage> FireMontage;
+	UPROPERTY(EditAnywhere, Category = "Animation")
+	TObjectPtr<UAnimMontage> ReloadMontage;
+
 	// 상태 변수
 	UPROPERTY(VisibleAnywhere, Category = "State|Movement")
 	EMovementState CurrentMovementState = EMovementState::Idle;
@@ -156,7 +226,9 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Crouch")
 	TObjectPtr<UCurveFloat> CrouchCurve;
 	UPROPERTY(EditAnywhere, Category = "Crouch")
-	float CrouchCapsuleValue = -44.0f;
+	FVector MeshRelativeLocation = FVector::ZeroVector;
+	float CapsuleHalfHeight = 0.0f;
+	float CrouchedHalfHeight = 0.0f;
 
 	// 대쉬 변수
 	UPROPERTY(VisibleAnywhere, Category = "Movement|Dash")
@@ -176,7 +248,7 @@ private:
 	FVector DashVelocity = FVector::ZeroVector;
 	FVector2D MoveInput = FVector2D::ZeroVector;
 	FHitResult DashHitResult;
-	
+
 	// 슬라이드
 	FTimerHandle SlideTimerHandle;
 	UPROPERTY(EditAnywhere, Category = "Movement|Slide")
@@ -211,6 +283,15 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health", meta = (AllowPrivateAccess = "true"))
 	float CurrentHealth = MaxHealth;
 
+	// 힐팩
+	UPROPERTY(EditAnywhere, Category = "QuickSlot|Heal", meta = (ClampMin = "0.0"))
+	float HealAmount = 35.0f;
+
+	UPROPERTY(EditAnywhere, Category = "QuickSlot|Heal", meta = (ClampMin = "0.1"))
+	float HealCooldownDuration = 12.0f;
+
+	float LastHealUseTime = -1000.0f;
+
 	// Movement
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement", meta = (AllowPrivateAccess = "true"))
 	float DefaultSpeed = 650.0f;
@@ -224,4 +305,30 @@ private:
 	float DefaultAirControl = 0.45;
 	float DefaultGroundFriction = 0.0f;
 	float DefaultBreakingDecelerationWalking = 0.0f;
+
+public:
+	//강화용 함수
+	float GetMoveSpeedMultiplier() const;
+	float GetDefaultMoveSpeed() const;
+	float GetSprintSpeed() const;
+	float GetMaxHealthWithUpgrade() const;
+	float GetRegenerationPerSecond() const;
+
+	UFUNCTION(BlueprintPure, Category = "Health")
+	float GetCurrentMaxHealth() const;
+
+	// 퀵슬롯 UI용
+	UFUNCTION(BlueprintPure, Category = "QuickSlot|Heal")
+	bool CanUseHealPack() const;
+
+	UFUNCTION(BlueprintPure, Category = "QuickSlot|Heal")
+	float GetHealCooldownRemaining() const;
+	
+// =============== 반동 관련 함수 추가 ================
+	UFUNCTION()
+	void ApplyRecoil();
+
+private:
+	UPROPERTY(EditAnywhere, Category = "Weapon|Recoil")
+	float RecoilInterpSpeed = 15.f;   // 반동이 얼마나 빠르게 "튀는지" (별도 부드러움 처리용, 필요없으면 즉시 적용)
 };

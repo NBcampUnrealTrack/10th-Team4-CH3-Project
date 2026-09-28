@@ -8,26 +8,50 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "RGBaseWeapon.h"
-#include "RGAssaultRifle.h"
+#include "RGRailgun.h" 
+#include "GameMode/RGGameModeBase.h"
+#include "Component/RGWallRunMovement.h"
+#include "Component/RGGrappleComponent.h"
+#include "Gamemode/RGProgressionSubsystem.h"
+#include "Perception/AISense_Hearing.h"
+#include "CableComponent.h"
+
+#include "RGGrenade.h"
+#include "Engine/Engine.h"
+#include "GameFramework/PlayerController.h"
+#include "UI/UIManager.h"
 
 ARGCharacter::ARGCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	
+
+	ArmMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("ArmMesh"));
+
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
 	SpringArm->SetupAttachment(RootComponent);
 	SpringArm->TargetArmLength = 0.0f;
-	SpringArm->SetRelativeLocation(FVector(0.0f, 0.0f, 70.0f));
+	SpringArm->SetRelativeLocation(FVector(0.0f, 0.0f, 80.0f));
 	SpringArm->SocketOffset = FVector(0.0f, 0.0f, 0.0f);
 	SpringArm->bUsePawnControlRotation = true;
+	// 카메라와 캡슐사이 장애물이 있을때 줌을 땅겨주는 기능
+	SpringArm->bDoCollisionTest = false;
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(SpringArm);
 	Camera->bUsePawnControlRotation = false;
 
-	DashTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("dAshTimeline"));
-	AimTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("AimTimeline"));
-	CrouchTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("CrouchTimeline"));
+	ArmMesh->SetupAttachment(Camera);
+
+	CapsuleHalfHeight = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	CrouchedHalfHeight = GetCharacterMovement()->GetCrouchedHalfHeight();
+
+	WallRunMovement = CreateDefaultSubobject<URGWallRunMovement>(TEXT("WallRunMovement"));
+	GrappleComponent = CreateDefaultSubobject<URGGrappleComponent>(TEXT("GrappleComponent"));
+	CableComponent = CreateDefaultSubobject<UCableComponent>(TEXT("CableComponent"));
+	CableComponent->SetupAttachment(RootComponent);
+	CableComponent->SetVisibility(false);
+	CableComponent->bEnableCollision = false;
+	CableComponent->CableLength = 0.0f;
 
 	JumpMaxCount = 2;
 	GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;
@@ -37,15 +61,34 @@ ARGCharacter::ARGCharacter()
 	GetCharacterMovement()->AirControl = DefaultAirControl;
 	DefaultGroundFriction = GetCharacterMovement()->GroundFriction;
 	DefaultBreakingDecelerationWalking = GetCharacterMovement()->BrakingDecelerationWalking;
+
+	DashTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("DashTimeline"));
+	AimTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("AimTimeline"));
+	CrouchTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("CrouchTimeline"));
+
 }
 
 void ARGCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	
-	if (DashTimeline == nullptr || DashCurve == nullptr) return;
+	MeshRelativeLocation = GetMesh()->GetRelativeLocation();
+
+	if (WallRunMovement)
+	{
+		WallRunMovement->OnWallRunStarted.AddDynamic(this, &ARGCharacter::OnStartWallRun);
+		WallRunMovement->OnWallRunStopped.AddDynamic(this, &ARGCharacter::OnStopWallRun);
+	}
+	if (GrappleComponent)
+	{
+		GrappleComponent->OnGrappleStarted.AddDynamic(this, &ARGCharacter::OnCanGrapple);
+		GrappleComponent->OnGrappleStopped.AddDynamic(this, &ARGCharacter::OnStopGrapple);
+	}
 
 	// 대쉬 타임라인
+	if (DashTimeline == nullptr || DashCurve == nullptr)
+	{
+		return;
+	}
 	FOnTimelineFloat DashTimelineFloat;
 	DashTimelineFloat.BindDynamic(this, &ARGCharacter::OnDashUpdate);
 	DashTimeline->AddInterpFloat(DashCurve, DashTimelineFloat);
@@ -56,12 +99,20 @@ void ARGCharacter::BeginPlay()
 	DashTimeline->SetTimelineFinishedFunc(DashTimelineFinished);
 
 	// 에임 타임라인
+	if (AimTimeline == nullptr || AimCurve == nullptr)
+	{
+		return;
+	}
 	FOnTimelineFloat AimTimelineFloat;
 	AimTimelineFloat.BindDynamic(this, &ARGCharacter::OnAimUpdate);
 	AimTimeline->AddInterpFloat(AimCurve, AimTimelineFloat);
 	AimTimeline->SetTimelineLengthMode(ETimelineLengthMode::TL_LastKeyFrame);
 
 	// Crouch 카메라 타임라인
+	if (CrouchTimeline == nullptr || CrouchCurve == nullptr)
+	{
+		return;
+	}
 	FOnTimelineFloat CrouchTimelineFloat;
 	CrouchTimelineFloat.BindDynamic(this, &ARGCharacter::OnCrouchCameraUpdate);
 	CrouchTimeline->AddInterpFloat(CrouchCurve, CrouchTimelineFloat);
@@ -72,7 +123,7 @@ void ARGCharacter::BeginPlay()
 	GetWorldTimerManager().SetTimer(CheckPointTimerHandle, this, &ARGCharacter::SetCheckPoint, CheckPointInterval, true);
 
 	// 임시로 여기서 불러놨음 UI버튼에서 클릭완료되면 지우기
-	EquipWeapon(ARGAssaultRifle::StaticClass());
+	EquipWeapon(WeaponClass);
 }
 
 void ARGCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -94,9 +145,9 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
 		ARGPlayerController* PlayerController = Cast<ARGPlayerController>(GetController());
-		
+
 		if (!PlayerController) return;
-		
+
 		if (PlayerController->MoveAction)
 		{
 			EnhancedInput->BindAction(PlayerController->MoveAction, ETriggerEvent::Triggered, this, &ARGCharacter::Move);
@@ -123,6 +174,10 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 		{
 			EnhancedInput->BindAction(PlayerController->CrouchAction, ETriggerEvent::Started, this, &ARGCharacter::ToggleCrouch);
 		}
+		if (PlayerController->GrappleAction)
+		{
+			EnhancedInput->BindAction(PlayerController->GrappleAction, ETriggerEvent::Started, this, &ARGCharacter::StartGrapple);
+		}
 		if (PlayerController->FireAction)
 		{
 			EnhancedInput->BindAction(PlayerController->FireAction, ETriggerEvent::Started, this, &ARGCharacter::StartFire);
@@ -132,6 +187,18 @@ void ARGCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 		{
 			EnhancedInput->BindAction(PlayerController->AimAction, ETriggerEvent::Started, this, &ARGCharacter::StartAim);
 			EnhancedInput->BindAction(PlayerController->AimAction, ETriggerEvent::Completed, this, &ARGCharacter::StopAim);
+		}
+		if (PlayerController->ReloadAction)
+		{
+			EnhancedInput->BindAction(PlayerController->ReloadAction, ETriggerEvent::Started, this, &ARGCharacter::Reload);
+		}
+		if (PlayerController->HealAction)
+		{
+			EnhancedInput->BindAction(PlayerController->HealAction,ETriggerEvent::Started,this,&ARGCharacter::UseHealPack);
+		}
+		if (PlayerController->GrenadeAction)
+		{
+			EnhancedInput->BindAction(PlayerController->GrenadeAction,ETriggerEvent::Started,this,&ARGCharacter::ThrowGrenade);
 		}
 	}
 
@@ -143,12 +210,47 @@ float ARGCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DmageEven
 	{
 		return 0.0f;
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Player TakeDamage called! Amount: %f, Causer: %s"),
+		DamageAmount, DamageCauser ? *DamageCauser->GetName() : TEXT("None"));
+
 	// 1초 재생타이머 정리
 	GetWorldTimerManager().ClearTimer(TickRegenerationTimerHandle);
+
 	// 5초 타이머 시작
 	GetWorldTimerManager().SetTimer(StartRegenerationTimerHandle, this, &ARGCharacter::StartRegenerateHealth, StartRegenerationDelay, false);
-	
-	CurrentHealth = FMath::Clamp(CurrentHealth - DamageAmount, 0.0f, MaxHealth);
+
+	CurrentHealth = FMath::Clamp(CurrentHealth - DamageAmount, 0.0f, GetMaxHealthWithUpgrade());
+
+	// 피격 방향 UI 표시
+	// 낙사 등 자기 자신이 DamageCauser인 경우에는 방향 표시를 띄우지 않는다.
+	if (IsValid(DamageCauser) && DamageCauser != this)
+	{
+		APlayerController* PlayerController = Cast<APlayerController>(GetController());
+
+		if (IsValid(PlayerController))
+		{
+			AUIManager* UIManager = Cast<AUIManager>(PlayerController->GetHUD());
+
+			if (IsValid(UIManager))
+			{
+				const FVector AttackOrigin = DamageCauser->GetActorLocation();
+
+				UIManager->NotifyDirectionalDamage(
+					DamageCauser,
+					AttackOrigin
+				);
+
+				UE_LOG(
+					LogTemp,
+					Warning,
+					TEXT("[DirectionalDamage] Source=%s | Origin=%s"),
+					*DamageCauser->GetName(),
+					*AttackOrigin.ToString()
+				);
+			}
+		}
+	}
 
 	if (CurrentHealth <= 0.0f)
 	{
@@ -168,22 +270,22 @@ void ARGCharacter::Falling()
 		{
 			StopSliding();
 		}
-		CurrentMovementState = EMovementState::Falling;
-		UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
+
+		SetMovementState(EMovementState::Falling);
 	}
 }
 
 void ARGCharacter::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
-
-	if (CurrentMovementState == EMovementState::Dashing || CurrentMovementState == EMovementState::Sliding)
+	if (GetCharacterMovement()->GetCurrentAcceleration().SizeSquared2D() > 0.0f)
 	{
-		return;
+		SetMovementState(bIsSprinting ? EMovementState::Sprinting : EMovementState::Walking);
 	}
-
-	CurrentMovementState = EMovementState::Idle;
-	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
+	else
+	{
+		SetMovementState(EMovementState::Idle, true);
+	}
 }
 
 bool ARGCharacter::CanJumpInternal_Implementation() const
@@ -214,11 +316,11 @@ int32 ARGCharacter::GetSlopeType()
 
 		float DotProduct = FVector::DotProduct(Velocity2D, FloorNormal);
 
-		if (DotProduct > 0.1f)
+		if (DotProduct > 0.0f)
 		{
 			return 1;
 		}
-		else if (DotProduct < -0.1f)
+		else if (DotProduct < 0.0f)
 		{
 			return 2;
 		}
@@ -234,12 +336,12 @@ void ARGCharacter::AddHealth(float Amount)
 		return;
 	}
 
-	CurrentHealth = FMath::Clamp(CurrentHealth + Amount, 0.0f, MaxHealth);
+	CurrentHealth = FMath::Clamp(CurrentHealth + Amount, 0.0f, GetMaxHealthWithUpgrade());
 }
 
 void ARGCharacter::SetCheckPoint()
 {
-	if (GetActorLocation().Z > 1.0f || CurrentMovementState == EMovementState::Falling || CurrentMovementState == EMovementState::WallRunning)
+	if (GetCharacterMovement()->IsFalling() || CurrentMovementState == EMovementState::WallRunning)
 	{
 		return;
 	}
@@ -273,13 +375,48 @@ void ARGCharacter::SetAimState(bool bCanAim)
 			AimTimeline->Reverse();
 		}
 	}
-	
+
 }
 
 void ARGCharacter::SetSprintState(bool bCanSprint)
 {
 	bIsSprinting = bCanSprint;
-	GetCharacterMovement()->MaxWalkSpeed = bIsSprinting ? SprintSpeed : DefaultSpeed;
+
+	const float MoveSpeedMultiplier = GetMoveSpeedMultiplier();
+
+	GetCharacterMovement()->MaxWalkSpeed =
+		(bIsSprinting ? SprintSpeed : DefaultSpeed)
+		* MoveSpeedMultiplier;
+}
+
+void ARGCharacter::SetMovementState(EMovementState NewState, bool bForce)
+{
+	if (CurrentMovementState == NewState)
+	{
+		return;
+	}
+
+	if (!bForce)
+	{
+		if (GetCharacterMovement()->IsFalling())
+		{
+			if (NewState == EMovementState::Idle || NewState == EMovementState::Walking || NewState == EMovementState::Sprinting)
+			{
+				return;
+			}
+		}
+
+		if (CurrentMovementState == EMovementState::Dashing || CurrentMovementState == EMovementState::Sliding || CurrentMovementState == EMovementState::Grappling)
+		{
+			if (NewState == EMovementState::Walking || NewState == EMovementState::Sprinting)
+			{
+				return;
+			}
+		}
+	}
+
+	CurrentMovementState = NewState;
+	UE_LOG(LogTemp, Warning, TEXT("Current Movement : %d"), CurrentMovementState);
 }
 
 void ARGCharacter::StartRegenerateHealth()
@@ -289,10 +426,11 @@ void ARGCharacter::StartRegenerateHealth()
 
 void ARGCharacter::TickRegenerateHealth()
 {
-	float HealthAmount = MaxHealth * RegenerationMultipiler;
+	const float HealthAmount = GetRegenerationPerSecond() * TickRegenerationInterval;
+
 	AddHealth(HealthAmount);
 
-	if (CurrentHealth >= MaxHealth)
+	if (CurrentHealth >= GetMaxHealthWithUpgrade())
 	{
 		GetWorldTimerManager().ClearTimer(TickRegenerationTimerHandle);
 	}
@@ -310,11 +448,14 @@ void ARGCharacter::ClearTimerHandle()
 
 void ARGCharacter::ResetAllState()
 {
+	if (UAnimInstance* AnimInstance = ArmMesh->GetAnimInstance())
+	{
+		AnimInstance->StopAllMontages(0.0f);
+	}
 	UnCrouch();
 	SetAimState(false);
 	SetSprintState(false);
 	GetCharacterMovement()->StopMovementImmediately();
-	// TODO 장전등 애니메이션 초기화
 }
 
 void ARGCharacter::ReturnCheckPoint()
@@ -355,6 +496,20 @@ void ARGCharacter::Dead()
 	bIsDead = true;
 	// TODO 죽었을때 로직
 	ResetAllState();
+
+	//만약 죽는다면 서브시스템의 강화 효과 및 경험치 초기화
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			Progression->ResetRun();
+		}
+	}
+
+	if (ARGGameModeBase* GameMode = Cast<ARGGameModeBase>(UGameplayStatics::GetGameMode(this)))
+	{
+		GameMode->CheckEndCondition(true, false);
+	}
 }
 
 void ARGCharacter::EquipWeapon(TSubclassOf<ARGBaseWeapon> SpawnWeaponClass)
@@ -379,7 +534,18 @@ void ARGCharacter::EquipWeapon(TSubclassOf<ARGBaseWeapon> SpawnWeaponClass)
 	if (CurrentWeapon)
 	{
 		CurrentWeapon->SetOwningCharacter(this);
-		CurrentWeapon->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TEXT("WeaponSocket"));
+		CurrentWeapon->AttachToComponent(ArmMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, TEXT("WeaponSocket"));
+
+		// 애니메이션 바인딩
+		CurrentWeapon->OnShotFired.AddDynamic(this, &ARGCharacter::PlayFireAnimation);
+		CurrentWeapon->OnShotFired.AddDynamic(this, &ARGCharacter::ApplyRecoil);   // 추가
+		CurrentWeapon->OnShotFiredStop.AddDynamic(this, &ARGCharacter::StopFireAnimation);
+		CurrentWeapon->OnReloadStarted.AddDynamic(this, &ARGCharacter::PlayReloadAnimation);
+		CurrentWeapon->OnReloadCanceled.AddDynamic(this, &ARGCharacter::StopReloadAnimation);
+
+		// [추가] 무기가 완전히 생성되고 OwningCharacter/Socket/애니메이션 바인딩까지 끝난 뒤 알린다.
+		// UIManager는 이 이벤트를 받아 HUDController에 현재 무기를 바인딩한다.
+		OnWeaponEquipped.Broadcast(CurrentWeapon);
 	}
 }
 
@@ -387,16 +553,8 @@ void ARGCharacter::Move(const FInputActionValue& value)
 {
 	MoveInput = value.Get<FVector2D>();
 
-	if (CurrentMovementState == EMovementState::Idle || CurrentMovementState == EMovementState::Walking || CurrentMovementState == EMovementState::Sprinting)
-	{
-		EMovementState NextMovementState = bIsSprinting ? EMovementState::Sprinting : EMovementState::Walking;
-
-		if (CurrentMovementState != NextMovementState)
-		{
-			CurrentMovementState = NextMovementState;
-			UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
-		}
-	}
+	EMovementState NextMovementState = bIsSprinting ? EMovementState::Sprinting : EMovementState::Walking;
+	SetMovementState(NextMovementState);
 
 	if (!FMath::IsNearlyZero(MoveInput.Y))
 	{
@@ -411,11 +569,7 @@ void ARGCharacter::Move(const FInputActionValue& value)
 void ARGCharacter::StopMove(const FInputActionValue& value)
 {
 	SetSprintState(false);
-	if (CurrentMovementState == EMovementState::Walking || CurrentMovementState == EMovementState::Sprinting)
-	{
-		CurrentMovementState = EMovementState::Idle;
-		UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
-	}
+	SetMovementState(EMovementState::Idle);
 }
 
 void ARGCharacter::Look(const FInputActionValue& value)
@@ -428,44 +582,39 @@ void ARGCharacter::Look(const FInputActionValue& value)
 
 void ARGCharacter::StartJump(const FInputActionValue& value)
 {
+	if (CurrentMovementState == EMovementState::WallRunning)
+	{
+		WallRunMovement->WallJump();
+		return;
+	}
+
 	if (DashTimeline && DashTimeline->IsPlaying())
 	{
 		DashTimeline->Stop();
 
 		GetCharacterMovement()->Velocity = DashVelocity;
 	}
-	if (CurrentMovementState == EMovementState::Sliding)
-	{
-		UnCrouch();
-		StopSliding();
-	}
 
+	StopCrouch();
 	Jump();
 }
 
 void ARGCharacter::StopJump(const FInputActionValue& value)
 {
 	StopJumping();
-	
 }
 
 void ARGCharacter::Dash(const FInputActionValue& value)
 {
-	if (DashCount <= 0 || GetVelocity().IsNearlyZero() || CurrentMovementState == EMovementState::Dashing)
+	if (DashCount <= 0 || GetVelocity().IsNearlyZero() || CurrentMovementState == EMovementState::Dashing || CurrentMovementState == EMovementState::WallRunning)
 	{
 		return;
 	}
 
-	if (CurrentMovementState == EMovementState::Sliding)
-	{
-		UnCrouch();
-		StopSliding();
-	}
+	StopCrouch();
+	SetMovementState(EMovementState::Dashing);
 
-	CurrentMovementState = EMovementState::Dashing;
-	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
 	FVector DashDirection = FMath::IsNearlyZero(MoveInput.X) ? GetActorForwardVector() * MoveInput.Y : GetActorRightVector() * MoveInput.X;
-
 	DashStartLocation = GetActorLocation();
 	DashEndLocation = DashStartLocation + (DashDirection * DashDistance);
 
@@ -476,7 +625,7 @@ void ARGCharacter::Dash(const FInputActionValue& value)
 
 void ARGCharacter::ToggleSprint(const FInputActionValue& value)
 {
-	if (bIsAiming)
+	if (bIsDead || bIsAiming)
 	{
 		return;
 	}
@@ -485,36 +634,59 @@ void ARGCharacter::ToggleSprint(const FInputActionValue& value)
 
 void ARGCharacter::ToggleCrouch(const FInputActionValue& value)
 {
-	if (CurrentMovementState == EMovementState::Falling)
+	if (CurrentMovementState == EMovementState::Falling || CurrentMovementState == EMovementState::WallRunning)
 	{
 		return;
 	}
 
 	if (bIsCrouched)
 	{
-		UnCrouch();
-		if (CrouchTimeline)
-		{
-			CrouchTimeline->Reverse();
-		}
-
-		if (CurrentMovementState == EMovementState::Sliding)
-		{
-			StopSliding();
-		}
+		StopCrouch();
 	}
 	else
 	{
-		Crouch();
-		if (CrouchTimeline)
-		{
-			CrouchTimeline->Play();
-		}
+		StartCrouch();
+	}
+}
 
-		if (GetVelocity().Size2D() > 700.0f && CurrentMovementState != EMovementState::Sliding)
+void ARGCharacter::StartGrapple(const FInputActionValue& value)
+{
+	if (GrappleComponent)
+	{
+		GrappleComponent->StartGrapple();
+	}
+}
+
+void ARGCharacter::OnCanGrapple()
+{
+	if (CurrentMovementState == EMovementState::WallRunning)
+	{
+		WallRunMovement->StopWallRun();
+	}
+	else if (CurrentMovementState == EMovementState::Dashing)
+	{
+		if (DashTimeline && DashTimeline->IsPlaying())
 		{
-			StartSliding();
+			DashTimeline->Stop();
 		}
+	}
+	else if (CurrentMovementState == EMovementState::Sliding)
+	{
+		StopSliding();
+	}
+
+	SetMovementState(EMovementState::Grappling);
+}
+
+void ARGCharacter::OnStopGrapple()
+{
+	if (GetCharacterMovement()->IsFalling())
+	{
+		SetMovementState(EMovementState::Falling);
+	}
+	else
+	{
+		SetMovementState(EMovementState::Idle);
 	}
 }
 
@@ -524,7 +696,7 @@ void ARGCharacter::StartFire(const FInputActionValue& value)
 	{
 		return;
 	}
-
+	UAISense_Hearing::ReportNoiseEvent(GetWorld(), GetActorLocation(), 1.0f, this, 2000.f);
 	CurrentWeapon->StartFire();
 }
 
@@ -535,7 +707,21 @@ void ARGCharacter::StopFire(const FInputActionValue& value)
 		return;
 	}
 
-	CurrentWeapon->StopFire();
+	if (ARGRailgun* Railgun = Cast<ARGRailgun>(CurrentWeapon))
+	{
+		if (Railgun->IsBeamFiring())
+		{
+			Railgun->StopFire();   // BeamFire 중이면 진짜 StopFire()를 호출
+		}
+		else
+		{
+			Railgun->ReleaseChargeAndFire();   // 기존 차지샷은 그대로 유지
+		}
+	}
+	else
+	{
+		CurrentWeapon->StopFire();
+	}
 }
 
 void ARGCharacter::StartAim(const FInputActionValue& value)
@@ -544,7 +730,7 @@ void ARGCharacter::StartAim(const FInputActionValue& value)
 	{
 		return;
 	}
-	
+
 	SetAimState(true);
 }
 
@@ -568,12 +754,68 @@ void ARGCharacter::Reload(const FInputActionValue& value)
 	CurrentWeapon->StartReloaded();
 }
 
+void ARGCharacter::UseHealPack(const FInputActionValue& value)
+{
+	if (!CanUseHealPack())
+	{
+		return;
+	}
+
+	AddHealth(HealAmount);
+
+	if (UWorld* World = GetWorld())
+	{
+		LastHealUseTime = World->GetTimeSeconds();
+	}
+}
+
+void ARGCharacter::ThrowGrenade(const FInputActionValue& value)
+{
+	if (bIsDead || !GrenadeClass)
+	{
+		return;
+	}
+
+	ARGGrenade::ThrowFromActor(
+		this,
+		GrenadeClass,
+		GrenadeThrowSpeed
+	);
+}
+
+void ARGCharacter::StartCrouch()
+{
+	Crouch();
+	if (CrouchTimeline)
+	{
+		CrouchTimeline->Play();
+	}
+
+	if (GetVelocity().Size2D() > 700.0f && CurrentMovementState != EMovementState::Sliding)
+	{
+		StartSliding();
+	}
+}
+
+void ARGCharacter::StopCrouch()
+{
+	UnCrouch();
+	if (CrouchTimeline)
+	{
+		CrouchTimeline->Reverse();
+	}
+
+	if (CurrentMovementState == EMovementState::Sliding)
+	{
+		StopSliding();
+	}
+}
+
 void ARGCharacter::StartSliding()
 {
-	CurrentMovementState = EMovementState::Sliding;
-	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
-	int32 Slope = GetSlopeType();
+	SetMovementState(EMovementState::Sliding);
 
+	int32 Slope = GetSlopeType();
 	float SpeedMultipiler = 1.05f;
 	float SlideFriction = 0.25f;
 	if (Slope == 1)
@@ -598,26 +840,31 @@ void ARGCharacter::StartSliding()
 
 void ARGCharacter::StopSliding()
 {
+	SetMovementState(EMovementState::Idle);
 	GetCharacterMovement()->MaxWalkSpeedCrouched = 300.0f;
 	GetCharacterMovement()->MaxAcceleration = DefaultAccelration;
 	GetCharacterMovement()->GroundFriction = DefaultGroundFriction;
 	GetCharacterMovement()->BrakingDecelerationWalking = DefaultBreakingDecelerationWalking;
 	GetWorldTimerManager().ClearTimer(SlideTimerHandle);
 
-	CurrentMovementState = EMovementState::Idle;
-	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
-
 	GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, FString::Printf(TEXT("Sliding Unapply")));
 }
 
-void ARGCharacter::StartWallRun()
+void ARGCharacter::OnStartWallRun()
 {
-	// TODO 벽타기 시작
+	SetMovementState(EMovementState::WallRunning);
 }
 
-void ARGCharacter::StopWallRun()
+void ARGCharacter::OnStopWallRun()
 {
-	// TODO 벽타기 종료
+	if (GetCharacterMovement()->IsFalling())
+	{
+		SetMovementState(EMovementState::Falling);
+	}
+	else
+	{
+		SetMovementState(EMovementState::Idle);
+	}
 }
 
 void ARGCharacter::OnDashUpdate(float Alpha)
@@ -632,8 +879,7 @@ void ARGCharacter::OnDashUpdate(float Alpha)
 
 void ARGCharacter::OnDashFinished()
 {
-	CurrentMovementState = EMovementState::Idle;
-	UE_LOG(LogTemp, Warning, TEXT("CurrentState : %d"), CurrentMovementState);
+	SetMovementState(EMovementState::Idle);
 }
 
 void ARGCharacter::OnAimUpdate(float Alpha)
@@ -644,17 +890,193 @@ void ARGCharacter::OnAimUpdate(float Alpha)
 	}
 
 	float TargetFOV = CurrentWeapon->GetADSFOV();
-	float CurrentFOV = FMath::Lerp(TargetFOV, DefaultFOV, Alpha);
+	float CurrentFOV = FMath::Lerp(DefaultFOV, TargetFOV, Alpha);
 
 	Camera->SetFieldOfView(CurrentFOV);
 }
 
 void ARGCharacter::OnCrouchCameraUpdate(float Alpha)
 {
-	float TargetOffsetZ = FMath::Lerp(0.0f, CrouchCapsuleValue, Alpha);
-	FVector CurrentOffset = SpringArm->SocketOffset;
-	CurrentOffset.Z = TargetOffsetZ;
-
-	SpringArm->SocketOffset = CurrentOffset;
+	float TargetZ = CapsuleHalfHeight - CrouchedHalfHeight;
+	if (bIsCrouched)
+	{
+		SpringArm->TargetOffset.Z = FMath::Lerp(TargetZ, 0.0f, Alpha);
+	}
+	else
+	{
+		SpringArm->TargetOffset.Z = FMath::Lerp(0.0f, -TargetZ, Alpha);
+	}
 }
 
+void ARGCharacter::PlayFireAnimation()
+{
+	UAnimInstance* ArmInstance = ArmMesh->GetAnimInstance();
+	if (ArmInstance && FireMontage)
+	{
+		ArmInstance->Montage_Play(FireMontage);
+	}
+}
+
+void ARGCharacter::StopFireAnimation()
+{
+	UAnimInstance* ArmInstance = ArmMesh->GetAnimInstance();
+	if (ArmInstance && FireMontage)
+	{
+		ArmInstance->Montage_Stop(0.1f, FireMontage);
+	}
+}
+
+void ARGCharacter::PlayReloadAnimation()
+{
+	if (!ReloadMontage || !CurrentWeapon)
+	{
+		return;
+	}
+
+	const float MontageLength = ReloadMontage->GetPlayLength();
+	const float ActualReloadTime = CurrentWeapon->GetReloadTime();
+
+	// 방어 코드: 몽타주 길이나 재장전 시간이 비정상이면 기본 배속(1.0)으로
+	float PlayRate = 1.0f;
+	if (MontageLength > 0.f && ActualReloadTime > 0.f)
+	{
+		PlayRate = MontageLength / ActualReloadTime;
+	}
+	if (UAnimInstance* ArmInstance = ArmMesh->GetAnimInstance())
+	{
+		ArmInstance->Montage_Play(ReloadMontage, PlayRate);
+	}
+}
+
+void ARGCharacter::StopReloadAnimation()
+{
+	UAnimInstance* ArmInstance = ArmMesh->GetAnimInstance();
+	if (ArmInstance && ReloadMontage)
+	{
+		ArmInstance->Montage_Stop(0.1f, ReloadMontage);
+	}
+}
+
+float ARGCharacter::GetMoveSpeedMultiplier() const
+{
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks =
+				Progression->GetUpgradeStackCount(FName(TEXT("MoveSpeedUp")));
+
+			const float EffectAmount =
+				Progression->GetUpgradeEffectAmount(FName(TEXT("MoveSpeedUp")));
+
+			return 1.0f + (EffectAmount * Stacks);
+		}
+	}
+
+	return 1.0f;
+}
+
+float ARGCharacter::GetMaxHealthWithUpgrade() const
+{
+	float Result = MaxHealth;
+
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks =
+				Progression->GetUpgradeStackCount(FName(TEXT("MaxHealthUp")));
+
+			const float EffectAmount =
+				Progression->GetUpgradeEffectAmount(FName(TEXT("MaxHealthUp")));
+
+			Result += EffectAmount * Stacks;
+		}
+	}
+
+	return FMath::RoundToFloat(Result);
+}
+
+float ARGCharacter::GetCurrentMaxHealth() const
+{
+	return GetMaxHealthWithUpgrade();
+}
+
+float ARGCharacter::GetRegenerationPerSecond() const
+{
+	float RegenPerSecond = MaxHealth * RegenerationMultipiler;
+
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks =
+				Progression->GetUpgradeStackCount(FName(TEXT("RegenUp")));
+
+			const float EffectAmount =
+				Progression->GetUpgradeEffectAmount(FName(TEXT("RegenUp")));
+
+			RegenPerSecond += EffectAmount * Stacks;
+		}
+	}
+
+	return RegenPerSecond;
+}
+
+void ARGCharacter::ApplyRecoil()
+{
+	if (!CurrentWeapon || !Controller)
+	{
+		return;
+	}
+
+	// BeamFire 중이면 반동 없음
+	if (ARGRailgun* Railgun = Cast<ARGRailgun>(CurrentWeapon))
+	{
+		if (Railgun->IsBeamFiring())
+		{
+			return;
+		}
+	}
+
+	const float VerticalRecoil = CurrentWeapon->GetVerticalRecoil();
+	const float HorizontalRecoil = CurrentWeapon->GetHorizontalRecoil();
+
+	// 위로 튕김 (Pitch는 위를 볼수록 음수 방향이므로 빼줌)
+	AddControllerPitchInput(-VerticalRecoil);
+
+	// 좌우는 랜덤하게 튕김 (매번 같은 방향이면 부자연스러움)
+	const float RandomHorizontal = FMath::RandRange(-HorizontalRecoil, HorizontalRecoil);
+	AddControllerYawInput(RandomHorizontal);
+}
+
+bool ARGCharacter::CanUseHealPack() const
+{
+	if (bIsDead || CurrentHealth >= GetMaxHealthWithUpgrade())
+	{
+		return false;
+	}
+
+	return GetHealCooldownRemaining() <= 0.0f;
+}
+
+float ARGCharacter::GetHealCooldownRemaining() const
+{
+	const UWorld* World = GetWorld();
+
+	if (!World)
+	{
+		return 0.0f;
+	}
+
+	const float ElapsedTime =
+		World->GetTimeSeconds() - LastHealUseTime;
+
+	return FMath::Max(
+		0.0f,
+		HealCooldownDuration - ElapsedTime
+	);
+}

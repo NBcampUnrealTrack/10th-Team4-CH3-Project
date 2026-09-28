@@ -1,0 +1,337 @@
+﻿#include "Enemy/BossEnemy.h"
+#include "Engine/DataTable.h"
+#include "Projectile/BaseProjectile.h"
+#include "BaseAreaAttack.h"
+#include "Kismet/GameplayStatics.h"
+#include "DrawDebugHelpers.h"
+#include "Components/DecalComponent.h"
+#include "Gamemode/RGGameModeBase.h"
+
+ABossEnemy::ABossEnemy()
+{
+	EnemyName = TEXT("Boss");
+
+	AttackRangeMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("AttackRangeMeshComponent"));
+	AttackRangeMesh->SetupAttachment(RootComponent);
+	AttackRangeMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	AttackRangeMesh->SetCastShadow(false);
+	AttackRangeMesh->SetVisibility(false);
+	AttackRangeMesh->SetWorldScale3D(FVector(AttackMaxRange / 100.0f, 1.0f, 0.2f));
+}
+
+void ABossEnemy::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// 보스맵에 배치된 DataCore 수를 최초 1회 저장한다.
+	// 실제 남은 수는 GameMode의 CurrentCoresDestroyed와 조합해서 계산한다.
+	CacheInitialBossCoreCount();
+
+	if (SkillDataTable)
+	{
+		TArray<FBossSkillRow*> AllRows;
+		SkillDataTable->GetAllRows<FBossSkillRow>(TEXT("BossSkill"), AllRows);
+		
+		for (FBossSkillRow* Row : AllRows)
+		{
+			if (Row)
+			{
+				CachedSkills.Add(Row->SkillType, *Row);
+			}
+		}
+	}
+}
+
+
+float ABossEnemy::TakeDamage(
+	float DamageAmount,
+	FDamageEvent const& DamageEvent,
+	AController* EventInstigator,
+	AActor* DamageCauser
+)
+{
+	if (DamageAmount <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	const int32 RemainingCoreCount = GetRemainingBossCoreCount();
+	const float DamageMultiplier = GetCurrentCoreShieldDamageMultiplier();
+	const float ReducedDamage = DamageAmount * DamageMultiplier;
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT(
+			"[Boss Core Shield] RemainingCores=%d / Incoming=%.2f / "
+			"Multiplier=%.2f / AppliedRequest=%.2f"
+		),
+		RemainingCoreCount,
+		DamageAmount,
+		DamageMultiplier,
+		ReducedDamage
+	);
+
+	return Super::TakeDamage(
+		ReducedDamage,
+		DamageEvent,
+		EventInstigator,
+		DamageCauser
+	);
+}
+
+void ABossEnemy::CacheInitialBossCoreCount()
+{
+	InitialBossCoreCount = 0;
+
+	if (!GetWorld() || BossCoreActorTag.IsNone())
+	{
+		return;
+	}
+
+	TArray<AActor*> FoundCoreActors;
+	UGameplayStatics::GetAllActorsWithTag(
+		this,
+		BossCoreActorTag,
+		FoundCoreActors
+	);
+
+	InitialBossCoreCount = FoundCoreActors.Num();
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT(
+			"[Boss Core Shield] Initial core count=%d / Tag=%s"
+		),
+		InitialBossCoreCount,
+		*BossCoreActorTag.ToString()
+	);
+}
+
+int32 ABossEnemy::GetRemainingBossCoreCount() const
+{
+	if (InitialBossCoreCount <= 0)
+	{
+		return 0;
+	}
+
+	const ARGGameModeBase* GameMode =
+		Cast<ARGGameModeBase>(UGameplayStatics::GetGameMode(this));
+
+	if (!IsValid(GameMode))
+	{
+		return InitialBossCoreCount;
+	}
+
+	return FMath::Clamp(
+		InitialBossCoreCount - GameMode->GetCurrentCoresDestroyed(),
+		0,
+		InitialBossCoreCount
+	);
+}
+
+float ABossEnemy::GetCurrentCoreShieldDamageMultiplier() const
+{
+	const int32 RemainingCoreCount = GetRemainingBossCoreCount();
+
+	if (RemainingCoreCount <= 0)
+	{
+		return 1.0f;
+	}
+
+	const float SafeReductionPerCore =
+		FMath::Clamp(DamageReductionPerRemainingCore, 0.0f, 1.0f);
+
+	const float SafeMinimumMultiplier =
+		FMath::Clamp(MinimumDamageMultiplierWhileCoreAlive, 0.0f, 1.0f);
+
+	const float RawMultiplier =
+		1.0f - (SafeReductionPerCore * RemainingCoreCount);
+
+	return FMath::Clamp(
+		RawMultiplier,
+		SafeMinimumMultiplier,
+		1.0f
+	);
+}
+
+void ABossEnemy::Attack()
+{
+	Super::Attack();
+
+	UseAttackPattern();
+}
+
+void ABossEnemy::OnChangedHealth()
+{
+	Super::OnChangedHealth();
+
+	float CurrentHPRatio = CurrentHP / MaxHP;
+
+	int32 NewPhase = CurrentPhase + 1;
+
+	if (BossPhaseThreshold.Contains(NewPhase))
+	{
+		float PhaseThresholdRatio = BossPhaseThreshold[NewPhase];
+		if (CurrentHPRatio <= PhaseThresholdRatio)
+		{
+			ChangePhase(NewPhase);
+			UE_LOG(LogTemp, Error, TEXT("Change Phase!!!!"));
+		}
+	}
+}
+
+void ABossEnemy::UseAttackPattern()
+{
+	switch (CurrentPhase)
+	{
+	case 1:
+		PhaseOnePattern();
+		break;
+	case 2:
+		PhaseTwoPattern();
+		break;
+	}
+}
+
+void ABossEnemy::SpawnProjectile(EBossSkillType Type)
+{
+	const FBossSkillRow* Row = CachedSkills.Find(Type);
+	if (!Row) return;
+
+	int32 SpawnCount = Row->SpawnCount;
+	float SpawnAngle = Row->SpawnAngle;
+
+	float StartSpawnAngle = -SpawnAngle / 2;
+	float AngleGap = SpawnCount > 1 ? SpawnAngle / (SpawnCount - 1) : 0.0f;
+	
+	FVector SpawnLocation = GetActorLocation() + GetActorForwardVector() * 100;
+	FRotator BaseRotation = GetActorRotation();
+	if (TargetActor)
+	{
+		FVector ToTargetDir = TargetActor->GetActorLocation() - GetActorLocation();
+		BaseRotation = ToTargetDir.Rotation();
+	}
+
+	for (int32 i = 0; i < SpawnCount; ++i)
+	{
+		float NewSpawnYaw = StartSpawnAngle + (AngleGap * i);
+		FRotator SpawnRotation = BaseRotation;
+		SpawnRotation.Yaw += NewSpawnYaw;
+
+		// 데미지랑 발사체 셋팅하기위해 딜레이 걸기
+		ABaseProjectile* Projectile = GetWorld()->SpawnActorDeferred<ABaseProjectile>(Row->ProjectileClass, FTransform(SpawnRotation, SpawnLocation));
+		if (Projectile)
+		{
+			Projectile->InitializeProjectile(*Row, TargetActor);
+			UGameplayStatics::FinishSpawningActor(Projectile, FTransform(SpawnRotation, SpawnLocation));
+		}
+	}
+	PlayAnimMontage(Row->SkillMontage);
+}
+
+void ABossEnemy::FireProjectile()
+{
+	ProjectileFireCount++;
+	SpawnProjectile(EBossSkillType::FireProjectile);
+}
+
+void ABossEnemy::ShockWave()
+{
+	ProjectileFireCount = 0;
+	bCanUseHoming = true;
+	const FBossSkillRow* Row = CachedSkills.Find(EBossSkillType::ShockWave);
+	if (!Row || !TargetActor) return;
+
+	FVector SpawnLocation = GetGroundLocation(this);
+	FRotator SpawnRotation = GetActorRotation();
+
+	ABaseAreaAttack* Attack = GetWorld()->SpawnActorDeferred<ABaseAreaAttack>(Row->AreaAttackClass, FTransform(SpawnRotation, SpawnLocation));
+	if (Attack)
+	{
+		Attack->InitializeAttack(*Row, TargetActor);
+		UGameplayStatics::FinishSpawningActor(Attack, FTransform(SpawnRotation, SpawnLocation));
+	}
+	PlayAnimMontage(Row->SkillMontage);
+}
+
+void ABossEnemy::HomingMissile()
+{
+	bCanUseHoming = false;
+	SpawnProjectile(EBossSkillType::HomingMissile);
+}
+
+void ABossEnemy::RiseSpike()
+{
+	const FBossSkillRow* Row = CachedSkills.Find(EBossSkillType::RiseSpike);
+	if (!Row || !TargetActor) return;
+
+	FVector SpawnLocation = GetGroundLocation(TargetActor);
+	FRotator SpawnRotation = TargetActor->GetActorRotation();
+
+	ABaseAreaAttack* Attack = GetWorld()->SpawnActorDeferred<ABaseAreaAttack>(Row->AreaAttackClass, FTransform(SpawnRotation, SpawnLocation));
+	if (Attack)
+	{
+		Attack->InitializeAttack(*Row, TargetActor);
+		UGameplayStatics::FinishSpawningActor(Attack, FTransform(SpawnRotation, SpawnLocation));
+	}
+	PlayAnimMontage(Row->SkillMontage);
+}
+
+void ABossEnemy::PhaseOnePattern()
+{
+	if (ProjectileFireCount < 5)
+	{
+		FireProjectile();
+	}
+	else
+	{
+		ShockWave();
+	}
+}
+
+void ABossEnemy::PhaseTwoPattern()
+{
+	if (ProjectileFireCount == 3)
+	{
+		ProjectileFireCount++;
+		RiseSpike();
+		return;
+	}
+
+	if (bCanUseHoming)
+	{
+		HomingMissile();
+	}
+	else
+	{
+		PhaseOnePattern();
+	}
+}
+
+void ABossEnemy::ChangePhase(int32 NewPhase)
+{
+	CurrentPhase = NewPhase;
+	ProjectileFireCount = 0;
+}
+
+FVector ABossEnemy::GetGroundLocation(AActor* Actor)
+{
+	if (!Actor) return FVector::ZeroVector;
+
+	FVector Start = Actor->GetActorLocation();
+	FVector End = Start - FVector(0.0f, 0.0f, 2000.0f);
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(Actor);
+	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECollisionChannel::ECC_Visibility, Params);
+	if (bHit)
+	{
+		return Hit.ImpactPoint;
+	}
+
+	return Start;
+}
+

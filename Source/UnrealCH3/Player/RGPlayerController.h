@@ -19,6 +19,16 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
+
+	UFUNCTION(Exec, Category = "Progression|Debug")
+	void DebugForceLevelUp();
+
+	UFUNCTION(Exec)
+	void DebugForceCoreUpgradeChoice();
+
+	UFUNCTION(Exec)
+	void DebugApplyCoreUpgradeByName(const FString& UpgradeName);
+
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputMappingContext> DefaultIMC;
 
@@ -41,6 +51,9 @@ public:
 	TObjectPtr<UInputAction> CrouchAction;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UInputAction> GrappleAction;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> FireAction;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
@@ -48,4 +61,10 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> ReloadAction;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UInputAction> HealAction;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UInputAction> GrenadeAction;
 };

@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+Ôªø// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -9,6 +9,7 @@
 
 class UImage;
 class UOverlay;
+class URGQuickSlotWidget;
 
 /**
  * 
@@ -19,15 +20,20 @@ class UNREALCH3_API UHUDWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	// LowHealthEffect ≤Ù±‚/ƒ—±‚
+	// LowHealthEffect ÎÅÑÍ∏∞/ÏºúÍ∏∞
 	UFUNCTION(BlueprintCallable, Category = "UI|HUD")
 	void SetLowHealthEffectVisible(bool bVisible);
 
-	// LowHealthEffect ∞≠µµ ¿˚øÎ
+	// LowHealthEffect Í∞ïÎèÑ Ï†ÅÏö©
 	UFUNCTION(BlueprintCallable, Category = "UI|HUD")
 	void SetLowHealthEffectIntensity(float Intensity);
 
 	UOverlay* GetLayer(EUILayer Layer) const;
+
+	URGQuickSlotWidget* GetHealQuickSlotView() const { return QuickSlot_Heal; }
+
+	URGQuickSlotWidget* GetGrenadeQuickSlotView() const { return QuickSlot_Grenade; }
+
 
 protected:
 	UPROPERTY(meta = (BindWidget))
@@ -53,5 +59,11 @@ protected:
 	
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UOverlay> Overlay_ResultLayer;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<URGQuickSlotWidget> QuickSlot_Heal;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<URGQuickSlotWidget> QuickSlot_Grenade;
 	
 };

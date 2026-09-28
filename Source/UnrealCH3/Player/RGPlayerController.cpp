@@ -1,4 +1,5 @@
 ﻿#include "Player/RGPlayerController.h"
+#include "Gamemode/RGProgressionSubsystem.h"
 #include "EnhancedInputSubsystems.h"
 
 ARGPlayerController::ARGPlayerController()
@@ -9,6 +10,7 @@ ARGPlayerController::ARGPlayerController()
 	, DashAction(nullptr)
 	, SprintAction(nullptr)
 	, CrouchAction(nullptr)
+	, GrappleAction(nullptr)
 	, FireAction(nullptr)
 	, AimAction(nullptr)
 	, ReloadAction(nullptr)
@@ -28,6 +30,43 @@ void ARGPlayerController::BeginPlay()
 			{
 				Subsystem->AddMappingContext(DefaultIMC, 0);
 			}
+		}
+	}
+}
+
+void ARGPlayerController::DebugForceLevelUp()
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			Progression->DebugForceLevelUp();
+		}
+	}
+}
+
+// 추가
+void ARGPlayerController::DebugForceCoreUpgradeChoice()
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			Progression->DebugForceCoreUpgradeChoice();
+		}
+	}
+}
+
+void ARGPlayerController::DebugApplyCoreUpgradeByName(const FString& UpgradeName)
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression =
+			GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			Progression->DebugApplyCoreUpgradeByName(UpgradeName);
 		}
 	}
 }

@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "UI/UIManager.h"
@@ -11,6 +11,34 @@
 #include "Components/OverlaySlot.h"
 #include "UI/View/Combat/WeaponInfoWidget.h"
 #include "UI/View/Combat/CrosshairWidget.h"
+// [추가] 플레이어의 실제 장착 무기 Delegate에 연결하기 위해 사용
+#include "Player/RGCharacter.h"
+#include "RGBaseWeapon.h"
+// [추가] RunFlow TopUI 정책 수신
+#include "Gamemode/RGGameModeBase.h"
+#include "Kismet/GameplayStatics.h"
+#include "UI/View/Combat/RailgunChargeWidget.h"
+#include "UI/View/Combat/RGQuickSlotWidget.h"
+#include "UI/View/Menu/RGResultWidget.h"
+#include "Gamemode/RGProgressionSubsystem.h"
+#include "Kismet/KismetSystemLibrary.h"
+
+//UI 시간 포맷용 함수
+namespace
+{
+	FText MakeResultTimeText(float Seconds)
+	{
+		const int32 TotalSeconds = FMath::Max(0, FMath::FloorToInt(Seconds));
+
+		return FText::FromString(
+			FString::Printf(
+				TEXT("%02d:%02d"),
+				TotalSeconds / 60,
+				TotalSeconds % 60
+			)
+		);
+	}
+}
 
 void AUIManager::BeginPlay()
 {
@@ -19,10 +47,22 @@ void AUIManager::BeginPlay()
 
 	Super::BeginPlay();
 
+	// [추가] Super::BeginPlay 이후에 연결한다.
+	// 이 시점에는 BP_CombatUIManager의 BeginPlay가 끝난 뒤이므로 Crosshair/WeaponInfo View 등록도 완료되어 있다.
+	// Character의 BeginPlay가 먼저 끝났다면 CurrentWeapon을 즉시 바인딩하고,
+	// 아직 무기 생성 전이라면 OnWeaponEquipped Delegate가 이후 자동으로 처리한다.
+	TryBindPlayerWeaponSource();
+
+	// [추가] 현재 RunFlow TopUI 정책도 자동 연결
+	TryBindRunFlowSource();
 }
 
 void AUIManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	// [추가] Character Delegate부터 안전하게 해제한다.
+	UnbindPlayerWeaponSource();
+	UnbindRunFlowSource();
+
 	UE_LOG(LogTemp,
 		Log,
 		TEXT("[UIManager] EndPlay - Remove HUD Widget")
@@ -54,8 +94,8 @@ bool AUIManager::IsInputBlockingLayer(EUILayer Layer) const
 
 bool AUIManager::HasInputBlockingView() const
 {
-	//const TPair : Map�� ���� �������� �ʰ� �б� �������� Ȯ��
-	//ViewLayer.Value : ����� EUILayer ���� �������� �ϳ��� �߰ߵǸ� Ʈ��� ��ȯ
+	//const TPair : Map의 값을 복사하지 않고 읽기 전용으로 확인
+	//ViewLayer.Value : 저장된 EUILayer 위의 계층값중 하나라도 발견되면 트루로 반환
 	for (const TPair<TSubclassOf<UUserWidget>, EUILayer>& ViewLayer : ActiveViewLayers)
 	{
 		if (IsInputBlockingLayer(ViewLayer.Value))
@@ -92,6 +132,250 @@ void AUIManager::HandleDamageNumberRequested(float AppliedDamage, AActor* Target
 	OnDamageNumberDisplayRequested(AppliedDamage, TargetActor, WorldLocation);
 }
 
+// [추가] 플레이어 캐릭터와 무기 장착 이벤트 연결
+void AUIManager::TryBindPlayerWeaponSource()
+{
+	if (!IsValid(PlayerOwner))
+	{
+		return;
+	}
+
+	ARGCharacter* PlayerCharacter = Cast<ARGCharacter>(PlayerOwner->GetPawn());
+	if (!IsValid(PlayerCharacter))
+	{
+		return;
+	}
+
+	// 이미 같은 캐릭터에 연결되어 있다면 Delegate를 중복 등록하지 않는다.
+	if (BoundPlayerCharacter.Get() != PlayerCharacter)
+	{
+		UnbindPlayerWeaponSource();
+
+		BoundPlayerCharacter = PlayerCharacter;
+		PlayerCharacter->OnWeaponEquipped.AddUniqueDynamic(
+			this,
+			&AUIManager::HandlePlayerWeaponEquipped
+		);
+	}
+
+	if (IsValid(HUDControllerInstance))
+	{
+		HUDControllerInstance->BindQuickSlotCharacter(PlayerCharacter);
+	}
+
+	// Character가 UIManager보다 먼저 BeginPlay를 끝낸 경우를 처리한다.
+	// 이미 생성된 CurrentWeapon이 있으면 지금 즉시 HUDController에 바인딩한다.
+	if (ARGBaseWeapon* CurrentWeapon = PlayerCharacter->GetCurrentWeapon())
+	{
+		HandlePlayerWeaponEquipped(CurrentWeapon);
+	}
+}
+
+// [추가] 플레이어 캐릭터 Delegate 연결 해제
+void AUIManager::UnbindPlayerWeaponSource()
+{
+	if (ARGCharacter* PlayerCharacter = BoundPlayerCharacter.Get())
+	{
+		PlayerCharacter->OnWeaponEquipped.RemoveDynamic(
+			this,
+			&AUIManager::HandlePlayerWeaponEquipped
+		);
+	}
+
+	BoundPlayerCharacter.Reset();
+}
+
+// [추가] 새 무기가 실제 장착된 순간 HUDController에 연결
+void AUIManager::HandlePlayerWeaponEquipped(ARGBaseWeapon* NewWeapon)
+{
+	if (!IsValid(HUDControllerInstance) || !IsValid(NewWeapon))
+	{
+		return;
+	}
+
+	// 별도의 BP Text 입력을 강제하지 않도록 클래스 이름을 기본 표시명으로 사용한다.
+	// 표시명은 UI 용도일 뿐, 히트/킬/데미지 피드백 동작에는 영향을 주지 않는다.
+	FString WeaponDisplayName = NewWeapon->GetClass()->GetName();
+	WeaponDisplayName.RemoveFromStart(TEXT("BP_"));
+	WeaponDisplayName.RemoveFromEnd(TEXT("_C"));
+
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponUI][PlayerBind] %s / %d"),
+		*WeaponDisplayName,
+		NewWeapon->GetCurrentAmmo());
+
+	HUDControllerInstance->BindWeapon(
+		NewWeapon,
+		FText::FromString(WeaponDisplayName)
+	);
+}
+
+
+// [추가] GameMode RunFlow 정책 연결
+void AUIManager::TryBindRunFlowSource()
+{
+	ARGGameModeBase* GameMode =
+		Cast<ARGGameModeBase>(
+			UGameplayStatics::GetGameMode(this)
+		);
+
+	if (!IsValid(GameMode))
+	{
+		return;
+	}
+
+	if (BoundRunFlowGameMode.Get() != GameMode)
+	{
+		UnbindRunFlowSource();
+
+		BoundRunFlowGameMode = GameMode;
+
+		GameMode->OnRunFlowPolicyChanged.AddUniqueDynamic(
+			this,
+			&AUIManager::HandleRunFlowPolicyChanged
+		);
+
+		GameMode->OnGameOver.AddUniqueDynamic(this,&AUIManager::HandleGameOver);
+
+		GameMode->OnStageCleared.AddUniqueDynamic(this,&AUIManager::HandleStageCleared);
+	}
+
+	// BeginPlay 순서와 관계없이 현재 TopUI를 즉시 동기화
+	OnRunFlowTopUIChanged(
+		GameMode->GetCurrentTopUI()
+	);
+}
+
+
+void AUIManager::UnbindRunFlowSource()
+{
+	if (
+		ARGGameModeBase* GameMode =
+			BoundRunFlowGameMode.Get()
+		)
+	{
+		GameMode->OnRunFlowPolicyChanged.RemoveDynamic(
+			this,
+			&AUIManager::HandleRunFlowPolicyChanged
+		);
+
+
+		GameMode->OnGameOver.RemoveDynamic(this,&AUIManager::HandleGameOver);
+		GameMode->OnStageCleared.RemoveDynamic(this,&AUIManager::HandleStageCleared);
+	}
+
+	BoundRunFlowGameMode.Reset();
+}
+
+
+void AUIManager::HandleRunFlowPolicyChanged(
+	ERGRunInputPolicy InputPolicy,
+	ERGRunTimePolicy TimePolicy,
+	ERGRunAIState AIState,
+	FName TopUI
+)
+{
+	// 입력 모드와 시간은 GameMode가 이미 실제 적용한다.
+	// UIManager는 자신이 담당하는 TopUI 논리 ID만 BP에 전달한다.
+	OnRunFlowTopUIChanged(
+		TopUI
+	);
+}
+
+URGResultWidget* AUIManager::OpenResultView()
+{
+	if (!ResultWidgetClass)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[UIManager] ResultWidgetClass is not assigned.")
+		);
+
+		return nullptr;
+	}
+
+	URGResultWidget* ResultWidget = Cast<URGResultWidget>(OpenView(ResultWidgetClass, EUILayer::Result));
+
+	if (IsValid(ResultWidget))
+	{
+		BindResultActions(ResultWidget);
+	}
+
+	return ResultWidget;
+}
+
+void AUIManager::BindResultActions(URGResultWidget* ResultWidget)
+{
+	ResultWidget->OnRetryRequested.RemoveAll(this);
+	ResultWidget->OnStartOverRequested.RemoveAll(this);
+	ResultWidget->OnMainMenuRequested.RemoveAll(this);
+	ResultWidget->OnExitRequested.RemoveAll(this);
+
+	ResultWidget->OnRetryRequested.AddUObject(
+		this,
+		&AUIManager::HandleResultRetryRequested
+	);
+
+	ResultWidget->OnStartOverRequested.AddUObject(
+		this,
+		&AUIManager::HandleResultStartOverRequested
+	);
+
+	ResultWidget->OnMainMenuRequested.AddUObject(
+		this,
+		&AUIManager::HandleResultMainMenuRequested
+	);
+
+	ResultWidget->OnExitRequested.AddUObject(
+		this,
+		&AUIManager::HandleResultExitRequested
+	);
+}
+
+
+void AUIManager::HandleGameOver(EDeathReason /*Reason*/)
+{
+	ARGGameModeBase* GameMode = BoundRunFlowGameMode.Get();
+
+	if (!IsValid(GameMode))
+	{
+		return;
+	}
+
+	URGResultWidget* ResultWidget = OpenResultView();
+
+	if (!IsValid(ResultWidget))
+	{
+		return;
+	}
+
+	ResultWidget->ShowGameOver();
+
+	ResultWidget->SetGameOverStats(MakeResultTimeText(GameMode->GetElapsedRunTimeSeconds()),GameMode->GetCurrentKills());
+}
+
+void AUIManager::HandleStageCleared()
+{
+	ARGGameModeBase* GameMode = BoundRunFlowGameMode.Get();
+
+	
+	if (!IsValid(GameMode) || GameMode->GetStageCompletionDestination() != TEXT("Result"))
+	{
+		return;
+	}
+
+	URGResultWidget* ResultWidget = OpenResultView();
+
+	if (!IsValid(ResultWidget))
+	{
+		return;
+	}
+
+	ResultWidget->ShowClear();
+
+	ResultWidget->SetClearStats(MakeResultTimeText(GameMode->GetElapsedRunTimeSeconds()),GameMode->GetCurrentKills());
+}
+
 void AUIManager::TestOpenPauseMenu()
 {
 	if (!PauseMenuClass)
@@ -103,7 +387,7 @@ void AUIManager::TestOpenPauseMenu()
 		);
 		return;
 	}
-	//IsChildOf : ������ Ŭ������ UPauseMenuWidget �� ����ߴ��� Ȯ��, StaticClass: C++ Ŭ������ �𸮾� Ÿ�� ������ �����´�.
+	//IsChildOf : 설정한 클래스가 UPauseMenuWidget 을 상속했는지 확인, StaticClass: C++ 클래스의 언리얼 타입 정보를 가져온다.
 	if (!PauseMenuClass->IsChildOf(UPauseMenuWidget::StaticClass()))
 	{
 		UE_LOG(
@@ -161,6 +445,21 @@ void AUIManager::TestCloseSelection()
 	CloseView(TestSelectionClass);
 }
 
+void AUIManager::TestOpenCraftingStation()
+{
+	if (!CraftingStationClass)
+	{
+		return;
+	}
+
+	OpenView(CraftingStationClass, EUILayer::Menu);
+}
+
+void AUIManager::TestCloseCraftingStation()
+{
+	CloseView(CraftingStationClass);
+}
+
 void AUIManager::CreateHUDWidget()
 {
 	if (!HUDWidgetClass)
@@ -201,25 +500,48 @@ void AUIManager::CreateHUDWidget()
 		return;
 	}
 
-	HUDWidgetInstance->AddToViewport();
-	HUDWidgetInstance->SetLowHealthEffectVisible(bPreviewLowHealthEffect);
+	HUDWidgetInstance->SetLowHealthEffectVisible(
+		bPreviewLowHealthEffect
+	);
 
-	HUDControllerInstance = NewObject<UHUDController>(this);
+	HUDControllerInstance =
+		NewObject<UHUDController>(this);
 
-	if (HUDControllerInstance)
+	if (!IsValid(HUDControllerInstance))
 	{
-		HUDControllerInstance->Initialize(HUDWidgetInstance);
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("Failed to create HUDController")
+		);
 
-		HUDControllerInstance->OnDamageNumberRequested.AddUObject(
+		HUDWidgetInstance = nullptr;
+		return;
+	}
+
+	HUDControllerInstance->Initialize(
+		HUDWidgetInstance
+	);
+
+	RegisterQuickSlotView(
+		HUDWidgetInstance->GetHealQuickSlotView(),
+		HUDWidgetInstance->GetGrenadeQuickSlotView()
+	);
+
+	HUDControllerInstance
+		->OnDamageNumberRequested
+		.AddUObject(
 			this,
 			&AUIManager::HandleDamageNumberRequested
 		);
-	}
+
+	HUDWidgetInstance->AddToViewport();
+
 }
 
 void AUIManager::RemoveHUDWidget()
 {
-	//�߰� �� view �ݺ� �˻� �� ����
+	//추가 된 view 반복 검색 후 제거
 	for (TPair<TSubclassOf<UUserWidget>, TObjectPtr<UUserWidget>>& ViewPair : ActiveViews)
 	{
 		if (IsValid(ViewPair.Value.Get()))
@@ -228,11 +550,11 @@ void AUIManager::RemoveHUDWidget()
 		}
 	}
 
-	//View,Later �ʱ�ȭ
+	//View,Later 초기화
 	ActiveViews.Empty();
 	ActiveViewLayers.Empty();
 
-	//RemoveHUDWidget ȣ�� �� ���θ޴� �Է� ����� �� ���� �Է¸��� ��ȯ
+	//RemoveHUDWidget 호출 시 메인메뉴 입력 모드일 시 게임 입력모드로 전환
 	if (bIsMenuInputModeActive)
 	{
 		ApplyGameInputMode();
@@ -446,6 +768,10 @@ void AUIManager::SetEquippedWeapon(ARGBaseWeapon* InWeapon, const FText& InWeapo
 		return;
 	}
 
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponUI][ExternalBind] %s / %d"),
+		*InWeaponDisplayName.ToString(),
+		IsValid(InWeapon) ? InWeapon->GetCurrentAmmo() : -1);
+
 	HUDControllerInstance->BindWeapon(InWeapon, InWeaponDisplayName);
 }
 
@@ -486,7 +812,7 @@ void AUIManager::NotifyAttackWarningCanceled(AActor* Attacker)
 		return;
 	}
 
-	//������ ����� ��� ���� ��û
+	//공격자 사망시 경고 제거 요청
 	OnAttackWarningHideReqested(Attacker);
 }
 
@@ -502,13 +828,201 @@ void AUIManager::NotifyDirectionalDamage(AActor* Attacker, FVector AttackOrigin)
 		return;
 	}
 
-	//�ǰ� ��ġ�� ���� ���� �߻� ��ġ ����
+	//피격 위치만 전달 공격 발생 위치 기준
 	AActor* ValidAttacker = IsValid(Attacker) ? Attacker : nullptr;
 
 	OnDirectionDamageDisplayRequested(ValidAttacker, AttackOrigin);
 }
 
+void AUIManager::RegisterRailgunChargeView(URailgunChargeWidget* InRailgunChargeView)
+{
+	if (!IsValid(HUDControllerInstance))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[UIManager] Cannot register railgun charge view: "
+				"HUDController is not ready."
+			)
+		);
+		return;
+	}
 
+	if (!IsValid(InRailgunChargeView))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[UIManager] Cannot register railgun charge view: "
+				"View is invalid."
+			)
+		);
+		return;
+	}
+
+	HUDControllerInstance->SetRailgunChargeView(InRailgunChargeView);
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[RailgunUI] Registered View: %s"),
+		*InRailgunChargeView->GetName()
+	);
+}
+
+void AUIManager::RegisterQuickSlotView(URGQuickSlotWidget* InHealQuickSlotView, URGQuickSlotWidget* InGrenadeQuickSlotView)
+{
+	if (!IsValid(HUDControllerInstance))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[UIManager] Cannot register quick slots: "
+				"HUDController is not ready."
+			)
+		);
+		return;
+	}
+
+	if (!IsValid(InHealQuickSlotView)||!IsValid(InGrenadeQuickSlotView))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT(
+				"[UIManager] Cannot register quick slots: "
+				"One or more views are invalid."
+			)
+		);
+		return;
+	}
+
+	HUDControllerInstance->SetQuickSlotViews(InHealQuickSlotView,InGrenadeQuickSlotView);
+}
+
+void AUIManager::TestOpenGameOverResult()
+{
+	ShowGameOverResult();
+}
+
+void AUIManager::TestOpenClearResult()
+{
+	ShowClearResult();
+}
+
+void AUIManager::ShowGameOverResult()
+{
+	if (!ResultWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ResultWidgetClass is not assigned."));
+		return;
+	}
+
+	URGResultWidget* ResultWidget =
+		Cast<URGResultWidget>(OpenView(ResultWidgetClass, EUILayer::Result));
+
+	if (!IsValid(ResultWidget))
+	{
+		return;
+	}
+
+	ResultWidget->ShowGameOver();
+}
+
+void AUIManager::ShowClearResult()
+{
+	if (!ResultWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ResultWidgetClass is not assigned."));
+		return;
+	}
+
+	URGResultWidget* ResultWidget =
+		Cast<URGResultWidget>(OpenView(ResultWidgetClass, EUILayer::Result));
+
+	if (!IsValid(ResultWidget))
+	{
+		return;
+	}
+
+	ResultWidget->ShowClear();
+}
+
+void AUIManager::HandleResultRetryRequested()
+{
+	// 최종 클리어 시 SetGamePaused(true)로 멈춘 월드를 해제한 뒤 이동/종료한다.
+	UGameplayStatics::SetGamePaused(this, false);
+
+	const FString CurrentLevelName =
+		UGameplayStatics::GetCurrentLevelName(this, true);
+
+	if (!CurrentLevelName.IsEmpty())
+	{
+		UGameplayStatics::OpenLevel(
+			this,
+			FName(*CurrentLevelName)
+		);
+	}
+}
+
+void AUIManager::HandleResultStartOverRequested()
+{
+	// 최종 클리어 시 SetGamePaused(true)로 멈춘 월드를 해제한 뒤 이동/종료한다.
+	UGameplayStatics::SetGamePaused(this, false);
+
+	if (UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (
+			URGProgressionSubsystem* Progression =
+			GameInstance->GetSubsystem<URGProgressionSubsystem>()
+			)
+		{
+			Progression->ResetRun();
+		}
+	}
+
+	UGameplayStatics::OpenLevel(this, FirstRunLevelName);
+}
+
+void AUIManager::HandleResultMainMenuRequested()
+{
+	// 최종 클리어 시 SetGamePaused(true)로 멈춘 월드를 해제한 뒤 이동/종료한다.
+	UGameplayStatics::SetGamePaused(this, false);
+
+	if (UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (
+			URGProgressionSubsystem* Progression =
+			GameInstance->GetSubsystem<URGProgressionSubsystem>()
+			)
+		{
+			Progression->ResetRun();
+		}
+	}
+
+	UGameplayStatics::OpenLevel(this, MainMenuLevelName);
+}
+
+void AUIManager::HandleResultExitRequested()
+{
+	// 최종 클리어 시 SetGamePaused(true)로 멈춘 월드를 해제한 뒤 이동/종료한다.
+	UGameplayStatics::SetGamePaused(this, false);
+
+	APlayerController* PlayerController =
+		GetWorld()
+		? GetWorld()->GetFirstPlayerController()
+		: nullptr;
+
+	UKismetSystemLibrary::QuitGame(
+		this,
+		PlayerController,
+		EQuitPreference::Quit,
+		false
+	);
+}
 
 
 

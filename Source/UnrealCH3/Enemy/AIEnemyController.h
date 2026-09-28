@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -15,32 +15,23 @@ class UNREALCH3_API AAIEnemyController : public AAIController
 	
 public:
 	AAIEnemyController();
+
+protected:
+	virtual void BeginPlay() override;
+
+public:
 	UFUNCTION()
 	virtual void OnPossess(APawn* InPawn) override;
 	UFUNCTION()
 	void OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus);
 	UFUNCTION()
-	void RunAI();
-	UFUNCTION()
 	void StopAI();
-
-	UPROPERTY(EditAnywhere, Category = "AI")
-	class UBehaviorTree* BtAsset;
-
-	UPROPERTY(EditAnywhere, Category = "AI")
-	class UBlackboardData* BbAsset;
-
-	//UPROPERTY(EditAnywhere, Category = "AI")
-	UPROPERTY()
-	class UBlackboardComponent* BbComp;
+	UFUNCTION()
+	void UpdateSight();
 
 protected:
+	UPROPERTY(VisibleAnywhere, Category = "AI")
 	UAIPerceptionComponent* Perception;
 	class UAISenseConfig_Sight* Sight;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-	bool bCanAttack;        // °ø°Ý °¡´É ¿©ºÎ
-	UPROPERTY()
-	FVector TargetLocation;
-
+	class UAISenseConfig_Hearing* Hearing;
 };

@@ -11,81 +11,37 @@
 
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISenseConfig_Sight.h"
+#include "Perception/AISenseConfig_Hearing.h"
 
 
 AAIEnemyController::AAIEnemyController()
 {
-	static ConstructorHelpers::FObjectFinder<UBlackboardData> BlackboardFinder(
-		TEXT("/Game/AI/BB_Enemy.BB_Enemy")
-	);
 
-	if (BlackboardFinder.Succeeded())
+	Perception = CreateDefaultSubobject<UAIPerceptionComponent>(TEXT("AIPerceptionComponent"));
+	Sight = CreateDefaultSubobject<UAISenseConfig_Sight>(TEXT("Sight Config"));
+	Hearing = CreateDefaultSubobject<UAISenseConfig_Hearing>(TEXT("Hearing Config"));
+
+	Sight->DetectionByAffiliation.bDetectEnemies = true;
+	Sight->DetectionByAffiliation.bDetectNeutrals = true;
+	Sight->DetectionByAffiliation.bDetectFriendlies = true;
+
+	Hearing->HearingRange = 2200.0f;
+	Hearing->DetectionByAffiliation.bDetectEnemies = true;
+	Hearing->DetectionByAffiliation.bDetectNeutrals = true;
+	Hearing->DetectionByAffiliation.bDetectFriendlies = true;
+
+	Perception->ConfigureSense(*Sight);
+	Perception->ConfigureSense(*Hearing);
+	Perception->SetDominantSense(*Sight->GetSenseImplementation());
+}
+
+void AAIEnemyController::BeginPlay()
+{
+	Super::BeginPlay();
+	if (Perception && Sight)
 	{
-		BbAsset = BlackboardFinder.Object;
-	}
-	else
-	{
-		BbAsset = nullptr;
+		Perception->OnTargetPerceptionUpdated.AddDynamic(this, &AAIEnemyController::OnPerceptionUpdated);
 
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("[AIEnemyController] BB_Enemy not found.")
-		);
-	}
-
-
-	static ConstructorHelpers::FObjectFinder<UBehaviorTree> BehaviorTreeFinder(
-		TEXT("/Game/AI/BT_Enemy.BT_Enemy")
-	);
-
-	if (BehaviorTreeFinder.Succeeded())
-	{
-		BtAsset = BehaviorTreeFinder.Object;
-	}
-	else
-	{
-		BtAsset = nullptr;
-
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("[AIEnemyController] BT_Enemy not found.")
-		);
-	}
-
-
-	Perception =
-		CreateDefaultSubobject<UAIPerceptionComponent>(
-			TEXT("AIPerceptionComponent")
-		);
-
-	Sight =
-		CreateDefaultSubobject<UAISenseConfig_Sight>(
-			TEXT("Sight Config")
-		);
-
-
-	if (Sight && Perception)
-	{
-		Sight->SightRadius = 2200.0f;
-		Sight->LoseSightRadius = 3500.0f;
-		Sight->PeripheralVisionAngleDegrees = 70.0f;
-
-		Sight->DetectionByAffiliation.bDetectEnemies = true;
-		Sight->DetectionByAffiliation.bDetectNeutrals = true;
-		Sight->DetectionByAffiliation.bDetectFriendlies = false;
-
-		Perception->ConfigureSense(*Sight);
-
-		Perception->SetDominantSense(
-			Sight->GetSenseImplementation()
-		);
-
-		Perception->OnTargetPerceptionUpdated.AddDynamic(
-			this,
-			&AAIEnemyController::OnPerceptionUpdated
-		);
 	}
 }
 
@@ -94,179 +50,46 @@ void AAIEnemyController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 
-
-	ABaseEnemy* Enemy =
-		Cast<ABaseEnemy>(InPawn);
-
-	if (!Enemy)
-	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] Possessed pawn is not BaseEnemy."
-			)
-		);
-
-		return;
-	}
-
-
-	if (!Sight || !Perception)
-	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] Perception components are missing."
-			)
-		);
-
-		return;
-	}
-
-
-	Sight->SightRadius =
-		FMath::Max(
-			0.0f,
-			Enemy->GetViewingDistance()
-		);
-
-	Sight->LoseSightRadius =
-		Sight->SightRadius + 500.0f;
-
-	Sight->PeripheralVisionAngleDegrees =
-		FMath::Clamp(
-			Enemy->GetViewingAngle() / 2.0f,
-			0.0f,
-			180.0f
-		);
-
-
-	// 런타임 값 변경 후 다시 적용
-	Perception->ConfigureSense(*Sight);
-
-
-	RunAI();
+	
 }
 
 
-void AAIEnemyController::OnPerceptionUpdated(
-	AActor* Actor,
-	FAIStimulus Stimulus
-)
+void AAIEnemyController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 {
-	ABaseEnemy* Enemy =
-		Cast<ABaseEnemy>(GetPawn());
-
-	if (!Enemy || !Actor)
-	{
-		return;
-	}
-
-
-	ARGCharacter* Player =
-		Cast<ARGCharacter>(Actor);
-
-	if (!Player)
-	{
-		return;
-	}
-
-
-	if (!BbComp)
-	{
-		return;
-	}
-
-
-	if (Stimulus.WasSuccessfullySensed())
-	{
-		Enemy->SetTargetActor(Actor);
-
-		BbComp->SetValueAsObject(
-			TEXT("Target"),
-			Actor
-		);
-	}
-	else
+	ABaseEnemy* Enemy = Cast<ABaseEnemy>(GetPawn());
+	if (!Enemy || !Actor) return;
+	ARGCharacter* Player = Cast<ARGCharacter>(Actor);
+	if (!Player) return;
+	UBlackboardComponent* BlackboardComponent = GetBlackboardComponent();
+	
+	if (!Stimulus.WasSuccessfullySensed())
 	{
 		Enemy->SetTargetActor(nullptr);
-
-		BbComp->ClearValue(
-			TEXT("Target")
-		);
-	}
-}
-
-
-void AAIEnemyController::RunAI()
-{
-	if (!BbAsset)
-	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] Blackboard asset is null."
-			)
-		);
-
+		if (BlackboardComponent)
+		{
+			BlackboardComponent->ClearValue(TEXT("Target"));
+		}
 		return;
-	}
 
 
-	if (!BtAsset)
+
+	if (Stimulus.Type == UAISense::GetSenseID<UAISense_Sight>())
 	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] BehaviorTree asset is null."
-			)
-		);
-
-		return;
+		Enemy->SetTargetActor(Actor);
+		if (BlackboardComponent)
+		{
+			BlackboardComponent->SetValueAsObject(TEXT("Target"), Actor);
+			UE_LOG(LogTemp, Warning, TEXT("Target On"));
+		}
 	}
-
-
-	if (!UseBlackboard(BbAsset, BbComp))
+	else if(Stimulus.Type == UAISense::GetSenseID<UAISenseConfig_Hearing>())
 	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] UseBlackboard failed."
-			)
-		);
+		if (BlackboardComponent)
+		{
+			BlackboardComponent->SetValueAsVector(TEXT("HeardLocation"), Stimulus.StimulusLocation);
+			BlackboardComponent->SetValueAsBool(TEXT("bHeardNoise"), true);
+		}
 
-		return;
-	}
-
-
-	if (!BbComp)
-	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] BlackboardComponent is null."
-			)
-		);
-
-		return;
-	}
-
-
-	if (!RunBehaviorTree(BtAsset))
-	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"[AIEnemyController] RunBehaviorTree failed."
-			)
-		);
 	}
 }
 
@@ -287,4 +110,24 @@ void AAIEnemyController::StopAI()
 	BehaviorTreeComponent->StopTree(
 		EBTStopMode::Safe
 	);
+}
+
+void AAIEnemyController::UpdateSight()
+{
+	ABaseEnemy* Enemy = Cast<ABaseEnemy>(GetPawn());
+	if (Enemy)
+	{
+		Sight->SightRadius = Enemy->GetViewingDistance();
+		Sight->LoseSightRadius = Enemy->GetViewingDistance() + 500.0f;
+		Sight->PeripheralVisionAngleDegrees = Enemy->GetViewingAngle() / 2.0f;
+
+		Hearing->HearingRange = Enemy->GetHearingDistance();
+		Perception->ConfigureSense(*Sight);
+		Perception->ConfigureSense(*Hearing);
+
+		if (Enemy->GetEnemyBehaviorTree())
+		{
+			RunBehaviorTree(Enemy->GetEnemyBehaviorTree());
+		}
+	}
 }

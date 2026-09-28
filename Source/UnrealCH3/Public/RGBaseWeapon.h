@@ -9,6 +9,8 @@
 class USkeletalMeshComponent;
 class UDataTable;
 class ACharacter;
+class USoundBase;  
+class UNiagaraSystem;
 
 //UI 바인딩용 델리게이트 _ 리로드시작 리로드끝 에이밍 총알갯수변경 시 델리게이트 호출 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAmmoChanged, int32, CurrentAmmo, int32, MagazineCapacity);
@@ -19,6 +21,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAimingChanged, bool, bNowAiming);
 //UI담당자 추가 델리게이트 - 재장전캔슬 델리게이트
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnReloadCanceled);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnWeaponShotFired);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnWeaponShotFiredStop);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWeaponDamageConfirmed, float, AppliedDamage, bool, bKilled);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnWeaponDamageNumberRequested, float, AppliedDamage, AActor*, TargetActor, FVector, WorldLocation);
 
@@ -64,6 +67,9 @@ public:
 	FOnWeaponShotFired OnShotFired;
 
 	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
+	FOnWeaponShotFiredStop OnShotFiredStop;
+
+	UPROPERTY(BlueprintAssignable, Category = "Weapon|Events")
 	FOnWeaponHit OnWeaponHit;
 	//=======================================================================================
 
@@ -90,11 +96,11 @@ protected:
 	virtual void Fire();
 	//라인트레이스 -> 맞았으면 ApplyHitDamage호출 ( AlreadyHitActors 를 넘기면 이 안의 엑터는 다시 처리하지 않음 ( 관통 무기용 중복 방지) )
 	//맞췄으면 true 반환 못맞췄으면 false 반환
-	virtual bool FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors);
+	virtual bool FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors , FHitResult* OutHit = nullptr , bool bTriggerCoreEffects = true , float TraceRadius = 0.f);
 	//피해 로직 : 기본 피해 * 강화 배율 * 거리 감쇠(선택) -> 최종 피해 전달.
 	// if 강화 X 에 거리감쇠 효과 0으로 한다면 -> 기본피해 == 최종피해
 	// 실제 체력 차감은 맞은 대상 (적) 에서 처리하는 것으로 구현 + 적 체력 여기서 건드리지 않음
-	virtual void ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart, bool bIsDirectHit);
+	virtual void ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart, bool bIsDirectHit , bool bTriggerCoreEffects = true);
 	// 발사 시작 지점/방향을 구함 기본은 캐릭터의 카메라 기준. 실패 시 false.
 	virtual bool GetMuzzleAimTransform(FVector& OutStart, FVector& OutDirection) const;
 	//재장전 타이머 끝났을 때 실제 재장전 처리
@@ -155,6 +161,10 @@ protected:
 	FTimerHandle FireTimerHandle;
 	FTimerHandle ReloadTimerHandle;
 
+	UFUNCTION()
+	void HandleUpgradeApplied(FName UpgradeId, int32 NewStackCount);
+	UPROPERTY()
+	int32 LastKnownMagazineStack = 0;
 private:
 	// 타이머 관련 함수들
 	UFUNCTION()
@@ -163,6 +173,7 @@ private:
 	void HandleFireTick();
 	void StartFireTimer();
 	void StopFireTimer();
+protected:
 	bool HasAmmo() const { return CurrentAmmo > 0; }
 
 public:
@@ -202,7 +213,7 @@ public:
 	// ===== 상태 조회 =====
 	//(델리게이트 시스템이 있으면 재장전 , 에임 , 총알변경 등은 여기서 안가져와도됨)
 	UFUNCTION(BlueprintPure, Category = "Weapon")
-	bool CanFire() const;
+	virtual bool CanFire() const;
 
 	UFUNCTION(BlueprintPure, Category = "Weapon")
 	bool CanReloaded() const;
@@ -217,11 +228,70 @@ public:
 	int32 GetCurrentAmmo() const { return CurrentAmmo; }
 
 	UFUNCTION(BlueprintPure, Category = "Weapon")
-	int32 GetMagazineCapacity() const { return WeaponStats.MagazineCapacity; }
-
-	UFUNCTION(BlueprintPure, Category = "Weapon")
 	float GetADSFOV() const { return WeaponStats.ADSFOV; }
 
 	UFUNCTION(BlueprintPure, Category = "Weapon")
 	float GetReloadProgress() const;
+
+	float GetFireInterval() const;
+	float GetReloadTime() const;
+	int32 GetMagazineCapacity() const;
+
+	//버그 수정 시 추가로 들어감
+	UPROPERTY()
+	int32 ReloadTargetMagazine = 0;
+	int32 GetCapacityForStack(int32 Stacks) const;
+	UPROPERTY()
+	float LastFireTime = -1000.f;
+
+	//=============== 핵심 강화 함수 ===================
+	protected:
+		// 핵심 강화 효과 분기 진입점
+		// bTriggerCoreEffects: 후속 효과(도탄/전이 등)가 자기 자신을 또 트리거하지 않도록 막는 플래그
+		void TryTriggerCoreUpgradeEffects(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
+		//개별 효과 구현
+		void TriggerDoubleShot(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
+		void TriggerChainPulse(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
+		void TriggerExplosiveRound(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart);
+
+	// ============= 반동 관련 함수 ===================
+public:
+	float GetVerticalRecoil() const { return WeaponStats.VerticalRecoil; }
+	float GetHorizontalRecoil() const { return WeaponStats.HorizontalRecoil; }
+
+	// =================== 사운드 ==================
+	protected:
+		UPROPERTY(EditDefaultsOnly, Category = "Weapon|Sound")
+		TObjectPtr<USoundBase> FireSound;
+
+		void PlayWeaponSound(USoundBase* Sound);
+		virtual void PlayFireSound();
+
+	// =================== 이펙트 ==================
+protected:
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Effect")
+	TObjectPtr<UNiagaraSystem> MuzzleEffect;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Effect")
+	TObjectPtr<UNiagaraSystem> TracerEffect;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Effect")
+	TObjectPtr<UNiagaraSystem> ImpactEffect;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Effect")
+	TObjectPtr<UNiagaraSystem> ExplosionEffect;
+
+	// 무기 메시의 총구 소켓 이름
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Effect")
+	FName MuzzleSocketName = TEXT("Muzzle");
+
+	FVector GetMuzzleLocation() const;
+	void PlayMuzzleEffect();
+	void PlayTracerEffect(const FVector& EndLocation);
+	void PlayImpactEffect(const FHitResult& Hit);
+	void PlayExplosionEffect(const FVector& Location);
+
+	// 총구 위치 표시용 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon|Effect")
+	TObjectPtr<USceneComponent> MuzzlePoint;
 };

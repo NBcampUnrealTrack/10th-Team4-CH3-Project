@@ -1,12 +1,19 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "RGBaseWeapon.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
+#include "Enemy/BaseEnemy.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
+#include "Gamemode/RGProgressionSubsystem.h"
 #include "DrawDebugHelpers.h"
+#include "Engine/OverlapResult.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 
 ARGBaseWeapon::ARGBaseWeapon()
 {
@@ -14,6 +21,8 @@ ARGBaseWeapon::ARGBaseWeapon()
 
 	WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMesh"));
 	RootComponent = WeaponMesh;
+	MuzzlePoint = CreateDefaultSubobject<USceneComponent>(TEXT("MuzzlePoint"));
+	MuzzlePoint->SetupAttachment(WeaponMesh);
 }
 
 void ARGBaseWeapon::ReceiveDamageFeedback(float AppliedDamage, bool bKilled, AActor* TargetActor, const FVector& WorldLocation)
@@ -49,7 +58,19 @@ void ARGBaseWeapon::BeginPlay()
 		}
 	}
 
-	CurrentAmmo = WeaponStats.MagazineCapacity;
+	CurrentAmmo = GetMagazineCapacity();
+	OnAmmoChanged.Broadcast(CurrentAmmo, GetMagazineCapacity());
+
+	// 강화 즉시 반영을 위한 구독
+	
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			LastKnownMagazineStack = Progression->GetUpgradeStackCount(FName(TEXT("MagazineUp")));
+			Progression->OnUpgradeApplied.AddDynamic(this, &ARGBaseWeapon::HandleUpgradeApplied);
+		}
+	}
 	
 }
 
@@ -106,13 +127,21 @@ void ARGBaseWeapon::StartFireTimer()
 	{
 		return;
 	}
+	const float FireInterval = GetFireInterval();
+	float InitialDelay = 0.f;
+	if (GetWorld())
+	{
+		const float TimeSinceLastFire = GetWorld()->GetTimeSeconds() - LastFireTime;
+		InitialDelay = FMath::Max(0.f, FireInterval - TimeSinceLastFire);
+	}
 	//FireTimerHandle = 이름표 / this = 무기 자신 / &ARGBaseWeapon::HandleFireTick = 호출할 함수 / 
 	//FMath::Max(0.01f, WeaponStats.FireInterval) = 반복간격 / true -> 계속 반복  / 0.f = 눌렀을 때 지연시간 (0.f 이므로 누르자마자 나감)
-	GetWorldTimerManager().SetTimer(FireTimerHandle, this, &ARGBaseWeapon::HandleFireTick, FMath::Max(0.01f, WeaponStats.FireInterval), true, 0.f);
+	GetWorldTimerManager().SetTimer(FireTimerHandle, this, &ARGBaseWeapon::HandleFireTick, FireInterval, true, InitialDelay);
 }
 
 void ARGBaseWeapon::StopFireTimer()
 {
+	OnShotFiredStop.Broadcast();
 	GetWorldTimerManager().ClearTimer(FireTimerHandle);
 }
 //이 함수에 의해 틱(발사시간간격)마다 적용되는 것 -> 발사 가능한 상태인지 실시간 확인 , 탄약 줄이기 , 델리게이트 , 탄퍼짐 , 발사 , 라인트레이스
@@ -124,15 +153,24 @@ void ARGBaseWeapon::HandleFireTick()
 		StopFireTimer();
 		return;
 	}
+	// 여기서 기록 — Fire()가 어떤 자식 클래스에서 오버라이드되든 항상 거쳐감
+	//스팸 클릭 막기 위한 코드,
+	if (GetWorld())
+	{
+		LastFireTime = GetWorld()->GetTimeSeconds();
+	}
+
 	//그렇다면 발사
 	Fire();
 	//탄약 줄이기 
 	CurrentAmmo = FMath::Max(0, CurrentAmmo - 1);
 	// 발사 처리 Broadcast
 	OnShotFired.Broadcast();
+	PlayFireSound();
+	PlayMuzzleEffect();
 
 	// 탄약이 바뀌는 이 시점에만 딱 한 번 방송. 누가 듣고 있는지는 몰라도 됨.
-	OnAmmoChanged.Broadcast(CurrentAmmo, WeaponStats.MagazineCapacity);
+	OnAmmoChanged.Broadcast(CurrentAmmo, GetMagazineCapacity());
 	//탄약이 0이라면 
 	if (CurrentAmmo <= 0)
 	{
@@ -179,6 +217,7 @@ void ARGBaseWeapon::Fire()
 	{
 		return;
 	}
+
 	// 조준 여부에 맞는 탄퍼짐을 적용해서 실제 발사 방향을 흩뜨림
 	const FVector SpreadDirection = ApplySpread(FireDirection);
 
@@ -186,20 +225,12 @@ void ARGBaseWeapon::Fire()
 	FireHitscan(StartLocation, SpreadDirection, -1.f, nullptr);
 }
 
-bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors)
+bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& FireDirection, float DamageOverride, TSet<AActor*>* AlreadyHitActors , FHitResult* OutHit , bool bTriggerCoreEffects , float TraceRadius	)
 {	
 	//광선의 끝 지점을 계산 
 	const FVector EndLocation = StartLocation + FireDirection * TraceRange;
 	//QueryParams라는 트레이스 검사 옵션을 담는 객체이다.
 	//WeaponFire라는 이름으로 몇 번 걸렸는지 통계를 냄.
-	
-	/*피격 판정을 몸통/약점의 별도 충돌 컴포넌트를 사용하는 방식으로 구성
-	false : 캡슐, 구체 등 단순 충돌 검사
-	약점 판정은 Trace Complex 여부가 아니라 맞은 컴포넌트의 Weakspot 태그로 구분할 것
-	ex ) 적 BP 에 몸통, 약점용 컴포넌트 추가(Capsule or Sphere)
-	각 컴포넌트를 머리와 몸통에 배치 or 스켈레탈 매쉬의 소켓,뼈에 부착
-	현재 코드는 맞은 컴포넌트의 태그로 약점판단 하므로 단순 충돌로 변경했습니다.
-	원래 생각하신 코드 있으시면 true 로 바꿔 주셔도 됩니다!*/
 
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(WeaponFire), false);
 	//무기 자기 자신은 맞은걸로 안침
@@ -209,65 +240,56 @@ bool ARGBaseWeapon::FireHitscan(const FVector& StartLocation, const FVector& Fir
 	{
 		QueryParams.AddIgnoredActor(OwningCharacter);
 	}
+
+	//이미 맞은 적들을 라인 트레이스가 감지하지 않도록 무시목록에 넣는다
+	//레일건 전용
+	if (AlreadyHitActors)
+	{
+		for (AActor* AlreadyHitActor : *AlreadyHitActors)
+		{
+			QueryParams.AddIgnoredActor(AlreadyHitActor);
+		}
+	}
+
 	//트레이스 결과를 담을 그릇.
 	//라인트레이스에 들어가서 맞은 적들 다 Hit에 집어넣어버리고 Hit 안에 있는 엑터들에 대미지 줄 예정
 	FHitResult Hit;
-	//Hit -> 맞은 녀석들을 Hit에 넣을 것이다. / StartLocation -> 라인트레이스 시작 / EndLocation -> 라인트레이스 끝지점 /
-	// TraceChannel -> 라인트레이스에 걸릴 녀석들의 채널 종류 ex)TraceChannel = ECC_Visibility 하면 Visibility 채널에 있는 녀석들만 걸림. / 
-	//그래서 맞았으면 true 아니면 false
-	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, StartLocation, EndLocation, TraceChannel, QueryParams);
+	bool bHit = false;
 
-	//테스트용 디버그 코드(충돌검사용 라인트레이스)
-#if !UE_BUILD_SHIPPING
-	if (bShowWeaponTraceDebug)
+	if (TraceRadius > 0.f)
 	{
-		const FVector DebugEnd = bHit
-			? Hit.ImpactPoint
-			: EndLocation;
-
-		DrawDebugLine(
-			GetWorld(),
-			StartLocation,
-			DebugEnd,
-			bHit ? FColor::Green : FColor::Red,
-			false,
-			2.f,
-			0,
-			2.f
-		);
-
-		UE_LOG(
-			LogTemp,
-			Log,
-			TEXT("[WeaponTrace] Owner=%s / Hit=%s / Component=%s"),
-			*GetNameSafe(OwningCharacter),
-			*GetNameSafe(Hit.GetActor()),
-			*GetNameSafe(Hit.GetComponent())
-		);
+		// 굵은 스윕 트레이스 - 히트박스 확대
+		FCollisionShape SweepShape = FCollisionShape::MakeSphere(TraceRadius);
+		bHit = GetWorld()->SweepSingleByChannel(Hit, StartLocation, EndLocation, FQuat::Identity, TraceChannel, SweepShape, QueryParams);
 	}
-#endif
+	else
+	{
+		// 기존 얇은 라인트레이스
+		bHit = GetWorld()->LineTraceSingleByChannel(Hit, StartLocation, EndLocation, TraceChannel, QueryParams);
+	}
 
 	if (!bHit || !Hit.GetActor())
 	{
 		return false;
 	}
-	// 레일건에만 필요한 로직
+
+	const float BaseDamage = (DamageOverride >= 0.f) ? DamageOverride : WeaponStats.BaseDamage;
+
 	if (AlreadyHitActors)
 	{
-		if (AlreadyHitActors->Contains(Hit.GetActor()))
-		{
-			return false;
-		}
 		AlreadyHitActors->Add(Hit.GetActor());
 	}
 
-	const float BaseDamage = (DamageOverride >= 0.f) ? DamageOverride : WeaponStats.BaseDamage;
 	// "직격"의 기준은 무기 종류가 아니라 관통 순서임.
 	// AlreadyHitActors가 없으면(nullptr) 애초에 관통을 아예 안 쓰는 무기 -> 항상 직격.
 	// AlreadyHitActors가 있으면(관통 무기) -> 이 트레이스에서 "처음" 맞은 대상일 때만 직격으로 인정.
 	//   (Add는 이 아래 if문에서 이미 실행됐으므로, 여기서는 "방금 추가되기 전엔 비어있었는지"를 따로 셈)
-	const bool bIsDirectHit = (AlreadyHitActors == nullptr) || (AlreadyHitActors->Num() == 1);
-	ApplyHitDamage(Hit, BaseDamage, StartLocation, bIsDirectHit);
+	const bool bIsDirectHit = bTriggerCoreEffects && ((AlreadyHitActors == nullptr) || (AlreadyHitActors->Num() == 1));
+
+	ApplyHitDamage(Hit, BaseDamage, StartLocation, bIsDirectHit , bTriggerCoreEffects);
+	if (OutHit) {
+		*OutHit = Hit;
+	}
 	return true;
 }
 
@@ -350,7 +372,7 @@ bool ARGBaseWeapon::CanReloaded() const
 	//조건은 외부 창이 동작하고있는가 -> 이미 리로딩중인가 -> 지금 총알이 풀인가. 전부 아니여야 true 반환
 	if (!bExternalActionsAllowed) return false;
 	if (bIsReloading) return false;
-	if (CurrentAmmo >= WeaponStats.MagazineCapacity) return false;
+	if (CurrentAmmo >= GetMagazineCapacity()) return false;
 	return true;
 }
 
@@ -367,7 +389,10 @@ void ARGBaseWeapon::StartReloaded()
 
 	bIsReloading = true;
 
-	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &ARGBaseWeapon::OnReloadTimerComplete, FMath::Max(0.01f, WeaponStats.ReloadTime), false);
+	// 재장전을 시작할 때 현재 최대 탄창을 저장
+	ReloadTargetMagazine = GetMagazineCapacity();
+
+	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &ARGBaseWeapon::OnReloadTimerComplete, GetReloadTime(), false);
 	
 	OnReloadStarted.Broadcast();	
 }
@@ -400,18 +425,19 @@ void ARGBaseWeapon::CompleteReload()
 	//bReloadWholeMagazine가 true라면 탄창 한번에 교환(돌격소총이나 레일건으로 예상)
 	if (WeaponStats.bReloadWholeMagazine)
 	{
-		CurrentAmmo = WeaponStats.MagazineCapacity;
+		CurrentAmmo = ReloadTargetMagazine;
 	}
 	//bReloadWholeMagazine가 false라면 장전 한번에 총알 하나씩 장전됨(샷건)
 	else
 	{
-		CurrentAmmo = FMath::Min(WeaponStats.MagazineCapacity, CurrentAmmo + 1);
+		CurrentAmmo = FMath::Min(ReloadTargetMagazine, CurrentAmmo + 1);
 	}
 
-	OnAmmoChanged.Broadcast(CurrentAmmo, WeaponStats.MagazineCapacity);
+	OnAmmoChanged.Broadcast(CurrentAmmo, GetMagazineCapacity());
+
 	OnReloadCompleted.Broadcast();
 
-	if (!WeaponStats.bReloadWholeMagazine && CurrentAmmo < WeaponStats.MagazineCapacity && bExternalActionsAllowed)
+	if (!WeaponStats.bReloadWholeMagazine && CurrentAmmo < ReloadTargetMagazine && bExternalActionsAllowed)
 	{
 		StartReloaded();
 	}
@@ -444,6 +470,15 @@ void ARGBaseWeapon::SetExternalActionsAllowed(bool bAllowed)
 //강화 데미지 계산 
 float ARGBaseWeapon::GetUpgradeDamageMultiplier() const
 {
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks = Progression->GetUpgradeStackCount(FName(TEXT("DamageUp")));
+			const float EffectAmount = Progression->GetUpgradeEffectAmount(FName(TEXT("DamageUp")));
+			return 1.0f + (EffectAmount * Stacks);
+		}
+	}
 	return 1.0f;
 }
 //거리에 따른 데미지 감쇠
@@ -466,35 +501,29 @@ float ARGBaseWeapon::CalculateDistanceFalloffMultiplier(float Distance) const
 	return FMath::Lerp(1.f, WeaponStats.MinFalloffDamageMultiplier, Alpha);
 }
 
-void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart , bool bIsDirectHit)
+void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, const FVector& ShotStart, bool bIsDirectHit , bool bTriggerCoreEffects)
 {
 	AActor* HitActor = Hit.GetActor();
 	if (!HitActor)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[ApplyHitDamage] 데미지 적용 안됨"));
 		return;
 	}
-	//최종 데미지 계산
-	float FinalDamage = BaseDamage;
-	//강화 데미지 계산
-	FinalDamage *= GetUpgradeDamageMultiplier();
-	//거리별 감쇠 데미지 계산
+
+	const float UpgradeMult = GetUpgradeDamageMultiplier();
 	const float Distance = FVector::Dist(ShotStart, Hit.ImpactPoint);
-	FinalDamage *= CalculateDistanceFalloffMultiplier(Distance);
-	//약점에 맞았으면 WeakSpotDamageMultiplier 배율만큼 데미지 추가
+	const float FalloffMult = CalculateDistanceFalloffMultiplier(Distance);
 	const bool bIsWeakSpot = Hit.Component.IsValid() && Hit.Component->ComponentHasTag(WeakSpotTag);
-	if (bIsWeakSpot)
-	{
-		FinalDamage *= WeakSpotDamageMultiplier;
-	}
-	// ===== 데이터코어 에서 받아야함 =====
-	// 직격 히트스캔이면 URGDirectHitDamageType, 관통이면 그냥 기본 UDamageType으로 전달.
-	// 데이터 코어 쪽은 TakeDamage에서 이 타입을 확인해 관통/도탄/폭발/전이 피해를 걸러낼 수 있음.
+	const float WeakSpotMult = bIsWeakSpot ? WeakSpotDamageMultiplier : 1.0f;
+
+	float FinalDamage = BaseDamage * UpgradeMult * FalloffMult * WeakSpotMult;
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("[Weapon Damage] Target: %s | Base: %.1f | UpgradeMult: %.2f | Falloff: %.2f | WeakSpot: %.2f | Final: %.1f"),
+		*HitActor->GetName(), BaseDamage, UpgradeMult, FalloffMult, WeakSpotMult, FinalDamage);
+
 	TSubclassOf<UDamageType> DamageTypeClass = bIsDirectHit ? URGDirectHitDamageType::StaticClass() : UDamageType::StaticClass();
 
-	// ===== 적 AI 에서 받아야함 =====
-	// 실제 전달은 언리얼 기본 데미지 시스템 사용.
-	//내부적으로 HitActor->TakeDamage()를 대신 호출
-	//그러므로 적을 담당하는 분은 적 코드에 언리얼에서 제공하는 TakeDamage() 함수 시그니쳐에 따라서 TakeDamage() 코드를 만들어 놓으면 됨
 	UGameplayStatics::ApplyPointDamage(
 		HitActor,
 		FinalDamage,
@@ -504,7 +533,361 @@ void ARGBaseWeapon::ApplyHitDamage(const FHitResult& Hit, float BaseDamage, cons
 		this,
 		DamageTypeClass
 	);
-	// ===== UI , 게임모드에서 받아야함 =====
-	//명중 처치 피드백 용 델리게이트 방송
+
 	OnWeaponHit.Broadcast(HitActor, FinalDamage, bIsWeakSpot, Hit.ImpactPoint);
+
+	//bTriggerCoreEffects가 false면 강화 후속 효과 분기로 들어가지 않음 (도탄된 공격이 또 도탄되지 않게 막음)
+	if (bTriggerCoreEffects)
+	{
+		TryTriggerCoreUpgradeEffects(Hit, FinalDamage, ShotStart);
+	}
+}
+
+float ARGBaseWeapon::GetFireInterval() const
+{
+	float FireInterval = WeaponStats.FireInterval;
+
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks =
+				Progression->GetUpgradeStackCount(FName(TEXT("RateUp")));
+
+			const float EffectAmount =
+				Progression->GetUpgradeEffectAmount(FName(TEXT("RateUp")));
+
+			// 발사 간격 감소
+			FireInterval /= (1.0f + EffectAmount * Stacks);
+		}
+	}
+
+	// 너무 작아지는 것 방지
+	return FMath::Max(0.01f, FireInterval);
+}
+
+float ARGBaseWeapon::GetReloadTime() const
+{
+	float ReloadTime = WeaponStats.ReloadTime;
+
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks =
+				Progression->GetUpgradeStackCount(FName(TEXT("RateUp")));
+
+			const float EffectAmount =
+				Progression->GetUpgradeEffectAmount(FName(TEXT("RateUp")));
+
+			ReloadTime /= (1.0f + EffectAmount * Stacks);
+		}
+	}
+
+	return FMath::Max(0.01f, ReloadTime);
+}
+
+int32 ARGBaseWeapon::GetMagazineCapacity() const
+{
+	float MagazineCapacity = WeaponStats.MagazineCapacity;
+
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			const int32 Stacks =
+				Progression->GetUpgradeStackCount(FName(TEXT("MagazineUp")));
+
+			const float EffectAmount =
+				Progression->GetUpgradeEffectAmount(FName(TEXT("MagazineUp")));
+
+			MagazineCapacity *= (1.0f + EffectAmount * Stacks);
+		}
+	}
+
+	return FMath::Max(1, FMath::RoundToInt(MagazineCapacity));
+}
+
+void ARGBaseWeapon::HandleUpgradeApplied(FName UpgradeId, int32 NewStackCount)
+{
+	if (UpgradeId != FName(TEXT("MagazineUp")))
+	{
+		return;
+	}
+
+	const int32 OldCapacity = GetCapacityForStack(LastKnownMagazineStack);
+	LastKnownMagazineStack = NewStackCount;
+	const int32 NewCapacity = GetMagazineCapacity();
+
+	const int32 CapacityDelta = NewCapacity - OldCapacity;
+	if (CapacityDelta > 0)
+	{
+		CurrentAmmo = FMath::Clamp(CurrentAmmo + CapacityDelta, 0, NewCapacity);
+		OnAmmoChanged.Broadcast(CurrentAmmo, NewCapacity);
+	}
+}
+
+// 특정 스택 수 기준 탄창 계산 (GetMagazineCapacity 로직 재사용)
+int32 ARGBaseWeapon::GetCapacityForStack(int32 Stacks) const
+{
+	float EffectAmount = 0.f;
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const URGProgressionSubsystem* Progression = GI->GetSubsystem<URGProgressionSubsystem>())
+		{
+			EffectAmount = Progression->GetUpgradeEffectAmount(FName(TEXT("MagazineUp")));
+		}
+	}
+	float Capacity = WeaponStats.MagazineCapacity * (1.0f + EffectAmount * Stacks);
+	return FMath::Max(1, FMath::RoundToInt(Capacity));
+}
+
+// ======================== 핵심 강화 ============================================================
+
+void ARGBaseWeapon::TryTriggerCoreUpgradeEffects(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart)
+{
+	UGameInstance* GI = GetGameInstance();
+	URGProgressionSubsystem* Progression = GI ? GI->GetSubsystem<URGProgressionSubsystem>() : nullptr;
+	if (!Progression)
+	{
+		return;
+	}
+
+	// DoubleShot, ChainPulse는 적을 맞췄을 때만 발동 (여기서 개별적으로 체크)
+	const bool bHitEnemy = Cast<ABaseEnemy>(Hit.GetActor()) != nullptr;
+
+	if (bHitEnemy && Progression->HasCoreUpgrade(FName(TEXT("DoubleShot"))))
+	{
+		TriggerDoubleShot(Hit, DealtDamage, ShotStart);
+	}
+
+	if (bHitEnemy && Progression->HasCoreUpgrade(FName(TEXT("ChainPulse"))))
+	{
+		TriggerChainPulse(Hit, DealtDamage, ShotStart);
+	}
+
+	// ExplosiveRound는 적이든 벽이든 라인트레이스가 뭔가에 부딪히기만 하면 발동
+	if (Progression->HasCoreUpgrade(FName(TEXT("ExplosiveRound"))))
+	{
+		TriggerExplosiveRound(Hit, DealtDamage, ShotStart);
+	}
+}
+
+void ARGBaseWeapon::TriggerDoubleShot(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart)
+{
+	UGameInstance* GI = GetGameInstance();
+	URGProgressionSubsystem* Progression = GI ? GI->GetSubsystem<URGProgressionSubsystem>() : nullptr;
+	if (!Progression)
+	{
+		return;
+	}
+
+	const FRGCoreUpgradeRow* Row = Progression->FindCoreUpgradeRow(FName(TEXT("DoubleShot")));
+	if (!Row || !Hit.GetActor())
+	{
+		return;
+	}
+
+	// 더블샷: 같은 대상에게 직접 한 번 더 데미지 적용 (트레이스 재발사 없이, 위치도 이미 아는 상태)
+	const bool bIsDirectHit = false;   // 후속 데미지이므로 코어는 이 데미지를 안 받음
+	TSubclassOf<UDamageType> DamageTypeClass = UDamageType::StaticClass();
+
+	const float SecondShotDamage = DealtDamage * Row->DamagePercent;
+
+	UGameplayStatics::ApplyPointDamage(
+		Hit.GetActor(),
+		SecondShotDamage,
+		(Hit.ImpactPoint - ShotStart).GetSafeNormal(),
+		Hit,
+		OwningCharacter ? OwningCharacter->GetController() : nullptr,
+		this,
+		DamageTypeClass
+	);
+
+	UE_LOG(LogTemp, Warning, TEXT("[DoubleShot] %s 더블샷 추가 데미지: %.1f"), *Hit.GetActor()->GetName(), SecondShotDamage);
+
+	OnWeaponHit.Broadcast(Hit.GetActor(), SecondShotDamage, false, Hit.ImpactPoint);
+}
+//전이 범위는 여기서 수정
+void ARGBaseWeapon::TriggerChainPulse(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart)
+{
+	UGameInstance* GI = GetGameInstance();
+	URGProgressionSubsystem* Progression = GI ? GI->GetSubsystem<URGProgressionSubsystem>() : nullptr;
+	if (!Progression)
+	{
+		return;
+	}
+
+	const FRGCoreUpgradeRow* Row = Progression->FindCoreUpgradeRow(FName(TEXT("ChainPulse")));
+	if (!Row || !Hit.GetActor())
+	{
+		return;
+	}
+
+	AActor* OriginalTarget = Hit.GetActor();
+	const float ChainDamage = DealtDamage * Row->DamagePercent;
+
+	// 첫 타격 지점 주변에서 전이 대상을 탐색
+	TArray<FOverlapResult> Overlaps;
+	FCollisionQueryParams QueryParams;
+	//내 캐릭터한텐 전이 안되게
+	QueryParams.AddIgnoredActor(OriginalTarget);
+	if (OwningCharacter)
+	{
+		QueryParams.AddIgnoredActor(OwningCharacter);
+	}
+	//전이 범위 = 800
+	const float ChainSearchRadius = 800.f;   
+
+	GetWorld()->OverlapMultiByChannel(Overlaps, Hit.ImpactPoint, FQuat::Identity, ECC_Pawn,
+		FCollisionShape::MakeSphere(ChainSearchRadius), QueryParams);
+
+	// 가까운 순으로 정렬
+	Overlaps.Sort([&Hit](const FOverlapResult& A, const FOverlapResult& B)
+		{
+			const float DistA = A.GetActor() ? FVector::DistSquared(Hit.ImpactPoint, A.GetActor()->GetActorLocation()) : TNumericLimits<float>::Max();
+			const float DistB = B.GetActor() ? FVector::DistSquared(Hit.ImpactPoint, B.GetActor()->GetActorLocation()) : TNumericLimits<float>::Max();
+			return DistA < DistB;
+		});
+
+	int32 HitCount = 0;
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		if (HitCount >= Row->MaxTargets)   // 최대 2대 제한 (데이터테이블 MaxTargets 값)
+		{
+			break;
+		}
+
+		AActor* Candidate = Overlap.GetActor();
+		if (!Candidate || Candidate == OriginalTarget || Candidate == OwningCharacter)
+		{
+			continue;
+		}
+
+		UGameplayStatics::ApplyPointDamage(
+			Candidate,
+			ChainDamage,
+			(Candidate->GetActorLocation() - Hit.ImpactPoint).GetSafeNormal(),
+			Hit,
+			OwningCharacter ? OwningCharacter->GetController() : nullptr,
+			this,
+			UDamageType::StaticClass()   // 후속 데미지이므로 비직격 타입 - 코어는 이 데미지를 받지 않음
+		);
+
+		OnWeaponHit.Broadcast(Candidate, ChainDamage, false, Candidate->GetActorLocation());
+		HitCount++;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[ChainPulse] %d명에게 전이 (최대 %d, 배율 %.2f)"), HitCount, Row->MaxTargets, Row->DamagePercent);
+}
+
+void ARGBaseWeapon::TriggerExplosiveRound(const FHitResult& Hit, float DealtDamage, const FVector& ShotStart)
+{
+	if (!Hit.GetActor())
+	{
+		return;
+	}
+
+	const float DamagePercent = 0.35f;
+	const float ExplosionRadius = 300.f;
+
+	TArray<FOverlapResult> Overlaps;
+	FCollisionQueryParams QueryParams;
+	if (OwningCharacter)
+	{
+		QueryParams.AddIgnoredActor(OwningCharacter);
+	}
+
+	GetWorld()->OverlapMultiByChannel(Overlaps, Hit.ImpactPoint, FQuat::Identity, ECC_Pawn,
+		FCollisionShape::MakeSphere(ExplosionRadius), QueryParams);
+
+	TSet<AActor*> AlreadyDamaged;   // 추가: 이번 폭발 한 번 안에서 이미 데미지를 준 적을 기록
+	int32 HitCount = 0;
+
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		AActor* Target = Overlap.GetActor();
+
+		if (!Cast<ABaseEnemy>(Target))
+		{
+			continue;
+		}
+
+		if (AlreadyDamaged.Contains(Target))   // 추가: 같은 적이면 건너뜀
+		{
+			continue;
+		}
+		AlreadyDamaged.Add(Target);   // 추가: 처리한 적으로 기록
+
+		const float ExplosionDamage = DealtDamage * DamagePercent;
+
+		UGameplayStatics::ApplyPointDamage(
+			Target,
+			ExplosionDamage,
+			(Target->GetActorLocation() - Hit.ImpactPoint).GetSafeNormal(),
+			Hit,
+			OwningCharacter ? OwningCharacter->GetController() : nullptr,
+			this,
+			UDamageType::StaticClass()
+		);
+
+		OnWeaponHit.Broadcast(Target, ExplosionDamage, false, Target->GetActorLocation());
+		HitCount++;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[ExplosiveRound] 폭발! %d명 적중"), HitCount);
+}
+
+void ARGBaseWeapon::PlayWeaponSound(USoundBase* Sound)
+{
+	if (!Sound) return;
+	UGameplayStatics::SpawnSoundAttached(Sound, GetRootComponent());
+}
+
+void ARGBaseWeapon::PlayFireSound()
+{
+	PlayWeaponSound(FireSound);
+}
+
+FVector ARGBaseWeapon::GetMuzzleLocation() const
+{
+	return MuzzlePoint ? MuzzlePoint->GetComponentLocation() : GetActorLocation();
+}
+
+void ARGBaseWeapon::PlayMuzzleEffect()
+{
+	if (!MuzzleEffect || !MuzzlePoint) return;
+
+	UNiagaraFunctionLibrary::SpawnSystemAttached(
+		MuzzleEffect, MuzzlePoint, NAME_None,
+		FVector::ZeroVector, FRotator::ZeroRotator,
+		EAttachLocation::SnapToTarget, true);
+}
+
+void ARGBaseWeapon::PlayTracerEffect(const FVector& EndLocation)
+{
+	if (!TracerEffect) return;
+
+	const FVector Start = GetMuzzleLocation();
+	if (UNiagaraComponent* Tracer = UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+		this, TracerEffect, Start, (EndLocation - Start).Rotation()))
+	{
+		Tracer->SetVectorParameter(TEXT("BeamStart"), Start);
+		Tracer->SetVectorParameter(TEXT("BeamEnd"), EndLocation);
+	}
+}
+
+void ARGBaseWeapon::PlayImpactEffect(const FHitResult& Hit)
+{
+	if (!ImpactEffect) return;
+
+	UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+		this, ImpactEffect, Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
+}
+
+void ARGBaseWeapon::PlayExplosionEffect(const FVector& Location)
+{
+	if (!ExplosionEffect) return;
+
+	UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ExplosionEffect, Location);
 }

@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "UI/Controller/HUDController.h"
@@ -8,8 +8,14 @@
 #include "UI/View/Combat/CrosshairWidget.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include "Public/RGRailgun.h"
+#include "UI/View/Combat/RailgunChargeWidget.h"
+#include "UI/View/Combat/RGQuickSlotWidget.h"
+#include "Player/RGCharacter.h"
+#include "RGGrenade.h"
+#include "UI/View/Combat/RGQuickSlotWidget.h"
 
-//Controller°¡ Á¦¾îÇÒ HUD¸¦ ÀúÀå ÈÄ ÃÊ±â°ª ¼ÂÆÃ
+//Controllerê°€ ì œì–´í•  HUDë¥¼ ì €ìž¥ í›„ ì´ˆê¸°ê°’ ì…‹íŒ…
 void UHUDController::Initialize(UHUDWidget* InHUDWidget)
 {
 	HUDWidget = InHUDWidget;
@@ -33,7 +39,7 @@ void UHUDController::HandleHealthChanged(float CurrentHealth, float MaxHelth)
 		return;
 	}
 
-	// ÇöÀç Ã¼·Â / ÃÖ´ëÃ¼·ÂÀ¸·Î ³ª´©¾î HealthRatio °è»ê
+	// í˜„ìž¬ ì²´ë ¥ / ìµœëŒ€ì²´ë ¥ìœ¼ë¡œ ë‚˜ëˆ„ì–´ HealthRatio ê³„ì‚°
 	const float HealthRatio =
 		FMath::Clamp(
 			CurrentHealth / MaxHelth,
@@ -42,7 +48,7 @@ void UHUDController::HandleHealthChanged(float CurrentHealth, float MaxHelth)
 		);
 
 
-	// Ã¼·Â ºñÀ²¿¡ µû¶ó È¿°ú °­µµ ÀúÀå
+	// ì²´ë ¥ ë¹„ìœ¨ì— ë”°ë¼ íš¨ê³¼ ê°•ë„ ì €ìž¥
 	const float Intensity =
 		FMath::GetMappedRangeValueClamped(
 			FVector2D(
@@ -53,7 +59,7 @@ void UHUDController::HandleHealthChanged(float CurrentHealth, float MaxHelth)
 			HealthRatio
 		);
 
-	//Intensity °ª¿¡ µû¶ó LowHealthEffect ÀÇ °­µµ ¼³Á¤
+	//Intensity ê°’ì— ë”°ë¼ LowHealthEffect ì˜ ê°•ë„ ì„¤ì •
 	HUDWidget->SetLowHealthEffectIntensity(Intensity);
 }
 
@@ -70,6 +76,13 @@ void UHUDController::Shutdown()
 	HUDWidget.Reset();
 
 	CrosshairView.Reset();
+
+	if (URailgunChargeWidget* View = RailgunChargeView.Get())
+	{
+		View->ResetChargeState();
+	}
+
+	RailgunChargeView.Reset();
 
 }
 
@@ -128,10 +141,24 @@ void UHUDController::BindWeapon(ARGBaseWeapon* InWeapon, const FText& InWeaponDi
 	);
 
 	RefreshWeaponInfo();
+	RefreshRailgunChargeUI();
 }
 
 void UHUDController::UnbindWeapon()
 {
+	StopReloadProgressTimer();
+	StopRailgunChargeTimer();
+
+	if (UCrosshairWidget* View = CrosshairView.Get())
+	{
+		View->ApplyReloadState(false, 0.0f);
+	}
+
+	if (URailgunChargeWidget* View = RailgunChargeView.Get())
+	{
+		View->ResetChargeState();
+	}
+
 	if (ARGBaseWeapon* Weapon = BoundWeapon.Get())
 	{
 		Weapon->OnAmmoChanged.RemoveDynamic(
@@ -168,6 +195,7 @@ void UHUDController::UnbindWeapon()
 			this,
 			&UHUDController::HandleWeaponDamageNumberRequested
 		);
+
 	}
 
 	BoundWeapon.Reset();
@@ -176,8 +204,6 @@ void UHUDController::UnbindWeapon()
 
 void UHUDController::SetCrosshairView(UCrosshairWidget* InCrosshairView)
 {
-	CrosshairView = InCrosshairView;
-
 	if (UCrosshairWidget* PreviousView = CrosshairView.Get())
 	{
 		PreviousView->ApplyReloadState(false, 0.f);
@@ -185,6 +211,47 @@ void UHUDController::SetCrosshairView(UCrosshairWidget* InCrosshairView)
 
 	CrosshairView = InCrosshairView;
 	RefreshReloadUI();
+}
+
+void UHUDController::SetRailgunChargeView(URailgunChargeWidget* InRailgunChargeView)
+{
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[RailgunUI] SetRailgunChargeView called: %s"),
+		IsValid(InRailgunChargeView)
+		? *InRailgunChargeView->GetName()
+		: TEXT("NULL")
+	);
+
+	if (URailgunChargeWidget* PreviousView = RailgunChargeView.Get())
+	{
+		PreviousView->ResetChargeState();
+	}
+
+	RailgunChargeView = InRailgunChargeView;
+
+	if (URailgunChargeWidget* NewView = RailgunChargeView.Get())
+	{
+		NewView->ResetChargeState();
+	}
+
+	RefreshRailgunChargeUI();
+}
+
+void UHUDController::SetQuickSlotViews(URGQuickSlotWidget* InHealQuikSlotView, URGQuickSlotWidget* InGrenadeQuickSlotView)
+{
+	HealQuickSlotView = InHealQuikSlotView;
+	GrenadeQuickSlotView = InGrenadeQuickSlotView;
+
+	RefreshQuickSlotUI();
+}
+
+void UHUDController::BindQuickSlotCharacter(ARGCharacter* InCharacter)
+{
+	QuickSlotCharacter = InCharacter;
+
+	RefreshQuickSlotUI();
 }
 
 void UHUDController::HandleWeaponAmmoChanged(int32 CurrentAmmo, int32 MagazineCapacity)
@@ -196,6 +263,10 @@ void UHUDController::HandleWeaponAmmoChanged(int32 CurrentAmmo, int32 MagazineCa
 
 	if (UWeaponInfoWidget* View = WeaponInfoView.Get())
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponUI][AmmoChanged] %s / %d"),
+			*BoundWeaponDisplayName.ToString(),
+			CurrentAmmo);
+
 		View->ApplyWeaponInfo(
 			BoundWeaponDisplayName,
 			CurrentAmmo
@@ -213,6 +284,10 @@ void UHUDController::RefreshWeaponInfo()
 		return;
 	}
 	
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponUI][Refresh] %s / %d"),
+		*BoundWeaponDisplayName.ToString(),
+		Weapon->GetCurrentAmmo());
+
 	View->ApplyWeaponInfo(
 		BoundWeaponDisplayName,
 		Weapon->GetCurrentAmmo()
@@ -221,7 +296,7 @@ void UHUDController::RefreshWeaponInfo()
 
 void UHUDController::RefreshReloadUI()
 {
-	//ÀÌÀü °»½Å ÃÊ±âÈ­
+	//ì´ì „ ê°±ì‹  ì´ˆê¸°í™”
 	StopReloadProgressTimer();
 	UpdateReloadProgress();
 
@@ -241,7 +316,7 @@ void UHUDController::RefreshReloadUI()
 
 	ReloadTimerWorld = World;
 
-	// ÀçÀåÀü Áß 60ÇÁ·¹ÀÓÀ¸·Î È­¸é °»½Å
+	// ìž¬ìž¥ì „ ì¤‘ 60í”„ë ˆìž„ìœ¼ë¡œ í™”ë©´ ê°±ì‹ 
 	World->GetTimerManager().SetTimer(
 		ReloadProgressTimerHandle,
 		this,
@@ -320,6 +395,168 @@ void UHUDController::HandleWeaponDamageNumberRequested(float AppliedDamage, AAct
 	}
 
 	OnDamageNumberRequested.Broadcast(AppliedDamage, TargetActor, WorldLocation);
+}
+
+void UHUDController::RefreshRailgunChargeUI()
+{
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[RailgunUI] Refresh called / View=%s / Weapon=%s"),
+		RailgunChargeView.IsValid() ? TEXT("Valid") : TEXT("Invalid"),
+		BoundWeapon.IsValid() ? *BoundWeapon->GetName() : TEXT("NULL")
+	);
+
+	StopRailgunChargeTimer();
+
+	URailgunChargeWidget* View = RailgunChargeView.Get();
+
+	if (!IsValid(View))
+	{
+		return;
+	}
+
+	View->ResetChargeState();
+
+	ARGRailgun* Railgun = Cast<ARGRailgun>(BoundWeapon.Get());
+
+	if (!IsValid(Railgun))
+	{
+		return;
+	}
+
+	UWorld* World = Railgun->GetWorld();
+
+	if (!IsValid(World))
+	{
+		return;
+	}
+
+	RailgunChargeTimerWorld = World;
+
+	UpdateRailgunChargeProgress();
+
+	World->GetTimerManager().SetTimer(
+		RailgunChargeTimerHandle,
+		this,
+		&UHUDController::UpdateRailgunChargeProgress,
+		1.0f / 60.0f,
+		true
+	);
+}
+
+void UHUDController::UpdateRailgunChargeProgress()
+{
+	URailgunChargeWidget* View = RailgunChargeView.Get();
+
+	if (!IsValid(View))
+	{
+		StopRailgunChargeTimer();
+		return;
+	}
+
+	ARGRailgun* Railgun = Cast<ARGRailgun>(BoundWeapon.Get());
+
+	if (!IsValid(Railgun))
+	{
+		View->ResetChargeState();
+		StopRailgunChargeTimer();
+		return;
+	}
+
+	const bool bIsCharging = Railgun->IsCharging();
+	const float ChargeRatio = Railgun->GetChargeRatio01();
+	const float MinimumFireRatio = Railgun->GetChargeFireRatio();
+	const bool bHasAmmo = Railgun->GetCurrentAmmo() > 0;
+
+	View->ApplyChargeState(
+		bIsCharging,
+		ChargeRatio,
+		MinimumFireRatio,
+		bHasAmmo
+	);
+}
+
+void UHUDController::StopRailgunChargeTimer()
+{
+	if (UWorld* World =
+		RailgunChargeTimerWorld.Get())
+	{
+		World->GetTimerManager().ClearTimer(
+			RailgunChargeTimerHandle
+		);
+	}
+
+	RailgunChargeTimerHandle.Invalidate();
+	RailgunChargeTimerWorld.Reset();
+}
+
+void UHUDController::RefreshQuickSlotUI()
+{
+	StopQuickSlotTimer();
+
+	ARGCharacter* Character = QuickSlotCharacter.Get();
+
+	if (!IsValid(Character))
+	{
+		return;
+	}
+
+	if (!HealQuickSlotView.IsValid()&&!GrenadeQuickSlotView.IsValid())
+	{
+		return;
+	}
+
+	UWorld* World = Character->GetWorld();
+
+	if (!IsValid(World))
+	{
+		return;
+	}
+
+	QickSlotTimerWorld = World;
+
+	UpdateQuickSlotUI();
+
+	World->GetTimerManager().SetTimer(
+		QuickSlotTimerHandle,
+		this,
+		&UHUDController::UpdateQuickSlotUI,
+		0.05f,
+		true
+	);
+}
+
+void UHUDController::UpdateQuickSlotUI()
+{
+	ARGCharacter* Character = QuickSlotCharacter.Get();
+
+	if (!IsValid(Character))
+	{
+		StopQuickSlotTimer();
+		return;
+	}
+
+	if (URGQuickSlotWidget* HealView = HealQuickSlotView.Get())
+	{
+		HealView->ApplyCooldown(Character->GetHealCooldownRemaining(), 0.0f);
+	}
+
+	if (URGQuickSlotWidget* GrenadeView = GrenadeQuickSlotView.Get())
+	{
+		GrenadeView->ApplyCooldown(ARGGrenade::GetGrenadeCooldownRemaining(Character), 0.0f);
+	}
+}
+
+void UHUDController::StopQuickSlotTimer()
+{
+	if (UWorld* World = QickSlotTimerWorld.Get())
+	{
+		World->GetTimerManager().ClearTimer(QuickSlotTimerHandle);
+	}
+
+	QuickSlotTimerHandle.Invalidate();
+	QickSlotTimerWorld.Reset();
 }
 
 void UHUDController::HandleWeaponReloadStarted()

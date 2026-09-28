@@ -23,6 +23,10 @@
 			"TargetAllowList": [
 				"Editor"
 			]
+		},
+		{
+			"Name": "WaveformEditor",
+			"Enabled": true
 		}
 	]
 }
