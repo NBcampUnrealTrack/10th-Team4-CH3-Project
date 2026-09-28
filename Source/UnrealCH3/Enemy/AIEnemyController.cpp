@@ -1,25 +1,25 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Enemy/AIEnemyController.h"
 #include "Enemy/BaseEnemy.h"
 #include "Player/RGCharacter.h"
+
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardData.h"
 #include "BehaviorTree/BlackboardComponent.h"
+#include "BehaviorTree/BehaviorTreeComponent.h"
+
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISenseConfig_Sight.h"
 #include "Perception/AISenseConfig_Hearing.h"
 
+
 AAIEnemyController::AAIEnemyController()
 {
+
 	Perception = CreateDefaultSubobject<UAIPerceptionComponent>(TEXT("AIPerceptionComponent"));
 	Sight = CreateDefaultSubobject<UAISenseConfig_Sight>(TEXT("Sight Config"));
 	Hearing = CreateDefaultSubobject<UAISenseConfig_Hearing>(TEXT("Hearing Config"));
-
-	Sight->SightRadius = 2200.0f;
-	Sight->LoseSightRadius = 3500.0f;
-	Sight->PeripheralVisionAngleDegrees = 70;
 
 	Sight->DetectionByAffiliation.bDetectEnemies = true;
 	Sight->DetectionByAffiliation.bDetectNeutrals = true;
@@ -41,12 +41,15 @@ void AAIEnemyController::BeginPlay()
 	if (Perception && Sight)
 	{
 		Perception->OnTargetPerceptionUpdated.AddDynamic(this, &AAIEnemyController::OnPerceptionUpdated);
+
 	}
 }
+
 
 void AAIEnemyController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
+
 	
 }
 
@@ -67,7 +70,7 @@ void AAIEnemyController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus
 			BlackboardComponent->ClearValue(TEXT("Target"));
 		}
 		return;
-	}
+
 
 
 	if (Stimulus.Type == UAISense::GetSenseID<UAISense_Sight>())
@@ -86,14 +89,27 @@ void AAIEnemyController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus
 			BlackboardComponent->SetValueAsVector(TEXT("HeardLocation"), Stimulus.StimulusLocation);
 			BlackboardComponent->SetValueAsBool(TEXT("bHeardNoise"), true);
 		}
+
 	}
 }
 
+
 void AAIEnemyController::StopAI()
 {
-	UBehaviorTreeComponent* behaviorTreeComponent = Cast<UBehaviorTreeComponent>(BrainComponent);
-	if (nullptr == behaviorTreeComponent) return;
-	behaviorTreeComponent->StopTree(EBTStopMode::Safe);
+	UBehaviorTreeComponent* BehaviorTreeComponent =
+		Cast<UBehaviorTreeComponent>(
+			BrainComponent
+		);
+
+	if (!BehaviorTreeComponent)
+	{
+		return;
+	}
+
+
+	BehaviorTreeComponent->StopTree(
+		EBTStopMode::Safe
+	);
 }
 
 void AAIEnemyController::UpdateSight()
