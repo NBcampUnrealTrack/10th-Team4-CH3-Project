@@ -10,6 +10,7 @@ class USkeletalMeshComponent;
 class UDataTable;
 class ACharacter;
 class USoundBase;  
+class UNiagaraSystem;
 
 //UI 바인딩용 델리게이트 _ 리로드시작 리로드끝 에이밍 총알갯수변경 시 델리게이트 호출 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAmmoChanged, int32, CurrentAmmo, int32, MagazineCapacity);
@@ -265,4 +266,28 @@ public:
 
 		void PlayWeaponSound(USoundBase* Sound);
 		virtual void PlayFireSound();
+
+	// =================== 이펙트 ==================
+protected:
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Effect")
+	TObjectPtr<UNiagaraSystem> MuzzleEffect;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Effect")
+	TObjectPtr<UNiagaraSystem> TracerEffect;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Effect")
+	TObjectPtr<UNiagaraSystem> ImpactEffect;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Effect")
+	TObjectPtr<UNiagaraSystem> ExplosionEffect;
+
+	// 무기 메시의 총구 소켓 이름
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon|Effect")
+	FName MuzzleSocketName = TEXT("Muzzle");
+
+	FVector GetMuzzleLocation() const;
+	void PlayMuzzleEffect();
+	void PlayTracerEffect(const FVector& EndLocation);
+	void PlayImpactEffect(const FHitResult& Hit);
+	void PlayExplosionEffect(const FVector& Location);
 };

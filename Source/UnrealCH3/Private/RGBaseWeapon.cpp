@@ -1,5 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 #include "RGBaseWeapon.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
 #include "Enemy/BaseEnemy.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
@@ -842,4 +844,51 @@ void ARGBaseWeapon::PlayWeaponSound(USoundBase* Sound)
 void ARGBaseWeapon::PlayFireSound()
 {
 	PlayWeaponSound(FireSound);
+}
+
+FVector ARGBaseWeapon::GetMuzzleLocation() const
+{
+	if (WeaponMesh && WeaponMesh->DoesSocketExist(MuzzleSocketName))
+	{
+		return WeaponMesh->GetSocketLocation(MuzzleSocketName);
+	}
+	return GetActorLocation();
+}
+
+void ARGBaseWeapon::PlayMuzzleEffect()
+{
+	if (!MuzzleEffect || !WeaponMesh) return;
+
+	UNiagaraFunctionLibrary::SpawnSystemAttached(
+		MuzzleEffect, WeaponMesh, MuzzleSocketName,
+		FVector::ZeroVector, FRotator::ZeroRotator,
+		EAttachLocation::SnapToTarget, true);
+}
+
+void ARGBaseWeapon::PlayTracerEffect(const FVector& EndLocation)
+{
+	if (!TracerEffect) return;
+
+	const FVector Start = GetMuzzleLocation();
+	if (UNiagaraComponent* Tracer = UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+		this, TracerEffect, Start, (EndLocation - Start).Rotation()))
+	{
+		Tracer->SetVectorParameter(TEXT("BeamStart"), Start);
+		Tracer->SetVectorParameter(TEXT("BeamEnd"), EndLocation);
+	}
+}
+
+void ARGBaseWeapon::PlayImpactEffect(const FHitResult& Hit)
+{
+	if (!ImpactEffect) return;
+
+	UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+		this, ImpactEffect, Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
+}
+
+void ARGBaseWeapon::PlayExplosionEffect(const FVector& Location)
+{
+	if (!ExplosionEffect) return;
+
+	UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ExplosionEffect, Location);
 }
