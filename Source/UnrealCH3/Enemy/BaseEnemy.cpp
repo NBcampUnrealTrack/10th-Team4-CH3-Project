@@ -18,6 +18,9 @@
 #include "TimerManager.h"
 // Animation 추가용
 #include "Animation/AnimMontage.h"
+#include "Kismet/GameplayStatics.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
 
 // Sets default values
 ABaseEnemy::ABaseEnemy()
@@ -132,6 +135,31 @@ void ABaseEnemy::FellOutOfWorld(const UDamageType& DamageType)
 void ABaseEnemy::Attack()
 {
 	UE_LOG(LogTemp, Warning, TEXT("%s Attack"), *EnemyName.ToString());
+	FName Socket(TEXT("Muzzle_01"));
+	UNiagaraComponent* Particle = nullptr;
+	if (AttackParticle && GetMesh()->DoesSocketExist(Socket))
+	{
+		const FTransform SocketTransform = GetMesh()->GetSocketTransform(Socket);
+		Particle = UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+			GetWorld(),
+			AttackParticle,
+			SocketTransform.GetLocation(),
+			FRotator(0.0f, 90.0f, 0.0f),
+			FVector(1.f),
+			true
+		);
+	}
+
+	if (AttackSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(
+			GetWorld(),
+			AttackSound,
+			GetActorLocation()
+		);
+	}
+
+
 }
 
 void ABaseEnemy::PlayAttackMontage()

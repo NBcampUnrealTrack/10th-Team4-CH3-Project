@@ -20,6 +20,7 @@ APursuerEnemy::APursuerEnemy()
 
 void APursuerEnemy::Attack()
 {
+	Super::Attack();
 	if (!TargetActor) return; // 널 체크도 없었네요
 
 	FVector Start = GetActorLocation() + FVector(0, 0, 50.f);
