@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Enemy/AIEnemyController.h"
 #include "Enemy/BaseEnemy.h"
@@ -35,13 +35,17 @@ AAIEnemyController::AAIEnemyController()
 	Perception->SetDominantSense(*Sight->GetSenseImplementation());
 }
 
+
 void AAIEnemyController::BeginPlay()
 {
 	Super::BeginPlay();
+
 	if (Perception && Sight)
 	{
-		Perception->OnTargetPerceptionUpdated.AddDynamic(this, &AAIEnemyController::OnPerceptionUpdated);
-
+		Perception->OnTargetPerceptionUpdated.AddDynamic(
+			this,
+			&AAIEnemyController::OnPerceptionUpdated
+		);
 	}
 }
 
@@ -49,47 +53,70 @@ void AAIEnemyController::BeginPlay()
 void AAIEnemyController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
-
-	
 }
 
 
 void AAIEnemyController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 {
 	ABaseEnemy* Enemy = Cast<ABaseEnemy>(GetPawn());
-	if (!Enemy || !Actor) return;
+
+	if (!Enemy || !Actor)
+	{
+		return;
+	}
+
 	ARGCharacter* Player = Cast<ARGCharacter>(Actor);
-	if (!Player) return;
+
+	if (!Player)
+	{
+		return;
+	}
+
 	UBlackboardComponent* BlackboardComponent = GetBlackboardComponent();
-	
+
+
 	if (!Stimulus.WasSuccessfullySensed())
 	{
 		Enemy->SetTargetActor(nullptr);
+
 		if (BlackboardComponent)
 		{
 			BlackboardComponent->ClearValue(TEXT("Target"));
 		}
-		return;
 
+		return;
+	} // ★ 기존 코드에서 이 괄호가 빠져 있었음
 
 
 	if (Stimulus.Type == UAISense::GetSenseID<UAISense_Sight>())
 	{
 		Enemy->SetTargetActor(Actor);
+
 		if (BlackboardComponent)
 		{
 			BlackboardComponent->SetValueAsObject(TEXT("Target"), Actor);
-			UE_LOG(LogTemp, Warning, TEXT("Target On"));
+
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT("Target On")
+			);
 		}
 	}
-	else if(Stimulus.Type == UAISense::GetSenseID<UAISenseConfig_Hearing>())
+	else if (Stimulus.Type == UAISense::GetSenseID<UAISenseConfig_Hearing>())
 	{
 		if (BlackboardComponent)
 		{
-			BlackboardComponent->SetValueAsVector(TEXT("HeardLocation"), Stimulus.StimulusLocation);
-			BlackboardComponent->SetValueAsBool(TEXT("bHeardNoise"), true);
-		}
+			BlackboardComponent->SetValueAsVector(
+				TEXT("HeardLocation"),
+				Stimulus.StimulusLocation
+			);
 
+			BlackboardComponent->SetValueAsBool(
+				TEXT("bHeardNoise"),
+				true
+			);
+		}
 	}
 }
 
@@ -106,28 +133,37 @@ void AAIEnemyController::StopAI()
 		return;
 	}
 
-
 	BehaviorTreeComponent->StopTree(
 		EBTStopMode::Safe
 	);
 }
 
+
 void AAIEnemyController::UpdateSight()
 {
 	ABaseEnemy* Enemy = Cast<ABaseEnemy>(GetPawn());
+
 	if (Enemy)
 	{
 		Sight->SightRadius = Enemy->GetViewingDistance();
-		Sight->LoseSightRadius = Enemy->GetViewingDistance() + 500.0f;
-		Sight->PeripheralVisionAngleDegrees = Enemy->GetViewingAngle() / 2.0f;
 
-		Hearing->HearingRange = Enemy->GetHearingDistance();
+		Sight->LoseSightRadius =
+			Enemy->GetViewingDistance() + 500.0f;
+
+		Sight->PeripheralVisionAngleDegrees =
+			Enemy->GetViewingAngle() / 2.0f;
+
+		Hearing->HearingRange =
+			Enemy->GetHearingDistance();
+
 		Perception->ConfigureSense(*Sight);
 		Perception->ConfigureSense(*Hearing);
 
 		if (Enemy->GetEnemyBehaviorTree())
 		{
-			RunBehaviorTree(Enemy->GetEnemyBehaviorTree());
+			RunBehaviorTree(
+				Enemy->GetEnemyBehaviorTree()
+			);
 		}
 	}
 }
