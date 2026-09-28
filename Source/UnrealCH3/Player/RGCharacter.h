@@ -180,7 +180,8 @@ private:
 	TObjectPtr<class URGWallRunMovement> WallRunMovement;
 	UPROPERTY(VisibleAnywhere, Category = "Movement")
 	TObjectPtr<class URGGrappleComponent> GrappleComponent;
-
+	UPROPERTY(VisibleAnywhere, Category = "Movement")
+	TObjectPtr<class UCableComponent> CableComponent;
 	// 무기
 private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
