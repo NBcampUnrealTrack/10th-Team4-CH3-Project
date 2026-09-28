@@ -22,6 +22,7 @@
 #include "NiagaraComponent.h"
 #include "NiagaraFunctionLibrary.h"
 
+
 // Sets default values
 ABaseEnemy::ABaseEnemy()
 {
@@ -52,6 +53,10 @@ ABaseEnemy::ABaseEnemy()
 	GetCharacterMovement()->bCanWalkOffLedgesWhenCrouching = false;
 
 	bUseControllerRotationYaw = false;
+	UCharacterMovementComponent* Move = GetCharacterMovement();
+	Move->bUseRVOAvoidance = true;
+	Move->AvoidanceConsiderationRadius = 300.f; // 이 반경 안의 캐릭터를 고려
+	Move->AvoidanceWeight = 0.5f;
 }
 
 // Called when the game starts or when spawned
