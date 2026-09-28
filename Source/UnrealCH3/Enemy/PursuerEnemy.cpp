@@ -38,13 +38,4 @@ void APursuerEnemy::Attack()
 	{
 		UGameplayStatics::ApplyDamage(Hit.GetActor(), AttackDamage, GetController(), this, UDamageType::StaticClass());
 	}
-
-	if (AttackSound)
-	{
-		UGameplayStatics::PlaySoundAtLocation(
-			GetWorld(),
-			AttackSound,
-			GetActorLocation()
-		);
-	}
 }
