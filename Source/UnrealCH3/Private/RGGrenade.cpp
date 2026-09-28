@@ -4,6 +4,7 @@
 
 #include "Components/SphereComponent.h"
 #include "Player/RGCharacter.h"
+#include "NiagaraFunctionLibrary.h"
 #include "RGBaseWeapon.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
@@ -282,6 +283,18 @@ void ARGGrenade::ExplodeGrenade()
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, GetActorLocation());
 	}
+
+	if (ExplosionSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, GetActorLocation());
+	}
+
+	if (ExplosionEffect)
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ExplosionEffect, GetActorLocation());
+	}
+
+	Destroy();
 
 
 	Destroy();
