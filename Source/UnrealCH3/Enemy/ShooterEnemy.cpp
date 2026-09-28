@@ -21,6 +21,7 @@ AShooterEnemy::AShooterEnemy()
 
 void AShooterEnemy::Attack()
 {
+	Super::Attack();
 	if (!TargetActor) return;
 
 	FVector Start = GetActorLocation() + FVector(0, 0, 50.f);
