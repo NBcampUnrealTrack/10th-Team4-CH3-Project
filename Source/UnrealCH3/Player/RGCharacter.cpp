@@ -14,13 +14,12 @@
 #include "Component/RGGrappleComponent.h"
 #include "Gamemode/RGProgressionSubsystem.h"
 #include "Perception/AISense_Hearing.h"
+#include "CableComponent.h"
 
 #include "RGGrenade.h"
 #include "Engine/Engine.h"
 #include "GameFramework/PlayerController.h"
 #include "UI/UIManager.h"
-
-#include "RGGrenade.h"
 
 ARGCharacter::ARGCharacter()
 {
@@ -48,6 +47,11 @@ ARGCharacter::ARGCharacter()
 
 	WallRunMovement = CreateDefaultSubobject<URGWallRunMovement>(TEXT("WallRunMovement"));
 	GrappleComponent = CreateDefaultSubobject<URGGrappleComponent>(TEXT("GrappleComponent"));
+	CableComponent = CreateDefaultSubobject<UCableComponent>(TEXT("CableComponent"));
+	CableComponent->SetupAttachment(RootComponent);
+	CableComponent->SetVisibility(false);
+	CableComponent->bEnableCollision = false;
+	CableComponent->CableLength = 0.0f;
 
 	JumpMaxCount = 2;
 	GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;

@@ -8,7 +8,7 @@ public class UnrealCH3 : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "AIModule" , "GameplayTasks", "NavigationSystem", "Niagara" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "AIModule" , "GameplayTasks", "NavigationSystem", "Niagara", "CableComponent" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 

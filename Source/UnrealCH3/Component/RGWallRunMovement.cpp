@@ -11,7 +11,6 @@ URGWallRunMovement::URGWallRunMovement()
 	
 }
 
-
 void URGWallRunMovement::BeginPlay()
 {
 	Super::BeginPlay();
@@ -202,7 +201,6 @@ void URGWallRunMovement::UpdateWallRun()
 		FVector PushDir = -WallNormal;
 		FVector FinalVelocity = (ForwardDir * WallRunSpeed) + (PushDir * 250.0f);
 		CharacterOwner->LaunchCharacter(FinalVelocity, true, false);
-
 	}
 }
 

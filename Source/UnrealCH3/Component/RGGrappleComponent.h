@@ -35,7 +35,8 @@ private:
 	TObjectPtr<ACharacter> CharacterOwner;
 	UPROPERTY(VisibleAnywhere, Category = "Cache|Component")
 	TObjectPtr<class UCharacterMovementComponent> CharacterMovementComponent;
-
+	UPROPERTY(VisibleAnywhere, Category = "Cache|Component")
+	TObjectPtr<class UCableComponent> CableComponent;
 private:
 	UPROPERTY(EditAnywhere, Category = "Grapple")
 	float GrappleSpeed = 2200.0f;

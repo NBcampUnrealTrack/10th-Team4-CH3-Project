@@ -4,6 +4,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Engine/EngineTypes.h"
+#include "CableComponent.h"
 
 URGGrappleComponent::URGGrappleComponent()
 {
@@ -19,7 +20,13 @@ void URGGrappleComponent::BeginPlay()
 	if (CharacterOwner)
 	{
 		CharacterMovementComponent =CharacterOwner->GetCharacterMovement();
+		CableComponent = CharacterOwner->FindComponentByClass<UCableComponent>();
 	}
+	if (!CableComponent)
+	{
+		UE_LOG(LogTemp, Error, TEXT("CableComponent not found"));
+	}
+
 	if (CharacterMovementComponent)
 	{
 		DefaultGravity = CharacterMovementComponent->GravityScale;
@@ -47,6 +54,13 @@ void URGGrappleComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 			StopGrapple();
 			return;
 		}
+	}
+
+	if (CableComponent)
+	{
+		FVector LocalTargetPos = CableComponent->GetComponentTransform().InverseTransformPosition(GrappleTargetLocation);
+		CableComponent->EndLocation = LocalTargetPos;
+		CableComponent->CableLength = LocalTargetPos.Size();
 	}
 
 	FVector CurrentLocation = CharacterOwner->GetActorLocation();
@@ -96,6 +110,11 @@ void URGGrappleComponent::StartGrapple()
 	CharacterMovementComponent->SetMovementMode(EMovementMode::MOVE_Falling);
 	OnGrappleStarted.Broadcast();
 
+	if (CableComponent)
+	{
+		CableComponent->SetVisibility(true);
+	}
+
 	TWeakObjectPtr<URGGrappleComponent> WeakPtr = this;
 	GetWorld()->GetTimerManager().SetTimer(GrappleTimerHandle, [WeakPtr]() { if (WeakPtr.IsValid()) { WeakPtr.Get()->bCanGrapple = true; } }, GetGrappleDelay(), false);
 }
@@ -107,6 +126,11 @@ void URGGrappleComponent::StopGrapple()
 	FVector ForwardDir = CharacterOwner->GetActorForwardVector();
 	ForwardDir.Z = 0.0f;
 	ForwardDir.Normalize();
+
+	if (CableComponent)
+	{
+		CableComponent->SetVisibility(false);
+	}
 
 	CharacterMovementComponent->Velocity = ForwardDir * (GrappleSpeed * 0.9f);
 	OnGrappleStopped.Broadcast();
@@ -123,10 +147,10 @@ bool URGGrappleComponent::CheckTrace()
 	FVector End = Start + (ForwardDir * MaxTraceDistance);
 
 	FHitResult HitResult;
-	TArray<AActor*> ActorsToIgnore;
-	ActorsToIgnore.Add(CharacterOwner);
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(CharacterOwner);
 
-	bool bHit = UKismetSystemLibrary::LineTraceSingle(this, Start, End, UEngineTypes::ConvertToTraceType(ECC_Visibility), false, ActorsToIgnore, EDrawDebugTrace::ForDuration, HitResult, true, FLinearColor::Red, FLinearColor::Green, 2.0f);
+	bool bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params);
 	if (bHit)
 	{
 		GrappleTargetLocation = HitResult.ImpactPoint;
